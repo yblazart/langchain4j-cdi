@@ -34,7 +34,7 @@ Go to each example `README.md` to see how to execute the example.
 
 == Contributing
 
-If you want to contribute, please have a look at link:CONTRIBUTING.md[CONTRIBUTING.md].
+If you want to contribute, please have a look at link:https://github.com/langchain4j/langchain4j-community/blob/main/CONTRIBUTING.md[CONTRIBUTING.md].
 
 == License
 
