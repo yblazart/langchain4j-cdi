@@ -1,1 +1,42 @@
-# langchain4j-microprofile-jakarta
+# Langchain4j integration with MicroProfile and Jakarta specifications
+Experimentation around LLM, MicroProfile and Jakarta EE
+
+== How to run examples
+
+=== Use LM Studio
+
+==== Install LM Studio
+
+https://lmstudio.ai/
+
+==== Download model 
+
+Mistral 7B Instruct v0.2
+
+==== Run
+
+On left goto "local server", select the model in dropdown combo on the top, then start server
+
+=== Use Ollama
+
+Running Ollama with the llama3.1 model:
+
+[source,bash]
+----
+CONTAINER_ENGINE=$(command -v podman || command -v docker)
+$CONTAINER_ENGINE run -d --rm --name ollama --replace --pull=always -p 11434:11434 -v ollama:/root/.ollama --stop-signal=SIGKILL docker.io/ollama/ollama
+$CONTAINER_ENGINE exec -it ollama ollama run llama3.1
+----
+
+=== Run the examples
+
+Go to each example `README.md` to see how to execute the example.
+
+== Contributing
+
+If you want to contribute, please have a look at link:CONTRIBUTING.md[CONTRIBUTING.md].
+
+== License
+
+This project is licensed under the Apache License 2.0 - see the link:LICENSE[LICENSE] file for details.
+
