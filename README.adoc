@@ -1,4 +1,4 @@
-= Langchain4j integration with MicroProfile and Jakarta specifications
+= Langchain4j integration with MicroProfile™ and Jakarta™ specifications
 Experimentation around LLM, MicroProfile and Jakarta EE
 
 == How to run examples
