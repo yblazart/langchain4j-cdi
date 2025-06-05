@@ -1,4 +1,4 @@
-name: SmallRye Build
+name: LangChain4J CDI Build
 
 on:
   push:

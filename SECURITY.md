@@ -1,25 +1,16 @@
 # Reporting of CVEs and Security Issues
 
-## The Smallrye LLM community takes security bugs very seriously
+## The LangChain4J CDI community takes security bugs very seriously
 
 We aim to take immediate action to address serious security-related problems that involve our project. 
 
-Note that we will only fix such issues in the most recent minor release of Smallrye LLM.
+Note that we will only fix such issues in the most recent minor release of LangChain4j CDI.
 
 ## Reporting of Security Issues
 
-When reporting a security vulnerability it is important to not accidentally broadcast to the world that
-the issue exists, as this makes it easier for people to exploit it. The software industry uses the term
-<a href="https://www.redhat.com/en/blog/security-embargoes-red-hat">embargo</a> to describe the time a
-security issue is known internally until it is public knowledge.
-
-Our preferred way of reporting security issues in Smallrye LLM is listed below.
-
-### Email the Smallrye LLM team
-
-To report a security issue, please email <a href="mailto:ehugonne@redhat.com">ehugonne@redhat.com</a> and/or
-<a href="mailto:yann.blazart@bycode.fr">yann.blazart@bycode.fr</a>. A member of the Smallrye LLM team will
-open the required issues.
+Please do not report security issues to the public issue tracker. 
+If you think you have found a security vulnerability, please send security issues to [info@langchain4j.dev](mailto:info@langchain4j.dev).
+We will do our best to get back to you as soon as possible.
     
 ### Other considerations
 
