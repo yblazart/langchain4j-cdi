@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <!--
 ~  Copyright 2017 Red Hat, Inc.
 ~
@@ -15,7 +14,6 @@
 ~  See the License for the specific language governing permissions and
 ~  limitations under the License.
 -->
-
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.langchain4j.cdi</groupId>
@@ -24,14 +22,49 @@
 
     <packaging>pom</packaging>
     <name>LangChain4J CDI Parent POM</name>
-    <inceptionYear>2024</inceptionYear>
     <url>https://github.com/langchain4j/langchain4j-cdi</url>
+    <inceptionYear>2024</inceptionYear>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <modules>
+        <module>langchain4j-cdi-portable-ext</module>
+        <module>langchain4j-cdi-build-compatible-ext</module>
+        <module>langchain4j-cdi-core</module>
+        <module>langchain4j-cdi-config</module>
+        <module>langchain4j-cdi-fault-tolerance</module>
+        <module>langchain4j-cdi-telemetry</module>
+    </modules>
+
+    <scm>
+        <connection>scm:git:git://github.com/langchain4j/langchain4j-cdi.git</connection>
+        <developerConnection>scm:git:git@github.com:langchain4j/langchain4j-cdi.git</developerConnection>
+        <url>https://github.com/langchain4j/langchain4j-cdi</url>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/langchain4j/langchain4j-cdi/issues</url>
+    </issueManagement>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <dev.langchain4j.core.version>1.0.1</dev.langchain4j.core.version>
-        <dev.langchain4j.version>1.0.1-beta6</dev.langchain4j.version>
+        <dev.langchain4j.core.version>1.1.0</dev.langchain4j.core.version>
+        <dev.langchain4j.version>1.1.0-rc1</dev.langchain4j.version>
+        <dev.langchain4j.community.version>1.1.0-beta7</dev.langchain4j.community.version>
         <jakartaee-api.version>10.0.0</jakartaee-api.version>
         <jakarta.enterprise.cdi-api.version>4.0.1</jakarta.enterprise.cdi-api.version>
 
@@ -62,50 +95,6 @@
         <sonar.projectName>LangChain4J CDI</sonar.projectName>
     </properties>
 
-    <licenses>
-        <license>
-            <name>Apache License, Version 2.0</name>
-            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
-        </license>
-    </licenses>
-
-    <issueManagement>
-        <system>GitHub</system>
-        <url>https://github.com/langchain4j/langchain4j-cdi/issues</url>
-    </issueManagement>
-
-    <scm>
-        <connection>scm:git:git://github.com/langchain4j/langchain4j-cdi.git</connection>
-        <developerConnection>scm:git:git@github.com:langchain4j/langchain4j-cdi.git</developerConnection>
-        <url>https://github.com/langchain4j/langchain4j-cdi</url>
-    </scm>
-
-    <distributionManagement>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
-    
-    <repositories>
-        <repository>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <id>snapshot-repo</id>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
-        </repository>
-    </repositories>
-
-    <modules>
-        <module>langchain4j-cdi-portable-ext</module>
-        <module>langchain4j-cdi-build-compatible-ext</module>
-        <module>langchain4j-cdi-core</module>
-        <module>langchain4j-cdi-config</module>
-        <module>langchain4j-cdi-fault-tolerance</module>
-        <module>langchain4j-cdi-telemetry</module>
-    </modules>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -129,8 +118,8 @@
                 <groupId>io.smallrye.common</groupId>
                 <artifactId>smallrye-common-bom</artifactId>
                 <version>${version.smallrye.common}</version>
-                <scope>import</scope>
                 <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- Test Dependencies -->
@@ -138,8 +127,8 @@
                 <groupId>io.smallrye.testing</groupId>
                 <artifactId>smallrye-testing-bom</artifactId>
                 <version>${version.smallrye.testing}</version>
-                <scope>import</scope>
                 <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
@@ -218,6 +207,16 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <id>snapshot-repo</id>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+        </repository>
+    </repositories>
     <build>
         <pluginManagement>
             <plugins>
@@ -363,13 +362,20 @@
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>
                     <version>0.8.13</version>
+                    <configuration>
+                        <propertyName>jacocoArgLine</propertyName>
+                        <append>true</append>
+                        <excludes>
+                            <exclude>META-INF/**</exclude>
+                        </excludes>
+                    </configuration>
                     <executions>
                         <execution>
                             <id>prepare-agent</id>
-                            <phase>generate-test-resources</phase>
                             <goals>
                                 <goal>prepare-agent</goal>
                             </goals>
+                            <phase>generate-test-resources</phase>
                             <configuration>
                                 <propertyName>jacocoArgLine</propertyName>
                                 <append>true</append>
@@ -379,13 +385,6 @@
                             </configuration>
                         </execution>
                     </executions>
-                    <configuration>
-                        <propertyName>jacocoArgLine</propertyName>
-                        <append>true</append>
-                        <excludes>
-                            <exclude>META-INF/**</exclude>
-                        </excludes>
-                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -402,6 +401,32 @@
                         </sortPom>
                     </pom>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>net.revelc.code.formatter</groupId>
+                <artifactId>formatter-maven-plugin</artifactId>
+                <version>2.24.1</version>
+                <configuration>
+                    <configFile>io/smallrye/coderules/eclipse-format.xml</configFile>
+                    <skip>${format.skip}</skip>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>io.smallrye</groupId>
+                        <artifactId>smallrye-code-rules</artifactId>
+                        <version>2</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <id>format-sources</id>
+                        <goals>
+                            <goal>format</goal>
+                        </goals>
+                        <phase>process-sources</phase>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
@@ -436,10 +461,10 @@
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
-                                <phase>verify</phase>
                                 <goals>
                                     <goal>sign</goal>
                                 </goals>
+                                <phase>verify</phase>
                             </execution>
                         </executions>
                     </plugin>
