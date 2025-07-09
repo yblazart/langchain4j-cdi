@@ -7,7 +7,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -135,7 +134,6 @@ public class CommonLLMPluginCreator {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public static Object create(Instance<Object> lookup, String beanName, Class<?> targetClass, Class<?> builderClass) {
         LLMConfig llmConfig = LLMConfigProvider.getLlmConfig();
         LOGGER.info(
