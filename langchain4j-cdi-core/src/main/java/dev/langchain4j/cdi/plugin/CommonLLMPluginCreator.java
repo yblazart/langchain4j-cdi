@@ -334,8 +334,4 @@ public class CommonLLMPluginCreator {
             return Enum.valueOf(enumClass, value.substring(lastDotIndex + 1));
         }
     }
-
-    public static void main(String[] args) {
-        System.out.println(Duration.parse("PT120s"));
-    }
 }
