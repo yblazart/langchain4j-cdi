@@ -8,6 +8,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+
 @ApplicationScoped
 @Path("/car-booking")
 public class CarBookingResource {
@@ -29,7 +33,10 @@ public class CarBookingResource {
             answer = aiService.chat(question);
         } catch (Exception e) {
             e.printStackTrace();
-            answer = "My failure reason is:\n\n" + e.getMessage();
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            e.printStackTrace(new PrintStream(byteArrayOutputStream));
+            answer = "My failure reason is:\n\n" + e.getMessage() + "\n\n"
+                    + byteArrayOutputStream.toString(StandardCharsets.UTF_8);
         }
 
         return answer;

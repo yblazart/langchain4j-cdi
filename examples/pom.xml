@@ -16,10 +16,10 @@
     <modules>
         <module>helidon-car-booking</module>
         <module>helidon-car-booking-portable-ext</module>
-        <module>quarkus-car-booking</module>
         <module>glassfish-car-booking</module>
         <module>liberty-car-booking</module>
         <module>payara-car-booking</module>
+        <module>quarkus-car-booking</module>
     </modules>
 
     <dependencyManagement>
@@ -56,7 +56,7 @@
             </dependency>
             <dependency>
                 <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-azure-open-ai</artifactId>
+                <artifactId>langchain4j-ollama</artifactId>
                 <version>${dev.langchain4j.version}</version>
             </dependency>
             <dependency>
@@ -68,11 +68,6 @@
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-hugging-face</artifactId>
                 <version>${dev.langchain4j.community.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-open-ai</artifactId>
-                <version>${dev.langchain4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>ai.djl.huggingface</groupId>

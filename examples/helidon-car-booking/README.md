@@ -56,11 +56,8 @@ All configuration is centralized in microprofile-config.properties and can be re
 
 ## Running the application
 
-To run in dev mode with Helidon CLI: _helidon dev_
+There is a script ./run.sh that run ollama, locally or with podman/docker, and then pull the llama 3.1 image, and then start the server
 
-To run in JVM mode (after packaging): _java -jar target/carbooking-helidon.jar_
-
-Note: native mode not yet tested.
 
 ## Playing with the application
 

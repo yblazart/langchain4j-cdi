@@ -16,7 +16,7 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-        <quarkus.platform.version>3.18.4</quarkus.platform.version>
+        <quarkus.platform.version>3.25.3</quarkus.platform.version>
         <skipITs>true</skipITs>
     </properties>
 
@@ -33,6 +33,12 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- MUST FORCE VERSION BECAUSE quarkus need cdi 4.1 and cdi-langchain4j bring cdi 4.0.1-->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>4.1.0</version>
+        </dependency>
         <dependency>
             <groupId>dev.langchain4j.cdi</groupId>
             <artifactId>langchain4j-cdi-build-compatible-ext</artifactId>
@@ -40,14 +46,6 @@
         <dependency>
             <groupId>dev.langchain4j.cdi</groupId>
             <artifactId>langchain4j-cdi-config</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j.cdi</groupId>
-            <artifactId>langchain4j-cdi-fault-tolerance</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j.cdi</groupId>
-            <artifactId>langchain4j-cdi-core</artifactId>
         </dependency>
         <!-- langchain4j dependencies -->
         <dependency>
@@ -60,17 +58,17 @@
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-azure-open-ai</artifactId>
+            <artifactId>langchain4j-ollama</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
         </dependency>
-        <!-- Avoid ClassNotFoundException com.azure.xml.XmlProviders -->
+        <!-- MUST FORCE VERSION BECAUSE root pom have deps management set to 6.7.x-->
         <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-xml</artifactId>
-            <scope>runtime</scope>
+            <groupId>io.smallrye</groupId>
+            <artifactId>smallrye-fault-tolerance</artifactId>
+            <version>6.9.2</version>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -83,10 +81,6 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-resteasy-jackson</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-arc</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>

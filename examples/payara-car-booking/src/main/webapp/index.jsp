@@ -15,7 +15,7 @@
             responseContainer.innerText = "Thinking...";
 
             try {
-                const response = await fetch(`http://127.0.0.1:8080/payara-car-booking/api/car-booking/chat?question=` + encodeURIComponent(question), {
+                const response = await fetch(`/api/car-booking/chat?question=` + encodeURIComponent(question), {
                     method: 'GET',
                     headers: {
                         'Accept': 'text/plain'

@@ -56,17 +56,14 @@ All configuration is centralized in `microprofile-config.properties` and can be 
 
 ## Running the application
 
-To run in dev mode with Helidon CLI: _helidon dev_
-
-To run in JVM mode (after packaging): _java -jar target/carbooking-helidon.jar_
-
-Note: native mode not yet tested.
+Use the script ./runexample.sh to run the application.
+it will start the application in dev mode and ollama
 
 ## Playing with the application
 
 The application exposes a REST API documented with OpenAPI. 
 
-To interact with the application go to: [http://localhost:8080/openapi/ui](http://localhost:8080/openapi/ui).
+To interact with the application go to: [http://localhost:8080 you will have acess to dev UI
 
 
 Typical questions you can ask in the Chat:

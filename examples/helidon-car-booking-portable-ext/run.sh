@@ -1,4 +1,6 @@
 #!/bin/bash
+# Generated with help of Junie
+
 # Source the common Ollama setup script
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 source "$SCRIPT_DIR/../ollama-setup.sh"
@@ -16,4 +18,8 @@ trap cleanup SIGINT SIGTERM
 # Setup Ollama
 setup_ollama
 
-mvn quarkus:dev
+# Run the application
+echo "Starting the application..."
+java -jar ./target/helidon-car-booking-portable-ext.jar
+
+# Cleanup will be handled by the trap

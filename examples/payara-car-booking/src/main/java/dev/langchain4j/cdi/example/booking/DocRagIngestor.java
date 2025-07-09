@@ -10,6 +10,7 @@ import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Produces;
 
+import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import dev.langchain4j.data.document.Document;
@@ -26,18 +27,29 @@ public class DocRagIngestor {
 	
 	private static final Logger LOGGER = Logger.getLogger(DocRagIngestor.class.getName());
 
-    // Used by ContentRetriever
     @Produces
-    private EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
+    public EmbeddingModel embeddingModel() {
+        // Création paresseuse pour éviter le chargement natif pendant le bootstrap CDI.
+        return new AllMiniLmL6V2EmbeddingModel();
+    }
 
     // Used by ContentRetriever
     @Produces
-    private InMemoryEmbeddingStore<TextSegment> embeddingStore = new InMemoryEmbeddingStore<>();
+    public InMemoryEmbeddingStore<TextSegment> embeddingStore() {
+        return new InMemoryEmbeddingStore<>();
+    }
 
-    private File docs = new File(System.getProperty("docragdir"));
+    @Inject
+    EmbeddingModel embeddingModel;
+
+    @Inject
+    InMemoryEmbeddingStore<TextSegment> embeddingStore;
+
+
+    private File docsDir = new File(".","docs-for-rag");
 
     private List<Document> loadDocs() {
-        return loadDocuments(docs.getPath(), new TextDocumentParser());
+        return loadDocuments(docsDir.getPath(), new TextDocumentParser());
     }
 
     public void ingest(@Observes @Initialized(ApplicationScoped.class) Object pointless) {
@@ -53,8 +65,8 @@ public class DocRagIngestor {
         List<Document> docs = loadDocs();
         ingestor.ingest(docs);
 
-        LOGGER.info(String.format("DEMO %d documents ingested in %d msec", docs.size(),
-                System.currentTimeMillis() - start));
+        LOGGER.info(String.format("DEMO %d documents ingested in %d msec from %s", docs.size(),
+                System.currentTimeMillis() - start,docsDir.getAbsolutePath()));
     }
 
     public static void main(String[] args) {
