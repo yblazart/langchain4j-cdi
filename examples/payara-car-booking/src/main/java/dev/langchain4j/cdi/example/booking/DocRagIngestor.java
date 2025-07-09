@@ -34,10 +34,10 @@ public class DocRagIngestor {
     @Produces
     private InMemoryEmbeddingStore<TextSegment> embeddingStore = new InMemoryEmbeddingStore<>();
 
-    private File docs = new File(System.getProperty("docragdir"));
+    private File docsDir = new File(".","docs-for-rag");
 
     private List<Document> loadDocs() {
-        return loadDocuments(docs.getPath(), new TextDocumentParser());
+        return loadDocuments(docsDir.getPath(), new TextDocumentParser());
     }
 
     public void ingest(@Observes @Initialized(ApplicationScoped.class) Object pointless) {
@@ -53,8 +53,8 @@ public class DocRagIngestor {
         List<Document> docs = loadDocs();
         ingestor.ingest(docs);
 
-        LOGGER.info(String.format("DEMO %d documents ingested in %d msec", docs.size(),
-                System.currentTimeMillis() - start));
+        LOGGER.info(String.format("DEMO %d documents ingested in %d msec from %s", docs.size(),
+                System.currentTimeMillis() - start,docsDir.getAbsolutePath()));
     }
 
     public static void main(String[] args) {

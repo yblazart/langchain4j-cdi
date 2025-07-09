@@ -2,7 +2,7 @@ This example is based on a simplified car booking application inspired from the 
 
 To test please do
 
-mvn clean verify cargo:run
+mvn clean install  payara-micro:dev
 
 then
 
