@@ -3,23 +3,21 @@ package dev.langchain4j.cdi.plugin;
 import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.inject.literal.NamedLiteral;
-import jakarta.enterprise.util.TypeLiteral;
 
 import org.jboss.logging.Logger;
 
@@ -27,10 +25,15 @@ import dev.langchain4j.cdi.core.config.spi.LLMConfig;
 import dev.langchain4j.cdi.core.config.spi.LLMConfigProvider;
 import dev.langchain4j.cdi.core.config.spi.ProducerFunction;
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.listener.ChatModelListener;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.literal.NamedLiteral;
+import jakarta.enterprise.util.TypeLiteral;
 
 /*
 dev.langchain4j.plugin.content-retriever.class=dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever
@@ -45,6 +48,8 @@ public class CommonLLMPluginCreator {
     public static final Logger LOGGER = Logger.getLogger(CommonLLMPluginCreator.class);
 
     private static final Map<Class<?>, TypeLiteral<?>> TYPE_LITERALS = new HashMap<>();
+    private static final Set<PluginPropertyConverter> CONVERTERS = Set.of(new ChatListenerPluginPropertyConverter(),
+            new CapabilitiesPluginPropertyConverter());
 
     static {
         TYPE_LITERALS.put(EmbeddingStore.class, new TypeLiteral<EmbeddingStore<TextSegment>>() {
@@ -142,43 +147,37 @@ public class CommonLLMPluginCreator {
                 String camelCaseProperty = LLMConfig.dashToCamel(property);
                 LOGGER.info("Bean " + beanName + " " + property);
                 String key = "config." + property;
-                String stringValue = llmConfig.getBeanPropertyValue(beanName, key, String.class);
-                LOGGER.info("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : " + stringValue);
-                List<Method> methodsToCall = Arrays.stream(builderClass.getDeclaredMethods())
-                        .filter(method -> method.getName().equals(camelCaseProperty))
-                        .collect(Collectors.toList());
-                if (methodsToCall == null || methodsToCall.isEmpty()) {
+                Field declaredField = Arrays.stream(builderClass.getDeclaredFields())
+                        .filter(field -> field.getName().equals(camelCaseProperty)).findFirst().get();
+                Method methodToCall = null;
+                long countMultipleMethods = Arrays.stream(builderClass.getDeclaredMethods())
+                        .filter(method -> method.getName().equals(camelCaseProperty)).count();
+                if (countMultipleMethods > 1) {
+                    methodToCall = builderClass.getMethod(camelCaseProperty, declaredField.getType());
+                } else {
+                    methodToCall = Arrays.stream(builderClass.getDeclaredMethods())
+                            .filter(method -> method.getName().equals(camelCaseProperty)).findFirst().get();
+                }
+                if (methodToCall == null) {
                     LOGGER.warn("No method found for " + property + " for bean " + beanName);
                 } else {
-                    for (Method methodToCall : methodsToCall) {
-                        Class<?> parameterType = methodToCall.getParameterTypes()[0];
-                        if ("listeners".equals(property)) {
-                            Class<?> typeParameterClass = ChatModel.class.isAssignableFrom(targetClass)
-                                    || StreamingChatModel.class.isAssignableFrom(targetClass)
-                                            ? ChatModelListener.class
-                                            : parameterType.getTypeParameters()[0].getGenericDeclaration();
-                            List<Object> listeners = (List<Object>) Collections.checkedList(new ArrayList<>(),
-                                    typeParameterClass);
-                            if ("@all".equals(stringValue.trim())) {
-                                Instance<Object> inst = (Instance<Object>) getInstance(lookup, typeParameterClass);
-                                if (inst != null) {
-                                    inst.forEach(listeners::add);
-                                }
-                            } else {
-                                try {
-                                    for (String className : stringValue.split(",")) {
-                                        Instance<?> inst = getInstance(lookup, loadClass(className.trim()));
-                                        listeners.add(inst.get());
-                                    }
-                                } catch (ClassNotFoundException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            }
-                            if (listeners != null && !listeners.isEmpty()) {
-                                listeners.stream().forEach(l -> LOGGER.info("Adding listener: " + l.getClass().getName()));
-                                methodToCall.invoke(builder, listeners);
-                            }
-                        } else if (stringValue.startsWith("lookup:")) {
+                    boolean applied = false;
+                    for (PluginPropertyConverter converter : CONVERTERS) {
+                        if (converter.satisfies(targetClass, builderClass, camelCaseProperty)) {
+                            Object value = converter.convert(lookup, targetClass, builderClass, beanName, key, llmConfig);
+                            LOGGER.info("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : "
+                                    + String.valueOf(value));
+                            methodToCall.invoke(builder, value);
+                            applied = true;
+                        }
+                    }
+
+                    if (!applied) {
+                        String stringValue = llmConfig.getBeanPropertyValue(beanName, key, String.class);
+                        LOGGER.info("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : " + stringValue);
+
+                        Class<?> parameterType = declaredField.getType();
+                        if (stringValue.startsWith("lookup:")) {
                             String lookupableBean = stringValue.substring("lookup:".length());
                             LOGGER.info("Lookup " + lookupableBean + " " + parameterType);
                             Instance<?> inst;
@@ -188,14 +187,9 @@ public class CommonLLMPluginCreator {
                                 inst = getInstance(lookup, parameterType, lookupableBean);
                             }
                             methodToCall.invoke(builder, inst.get());
-                            break;
                         } else {
-                            try {
-                                Object value = llmConfig.getBeanPropertyValue(beanName, key, parameterType);
-                                methodToCall.invoke(builder, value);
-                                break;
-                            } catch (IllegalArgumentException ex) {
-                            }
+                            Object value = llmConfig.getBeanPropertyValue(beanName, key, parameterType);
+                            methodToCall.invoke(builder, value);
                         }
                     }
                 }
@@ -222,5 +216,126 @@ public class CommonLLMPluginCreator {
         if (lookupName == null || lookupName.isBlank())
             return getInstance(lookup, clazz);
         return lookup.select(clazz, NamedLiteral.of(lookupName));
+    }
+
+    interface PluginPropertyConverter {
+
+        public boolean satisfies(final Class<?> beanClass, final Class<?> builderClass, final String propertyName);
+
+        public Object convert(final Instance<Object> lookup, final Class<?> beanClass, final Class<?> builderClass,
+                final String beanName, final String key, final LLMConfig config);
+    }
+
+    static class ChatListenerPluginPropertyConverter implements PluginPropertyConverter {
+
+        private static final String PROPERTY_NAME = "listeners";
+
+        @Override
+        public boolean satisfies(Class<?> beanClass, Class<?> builderClass, String propertyName) {
+            // TODO Auto-generated method stub
+            if (ChatModel.class.isAssignableFrom(beanClass) || StreamingChatModel.class.isAssignableFrom(beanClass)) {
+                return PROPERTY_NAME.equals(propertyName) && Arrays.stream(builderClass.getDeclaredFields())
+                        .anyMatch(field -> field.getName().equals(propertyName));
+            }
+            return false;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public Object convert(Instance<Object> lookup, Class<?> beanClass, Class<?> builderClass, String beanName,
+                final String key,
+                LLMConfig config) {
+            // TODO Auto-generated method stub
+            final Field declaredField = Arrays.stream(builderClass.getDeclaredFields())
+                    .filter(field -> field.getName().equals(PROPERTY_NAME)).findFirst().get();
+            Class<?> typeParameterClass = null;
+            if (declaredField.getGenericType() instanceof ParameterizedType) {
+                ParameterizedType pType = (ParameterizedType) declaredField.getGenericType();
+                typeParameterClass = (Class<?>) pType.getActualTypeArguments()[0];
+            } else
+                typeParameterClass = ChatModelListener.class;
+
+            List<Object> listeners = (List<Object>) Collections.checkedList(new ArrayList<>(),
+                    typeParameterClass);
+            String value = config.getBeanPropertyValue(beanName, key, String.class);
+            if ("@all".equals(value.trim())) {
+                Instance<Object> inst = (Instance<Object>) getInstance(lookup, typeParameterClass);
+                if (inst != null) {
+                    inst.forEach(listeners::add);
+                }
+            } else {
+                try {
+                    String[] values = config.getBeanPropertyValue(beanName, key, String[].class);
+                    for (String className : values) {
+                        Instance<?> inst = getInstance(lookup, loadClass(className.trim()));
+                        listeners.add(inst.get());
+                    }
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            if (listeners != null && !listeners.isEmpty()) {
+                listeners.stream().forEach(l -> LOGGER.info("Adding listener: " + l.getClass().getName()));
+            }
+
+            return listeners;
+        }
+    }
+
+    static class CapabilitiesPluginPropertyConverter implements PluginPropertyConverter {
+
+        private static final String PROPERTY_NAME = "supportedCapabilities";
+
+        @Override
+        public boolean satisfies(Class<?> beanClass, Class<?> builderClass, String propertyName) {
+            // TODO Auto-generated method stub
+            if (ChatModel.class.isAssignableFrom(beanClass) || StreamingChatModel.class.isAssignableFrom(beanClass)) {
+                return PROPERTY_NAME.equals(propertyName) && Arrays.stream(builderClass.getDeclaredFields())
+                        .anyMatch(field -> field.getName().equals(propertyName));
+            }
+            return false;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public Object convert(Instance<Object> lookup, Class<?> beanClass, Class<?> builderClass, String beanName,
+                final String key,
+                LLMConfig config) {
+            // TODO Auto-generated method stub
+            final Field declaredField = Arrays.stream(builderClass.getDeclaredFields())
+                    .filter(field -> field.getName().equals(PROPERTY_NAME)).findFirst().get();
+            Class<?> typeParameterClass = null;
+            if (declaredField.getGenericType() instanceof ParameterizedType) {
+                ParameterizedType pType = (ParameterizedType) declaredField.getGenericType();
+                typeParameterClass = (Class<?>) pType.getActualTypeArguments()[0];
+            } else
+                typeParameterClass = Capability.class;
+
+            try {
+                Set<Object> enums = (Set<Object>) Collections.checkedSet(new HashSet<>(),
+                        typeParameterClass);
+                String[] values = config.getBeanPropertyValue(beanName, key, String[].class);
+                for (String enumString : values) {
+                    enums.add(toEnum(enumString));
+                }
+
+                return enums;
+            } catch (ClassNotFoundException e) {
+                // TODO Auto-generated catch block
+                throw new IllegalArgumentException(e);
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private <T extends Enum<T>> Enum<T> toEnum(String value) throws ClassNotFoundException {
+            int lastDotIndex = value.lastIndexOf(".");
+            Class<T> enumClass = (Class<T>) Class.forName(value.substring(0, lastDotIndex));
+            return Enum.valueOf(enumClass, value.substring(lastDotIndex + 1));
+        }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(Duration.parse("PT120s"));
     }
 }
