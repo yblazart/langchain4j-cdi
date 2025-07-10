@@ -18,11 +18,15 @@ public class LLMConfigProvider {
         final List<LLMConfig> factories = new ArrayList<>();
         loader.forEach(factories::add);
         if (factories.isEmpty()) {
-            throw new RuntimeException("No service Found for LLMConfig interface");
-        } else {
-            llmConfig = factories.iterator().next(); //loader.findFirst().orElse(null);
-            LOGGER.debug("Found LLMConfig interface: " + llmConfig.getClass().getName());
+            // Use current classloader to load the LLMConfig implementation as a fallback option
+            loader = ServiceLoader.load(LLMConfig.class, LLMConfig.class.getClassLoader());
+            loader.forEach(factories::add);
+            if (factories.isEmpty()) {
+                throw new RuntimeException("No service Found for LLMConfig interface");
+            }
         }
+        llmConfig = factories.iterator().next(); //loader.findFirst().orElse(null);
+        LOGGER.debug("Found LLMConfig interface: " + llmConfig.getClass().getName());
     }
 
     public static LLMConfig getLlmConfig() {
