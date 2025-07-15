@@ -1,7 +1,5 @@
 package dev.langchain4j.cdi.core.mpconfig;
 
-import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PREFIX;
-import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
 import static dev.langchain4j.cdi.core.config.spi.LLMConfig.getBeanPropertyName;
 
 import java.util.Collections;
