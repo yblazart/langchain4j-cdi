@@ -9,19 +9,30 @@ on:
       - 'CODEOWNERS'
       - 'LICENSE'
       - 'NOTICE'
+      - '*.md'
+      - '.github/*.md'
+      - '.github/*.yml'
+      - '.github/*.conf'
+      - '.github/ISSUE_TEMPLATE/*.md'
   pull_request:
     paths-ignore:
       - '.gitignore'
       - 'CODEOWNERS'
       - 'LICENSE'
       - 'NOTICE'
+      - '*.md'
+      - '.github/*.md'
+      - '.github/*.yml'
+      - '.github/*.conf'
+      - '.github/ISSUE_TEMPLATE/*.md'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java: [17, 21]
+        java: [17]
     name: build with jdk ${{matrix.java}}
 
     steps:
@@ -43,7 +54,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        java: [17, 21]
+        java: [17]
     name: build with jdk ${{matrix.java}} windows
 
     steps:
