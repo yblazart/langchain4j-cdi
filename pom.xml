@@ -248,7 +248,7 @@
                             </manifest>
                             <manifestEntries>
                                 <Implementation-URL>https://github.com/langchain4j/langchain4j-cdi</Implementation-URL>
-                                <Java-Version>17.0.16</Java-Version>
+                                <Java-Version>17</Java-Version>
                                 <Scm-Url>https://github.com/langchain4j/langchain4j-cdi</Scm-Url>
                                 <Scm-Connection>scm:git:git://github.com/langchain4j/langchain4j-cdi.git</Scm-Connection>
                                 <Scm-Revision>${buildNumber}</Scm-Revision>
