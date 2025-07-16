@@ -323,6 +323,10 @@
                 <plugin>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.1.4</version>
+                    <configuration>
+                        <!-- do not deploy langchain4j-cdi-parent's pom.xml (this file) -->
+                        <skip>true</skip>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <artifactId>maven-dependency-plugin</artifactId>
