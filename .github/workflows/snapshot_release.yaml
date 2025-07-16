@@ -1,7 +1,7 @@
-name: snapshot_release
+# This workflow will build a package using Maven and then publish it to Maven Central when a release is created.
+name: LangChain4J CDI Snapshot Release
 
-# Only run on pushes to main:
-# Replace with 'on: [push]' if you need to run tests on your PR
+# Only run on pushes to main.
 on:
   push:
     branches:
@@ -17,19 +17,18 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          # Modules specify the oldest java version that they support:
-          # even if we build with version 21, produced jars should be compatible with
-          # JVMs running the version specified in each module's maven.compiler.target property
           java-version: '17'
           distribution: 'temurin'
+          cache: 'maven'
+          cache-dependency-path: '**/pom.xml'
+          server-id: central # Value of the distributionManagement/repository/id field of the pom.xml
       - name: snapshot_release
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-        # Notes: how/when do we run integration tests before release?
         run: |
           mvn -B -U --fail-at-end \
-            -DskipTests \
+            -DperformRelease -DskipTests \
             clean deploy
 
       - name: Publish Test Report
