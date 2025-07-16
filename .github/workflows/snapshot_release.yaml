@@ -3,14 +3,13 @@ name: snapshot_release
 # Only run on pushes to main:
 # Replace with 'on: [push]' if you need to run tests on your PR
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   snapshot_release:
-    if: github.repository == 'langchain4j/langchain4j-cdi'
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -23,15 +22,11 @@ jobs:
           # JVMs running the version specified in each module's maven.compiler.target property
           java-version: '17'
           distribution: 'temurin'
-          server-id: central
-          server-username: MAVEN_CENTRAL_USERNAME
-          server-password: MAVEN_CENTRAL_PASSWORD
       - name: snapshot_release
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-        # Notes:
-        #  - tests already run in a separate action (main)
+        # Notes: how/when do we run integration tests before release?
         run: |
           mvn -B -U --fail-at-end \
             -DskipTests \
