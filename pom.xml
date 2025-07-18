@@ -52,13 +52,6 @@
         <url>https://github.com/langchain4j/langchain4j-cdi/issues</url>
     </issueManagement>
 
-    <distributionManagement>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
-
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
@@ -91,8 +84,6 @@
         <maven.compiler.release>17</maven.compiler.release>
         <surefire-plugin.version>3.5.3</surefire-plugin.version>
         <compiler-plugin.version>3.14.0</compiler-plugin.version>
-
-        <sonar.projectName>LangChain4J CDI</sonar.projectName>
     </properties>
 
     <dependencyManagement>
@@ -208,15 +199,6 @@
         </dependencies>
     </dependencyManagement>
 
-    <repositories>
-        <repository>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <id>snapshot-repo</id>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
-        </repository>
-    </repositories>
     <build>
         <pluginManagement>
             <plugins>
@@ -266,7 +248,7 @@
                             </manifest>
                             <manifestEntries>
                                 <Implementation-URL>https://github.com/langchain4j/langchain4j-cdi</Implementation-URL>
-                                <Java-Version>21.0.7</Java-Version>
+                                <Java-Version>17</Java-Version>
                                 <Scm-Url>https://github.com/langchain4j/langchain4j-cdi</Scm-Url>
                                 <Scm-Connection>scm:git:git://github.com/langchain4j/langchain4j-cdi.git</Scm-Connection>
                                 <Scm-Revision>${buildNumber}</Scm-Revision>
@@ -339,16 +321,12 @@
                     <version>${surefire-plugin.version}</version>
                 </plugin>
                 <plugin>
-                    <groupId>org.sonatype.plugins</groupId>
-                    <artifactId>nexus-staging-maven-plugin</artifactId>
-                    <version>1.7.0</version>
-                    <configuration>
-                        <stagingProgressTimeoutMinutes>15</stagingProgressTimeoutMinutes>
-                    </configuration>
-                </plugin>
-                <plugin>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.1.4</version>
+                    <configuration>
+                        <!-- do not deploy langchain4j-cdi-parent's pom.xml (this file) -->
+                        <skip>true</skip>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <artifactId>maven-dependency-plugin</artifactId>

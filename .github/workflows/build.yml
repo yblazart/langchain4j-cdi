@@ -9,30 +9,38 @@ on:
       - 'CODEOWNERS'
       - 'LICENSE'
       - 'NOTICE'
+      - '*.md'
+      - '.github/*.md'
+      - '.github/*.yml'
+      - '.github/*.conf'
+      - '.github/ISSUE_TEMPLATE/*.md'
   pull_request:
     paths-ignore:
       - '.gitignore'
       - 'CODEOWNERS'
       - 'LICENSE'
       - 'NOTICE'
+      - '*.md'
+      - '.github/*.md'
+      - '.github/*.yml'
+      - '.github/*.conf'
+      - '.github/ISSUE_TEMPLATE/*.md'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        java: [17, 21]
-    name: build with jdk ${{matrix.java}}
+    name: build with jdk 17
 
     steps:
       - uses: actions/checkout@v4
         name: checkout
 
       - uses: actions/setup-java@v4
-        name: set up jdk ${{matrix.java}}
+        name: set up jdk 17
         with:
           distribution: 'temurin'
-          java-version: ${{matrix.java}}
+          java-version: '17'
           cache: 'maven'
           cache-dependency-path: '**/pom.xml'
 
@@ -41,10 +49,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        java: [17, 21]
-    name: build with jdk ${{matrix.java}} windows
+    name: build with jdk 17 on windows
 
     steps:
       - name: git configure long path
@@ -54,10 +59,10 @@ jobs:
         name: checkout
 
       - uses: actions/setup-java@v4
-        name: set up jdk ${{matrix.java}}
+        name: set up jdk 17
         with:
           distribution: 'temurin'
-          java-version: ${{matrix.java}}
+          java-version: '17'
           cache: 'maven'
           cache-dependency-path: '**/pom.xml'
 
