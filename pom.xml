@@ -55,9 +55,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <dev.langchain4j.core.version>1.1.0</dev.langchain4j.core.version>
-        <dev.langchain4j.version>1.1.0-rc1</dev.langchain4j.version>
-        <dev.langchain4j.community.version>1.1.0-beta7</dev.langchain4j.community.version>
+        <dev.langchain4j.version>1.2.0</dev.langchain4j.version>
+        <dev.langchain4j.community.version>1.2.0-beta8</dev.langchain4j.community.version>
         <jakartaee-api.version>10.0.0</jakartaee-api.version>
         <jakarta.enterprise.cdi-api.version>4.0.1</jakarta.enterprise.cdi-api.version>
 
@@ -102,7 +101,7 @@
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-bom</artifactId>
-                <version>${dev.langchain4j.core.version}</version>
+                <version>${dev.langchain4j.version}</version>
                 <type>pom</type>
             </dependency>
             <dependency>
@@ -153,7 +152,7 @@
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j</artifactId>
-                <version>${dev.langchain4j.core.version}</version>
+                <version>${dev.langchain4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.langchain4j.cdi</groupId>
