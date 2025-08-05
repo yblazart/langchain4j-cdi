@@ -52,7 +52,7 @@
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j</artifactId>
-                <version>${dev.langchain4j.core.version}</version>
+                <version>${dev.langchain4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.langchain4j</groupId>
@@ -72,7 +72,7 @@
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-open-ai</artifactId>
-                <version>${dev.langchain4j.core.version}</version>
+                <version>${dev.langchain4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>ai.djl.huggingface</groupId>
