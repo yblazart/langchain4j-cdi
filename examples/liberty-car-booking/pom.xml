@@ -22,7 +22,6 @@
         <microprofile-api.version>6.1</microprofile-api.version>
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
         <war-plugin.version>3.4.0</war-plugin.version>
-        <version.io.smallrye.fault-tolerance>6.7.3</version.io.smallrye.fault-tolerance>
         <!-- We need only javac to use the release parameter. OpenLiberty doesn't depend on maven-compiler-plugin.' -->
         <maven.compiler.source combine.self="override" />
         <maven.compiler.target combine.self="override" />

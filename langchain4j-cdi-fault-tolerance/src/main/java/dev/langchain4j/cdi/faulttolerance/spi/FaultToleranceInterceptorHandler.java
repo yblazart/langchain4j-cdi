@@ -30,7 +30,7 @@ class FaultToleranceInterceptorHandler {
      * @param interceptionType
      * @param interceptors
      */
-    public FaultToleranceInterceptorHandler(BeanManager beanManager, InterceptionType interceptionType,
+    FaultToleranceInterceptorHandler(BeanManager beanManager, InterceptionType interceptionType,
             List<Interceptor<?>> interceptors) {
         super();
         this.beanManager = beanManager;
@@ -64,49 +64,41 @@ class FaultToleranceInterceptorHandler {
 
         @Override
         public Object getTarget() {
-            // TODO Auto-generated method stub
             return delegate.getTarget();
         }
 
         @Override
         public Object getTimer() {
-            // TODO Auto-generated method stub
             return delegate.getTimer();
         }
 
         @Override
         public Method getMethod() {
-            // TODO Auto-generated method stub
             return delegate.getMethod();
         }
 
         @Override
         public Constructor<?> getConstructor() {
-            // TODO Auto-generated method stub
             return delegate.getConstructor();
         }
 
         @Override
         public Object[] getParameters() {
-            // TODO Auto-generated method stub
             return delegate.getParameters();
         }
 
         @Override
         public void setParameters(Object[] params) {
-            // TODO Auto-generated method stub
             delegate.setParameters(params);
         }
 
         @Override
         public Map<String, Object> getContextData() {
-            // TODO Auto-generated method stub
             return delegate.getContextData();
         }
 
         @Override
         public Object proceed() throws Exception {
-            // TODO Auto-generated method stub
             return FaultToleranceInterceptorHandler.this.handle(delegate);
         }
     }
