@@ -10,6 +10,7 @@ import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Produces;
 
+import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import dev.langchain4j.data.document.Document;
@@ -26,13 +27,24 @@ public class DocRagIngestor {
 	
 	private static final Logger LOGGER = Logger.getLogger(DocRagIngestor.class.getName());
 
-    // Used by ContentRetriever
     @Produces
-    private EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
+    public EmbeddingModel embeddingModel() {
+        // Création paresseuse pour éviter le chargement natif pendant le bootstrap CDI.
+        return new AllMiniLmL6V2EmbeddingModel();
+    }
 
     // Used by ContentRetriever
     @Produces
-    private InMemoryEmbeddingStore<TextSegment> embeddingStore = new InMemoryEmbeddingStore<>();
+    public InMemoryEmbeddingStore<TextSegment> embeddingStore() {
+        return new InMemoryEmbeddingStore<>();
+    }
+
+    @Inject
+    EmbeddingModel embeddingModel;
+
+    @Inject
+    InMemoryEmbeddingStore<TextSegment> embeddingStore;
+
 
     private File docsDir = new File(".","docs-for-rag");
 
