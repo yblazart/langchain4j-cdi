@@ -1,6 +1,19 @@
 package dev.langchain4j.cdi.plugin;
 
-import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
+import dev.langchain4j.cdi.core.config.spi.LLMConfig;
+import dev.langchain4j.cdi.core.config.spi.LLMConfigProvider;
+import dev.langchain4j.cdi.core.config.spi.ProducerFunction;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.chat.Capability;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.chat.listener.ChatModelListener;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.literal.NamedLiteral;
+import jakarta.enterprise.util.TypeLiteral;
+import org.jboss.logging.Logger;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -17,22 +30,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
-import org.jboss.logging.Logger;
-
-import dev.langchain4j.cdi.core.config.spi.LLMConfig;
-import dev.langchain4j.cdi.core.config.spi.LLMConfigProvider;
-import dev.langchain4j.cdi.core.config.spi.ProducerFunction;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.chat.Capability;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.chat.listener.ChatModelListener;
-import dev.langchain4j.store.embedding.EmbeddingStore;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.inject.literal.NamedLiteral;
-import jakarta.enterprise.util.TypeLiteral;
+import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
 
 /*
 dev.langchain4j.plugin.content-retriever.class=dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever
@@ -143,11 +143,13 @@ public class CommonLLMPluginCreator {
             Set<String> properties = llmConfig.getPropertyNamesForBean(beanName);
             for (String property : properties) {
                 String camelCaseProperty = LLMConfig.dashToCamel(property);
-                LOGGER.info("Bean " + beanName + " " + property);
+                LOGGER.info("Bean " + beanName + " " + property + "look for " + camelCaseProperty);
                 String key = "config." + property;
-                Field declaredField = Arrays.stream(builderClass.getDeclaredFields())
+                List<Field> fields = getFieldsUpToObject(builderClass);
+                LOGGER.info("In " + builderClass + " find fields : " + fields);
+                Field declaredField = fields.stream()
                         .filter(field -> field.getName().equals(camelCaseProperty)).findFirst().get();
-                Method methodToCall = null;
+                Method methodToCall;
                 long countMultipleMethods = Arrays.stream(builderClass.getDeclaredMethods())
                         .filter(method -> method.getName().equals(camelCaseProperty)).count();
                 if (countMultipleMethods > 1) {
@@ -197,6 +199,19 @@ public class CommonLLMPluginCreator {
                 | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static List<Field> getFieldsUpToObject(Class<?> startClass) {
+
+        List<Field> currentClassFields = new ArrayList<>(Arrays.asList(startClass.getDeclaredFields()));
+        Class<?> parentClass = startClass.getSuperclass();
+
+        if (parentClass != null && !parentClass.equals(Object.class)) {
+            List<Field> parentClassFields = getFieldsUpToObject(parentClass);
+            currentClassFields.addAll(parentClassFields);
+        }
+
+        return currentClassFields;
     }
 
     private static Class<?> loadClass(String className) throws ClassNotFoundException {

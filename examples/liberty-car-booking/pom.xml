@@ -57,6 +57,11 @@
     </dependencyManagement>
 
     <dependencies>
+
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.eclipse.microprofile</groupId>
             <artifactId>microprofile</artifactId>
@@ -100,12 +105,12 @@
         
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-azure-open-ai</artifactId>
+            <artifactId>langchain4j-hugging-face</artifactId>
         </dependency>
-		
+
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-open-ai</artifactId>
+            <artifactId>langchain4j-ollama</artifactId>
         </dependency>
         
         <dependency>
