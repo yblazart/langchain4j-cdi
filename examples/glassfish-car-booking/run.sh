@@ -16,4 +16,13 @@ trap cleanup SIGINT SIGTERM
 # Setup Ollama
 setup_ollama
 
-mvn quarkus:dev
+WORKING_DIR="$(dirname "${BASH_SOURCE[0]}")"
+GLASSFISH_DIR=$WORKING_DIR/target/cargo/installs/glassfish-7.0.16/glassfish7/
+echo $WORKING_DIR
+
+if [[ ! -d $GLASSFISH_DIR ]];then
+    echo "Installing Glassfish"
+    mvn cargo:install
+fi
+
+mvn cargo:run

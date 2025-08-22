@@ -24,9 +24,7 @@ The project has been developped and tested with:
 * Helidon CLI 3.0.4
 * LangChain4j 0.30.0
 * Maven 3.9.5
-* Testing against GPT 3.5 and 4.0 on a dedicated Azure instance (to be customized in your context). 
-
-During my tests, GPT 3.5 has proved to be faster but less precise en consistent than GPT 4. In particular, GPT 4 has provided much better result with Fraud Detection.
+* Testing against Llama 3.1 using local Ollama instance. 
 
 ## Differences with Quarkus-LangChain4j
 
@@ -38,13 +36,13 @@ This example is based on a standard usage of LangChain4j with Helidon. There is 
 
 I've added 3 technical classes to manage "the glue" (more or less the equivalent of `@RegisterAiService`):
 
-* ModelFactory: generates an OpenAI Chat model
+* ModelFactory: generates an Ollama Chat model
 * ChatAiServiceFactory: generates a Chat assistant
 * FraudAiServiceFactory: generates a Fraud assistant.
 
-I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize OpenAI responses does not support Java Record.
+I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize LLM responses does not support Java Record.
 
-In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j. For instance, the Azure SDK is used with Azure OpenAI.
+In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j using local Ollama.
 
 ## Packaging the application
 
@@ -56,17 +54,14 @@ All configuration is centralized in `microprofile-config.properties` and can be 
 
 ## Running the application
 
-To run in dev mode with Helidon CLI: _helidon dev_
-
-To run in JVM mode (after packaging): _java -jar target/carbooking-helidon.jar_
-
-Note: native mode not yet tested.
+Use the script ./runexample.sh to run the application.
+it will start the application in dev mode and ollama
 
 ## Playing with the application
 
 The application exposes a REST API documented with OpenAPI. 
 
-To interact with the application go to: [http://localhost:8080/openapi/ui](http://localhost:8080/openapi/ui).
+To interact with the application go to: [http://localhost:8080 you will have acess to dev UI
 
 
 Typical questions you can ask in the Chat:
