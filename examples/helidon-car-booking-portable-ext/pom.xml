@@ -114,7 +114,7 @@
             <artifactId>helidon-logging-jul</artifactId>
             <scope>runtime</scope>
         </dependency>
-        <!-- SLF4J messages from langchain4j and Azure OpenAI SDK backed by JUL -->
+        <!-- SLF4J messages from langchain4j backed by JUL -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-jdk14</artifactId>

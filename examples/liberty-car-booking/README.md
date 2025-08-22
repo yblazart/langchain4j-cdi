@@ -13,7 +13,7 @@ These are the steps to run this service.
 - JDK 17 and higher
 - Maven 3.9.9 and higher
 - LangChain4j 0.33.0 or higher.
-- Testing against GPT 3.5 and 4.0 on a dedicated Azure instance (to be customized in your context). 
+- Testing against Llama 3.1 using local Ollama instance. 
 
 Then you can access the application through the browser of your choice.
 
@@ -27,13 +27,13 @@ This example is based on a standard usage of LangChain4j with Helidon. There is 
 
 I've added 3 technical classes to manage "the glue" (more or less the equivalent of `@RegisterAiService`):
 
-* ModelFactory: generates an OpenAI Chat model
+* ModelFactory: generates an Ollama Chat model
 * ChatAiServiceFactory: generates a Chat assistant
 * FraudAiServiceFactory: generates a Fraud assistant.
 
-I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize OpenAI responses does not support Java Record.
+I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize LLM responses does not support Java Record.
 
-In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j. For instance, the Azure SDK is used with Azure OpenAI.
+In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j using local Ollama.
 
 ## Packaging the application
 
