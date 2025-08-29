@@ -363,6 +363,7 @@
                         <preparationGoals>clean install</preparationGoals>
                         <autoVersionSubmodules>true</autoVersionSubmodules>
                         <releaseProfiles>sign</releaseProfiles>
+                        <useReleaseProfile>true</useReleaseProfile>
                     </configuration>
                 </plugin>
                 <plugin>
