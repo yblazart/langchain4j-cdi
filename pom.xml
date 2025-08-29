@@ -48,6 +48,15 @@
         <url>https://github.com/langchain4j/langchain4j-cdi</url>
     </scm>
 
+    <developers>
+        <developer>
+            <id>langchain4j.dev</id>
+            <name>Langchain4J Community</name>
+            <organization>langchain4j.dev</organization>
+            <organizationUrl>https://docs.langchain4j.dev/</organizationUrl>
+        </developer>
+    </developers>
+
     <issueManagement>
         <system>GitHub</system>
         <url>https://github.com/langchain4j/langchain4j-cdi/issues</url>
@@ -348,11 +357,12 @@
                     <version>3.1.1</version>
                     <configuration>
                         <tagNameFormat>langchain4j-cdi-@{project.version}</tagNameFormat>
-                        <pushChanges>true</pushChanges>
+                        <localCheckout>true</localCheckout>
+                        <pushChanges>false</pushChanges>
+                        <remoteTagging>false</remoteTagging>
                         <preparationGoals>clean install</preparationGoals>
                         <autoVersionSubmodules>true</autoVersionSubmodules>
                         <releaseProfiles>sign</releaseProfiles>
-                        <signTag>true</signTag>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -470,6 +480,13 @@
                                     <goal>sign</goal>
                                 </goals>
                                 <phase>verify</phase>
+                                <configuration>
+                                    <useAgent>true</useAgent>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
