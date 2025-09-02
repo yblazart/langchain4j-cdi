@@ -42,18 +42,18 @@ public class LangChain4JPluginsBuildCompatibleExtension implements BuildCompatib
                 llmConfig,
                 beanData -> {
                     SyntheticBeanBuilder<Object> builder = (SyntheticBeanBuilder<Object>) syntheticComponents
-                            .addBean(beanData.getTargetClass());
+                            .addBean(beanData.targetClass());
 
                     builder.createWith(AISyntheticBeanCreatorClassProvider.getSyntheticBeanCreatorClass())
-                            .type(beanData.getTargetClass())
-                            .scope(beanData.getScopeClass())
-                            .name(beanData.getBeanName())
-                            .qualifier(NamedLiteral.of(beanData.getBeanName()))
-                            .withParam(PARAM_BEANNAME, beanData.getBeanName())
-                            .withParam(PARAM_TARGET_CLASS, beanData.getTargetClass())
-                            .withParam(PARAM_BUILDER_CLASS, beanData.getBuilderClass());
+                            .type(beanData.targetClass())
+                            .scope(beanData.scopeClass())
+                            .name(beanData.beanName())
+                            .qualifier(NamedLiteral.of(beanData.beanName()))
+                            .withParam(PARAM_BEANNAME, beanData.beanName())
+                            .withParam(PARAM_TARGET_CLASS, beanData.targetClass())
+                            .withParam(PARAM_BUILDER_CLASS, beanData.builderClass());
 
-                    for (Class<?> newInterface : beanData.getTargetClass().getInterfaces())
+                    for (Class<?> newInterface : beanData.targetClass().getInterfaces())
                         builder.type(newInterface);
                 });
     }

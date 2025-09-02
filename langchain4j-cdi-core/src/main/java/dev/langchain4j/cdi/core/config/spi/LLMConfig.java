@@ -14,7 +14,13 @@ dev.langchain4j.plugin.content-retriever.config.embedding-model=lookup:my-model
  */
 public interface LLMConfig {
 
+    /**
+     * Prefix for all LLM beans properties.
+     */
     String PREFIX = "dev.langchain4j.plugin";
+    /**
+     * Property name for bean producer.
+     */
     String PRODUCER = "defined_bean_producer";
 
     void init();

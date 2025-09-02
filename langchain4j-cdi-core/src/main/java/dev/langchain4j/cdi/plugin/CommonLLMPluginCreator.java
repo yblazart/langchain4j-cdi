@@ -42,6 +42,18 @@ dev.langchain4j.plugin.content-retriever.config.endpoint=${azure.openai.endpoint
 dev.langchain4j.plugin.content-retriever.config.embedding-store=lookup:default
 dev.langchain4j.plugin.content-retriever.config.embedding-model=lookup:my-model
  */
+
+/**
+ * Help to build LangChain4j Beans from LLMConfig.
+ * A typical class (model, chat, etc...) often follows this pattern (@see dev.langchain4j.model.ollama.OllamaChatModel for
+ * example):
+ * Inside the class there is a static method to create the builder:
+ * public static OllamaChatModelBuilder builder() { }
+ * This builder is also defined as a static inner class.
+ * And then the builder class has private fields for each property of the bean. And an associated setter method for each field
+ * (without 'set' prefix).
+ *
+ */
 public class CommonLLMPluginCreator {
 
     public static final Logger LOGGER = Logger.getLogger(CommonLLMPluginCreator.class.getName());
@@ -85,129 +97,98 @@ public class CommonLLMPluginCreator {
                 }
                 beanBuilder.accept(
                         new BeanData(targetClass, builderCLass, scopeClass, beanName,
-                                (Instance<Object> creationalContext) -> {
-                                    return CommonLLMPluginCreator.create(
-                                            creationalContext,
-                                            beanName,
-                                            targetClass,
-                                            builderCLass);
-                                }));
+                                (Instance<Object> creationalContext) -> CommonLLMPluginCreator.create(
+                                        creationalContext,
+                                        llmConfig,
+                                        beanName,
+                                        targetClass,
+                                        builderCLass)));
             }
         }
     }
 
-    public static class BeanData {
+    public record BeanData(Class<?> targetClass,
+            Class<?> builderClass,
+            Class<? extends Annotation> scopeClass,
+            String beanName,
+            Function<Instance<Object>, Object> callback) {
 
-        private final Class<?> targetClass;
-        private final Class<?> builderClass;
-        private final Class<? extends Annotation> scopeClass;
-        private final String beanName;
-        private final Function<Instance<Object>, Object> callback;
-
-        public BeanData(Class<?> targetClass, Class<?> builderClass, Class<? extends Annotation> scopeClass,
-                String beanName, Function<Instance<Object>, Object> callback) {
-            this.targetClass = targetClass;
-            this.builderClass = builderClass;
-            this.scopeClass = scopeClass;
-            this.beanName = beanName;
-            this.callback = callback;
-        }
-
-        public Class<?> getTargetClass() {
-            return targetClass;
-        }
-
-        public Class<?> getBuilderClass() {
-            return builderClass;
-        }
-
-        public Class<? extends Annotation> getScopeClass() {
-            return scopeClass;
-        }
-
-        public String getBeanName() {
-            return beanName;
-        }
-
-        public Function<Instance<Object>, Object> getCallback() {
-            return callback;
-        }
     }
 
     public static Object create(Instance<Object> lookup, String beanName, Class<?> targetClass, Class<?> builderClass) {
-        LLMConfig llmConfig = LLMConfigProvider.getLlmConfig();
+        return create(lookup, LLMConfigProvider.getLlmConfig(), beanName, targetClass, builderClass);
+    }
+
+    public static Object create(Instance<Object> lookup, LLMConfig llmConfig, String beanName, Class<?> targetClass,
+            Class<?> builderClass) {
         LOGGER.info(
-                "Create instance config:" + beanName + ", target class : " + targetClass + ", builderClass : " + builderClass);
+                "Create instance for :" + beanName + ", target class : " + targetClass + ", builderClass : " + builderClass);
+        String currentProperty = "";
         try {
             Object builder = targetClass.getMethod("builder").invoke(null);
             Set<String> properties = llmConfig.getPropertyNamesForBean(beanName);
             for (String property : properties) {
+                currentProperty = property;
                 String camelCaseProperty = LLMConfig.dashToCamel(property);
-                LOGGER.fine("Bean " + beanName + " " + property + "look for " + camelCaseProperty);
-                String key = "config." + property;
-                List<Field> fields = getFieldsUpToObject(builderClass);
-                LOGGER.fine("In " + builderClass + " find fields : " + fields);
-                Field declaredField = fields.stream()
-                        .filter(field -> field.getName().equals(camelCaseProperty)).findFirst().get();
-                Method methodToCall;
-                long countMultipleMethods = Arrays.stream(builderClass.getDeclaredMethods())
-                        .filter(method -> method.getName().equals(camelCaseProperty)).count();
-                if (countMultipleMethods > 1) {
-                    methodToCall = builderClass.getMethod(camelCaseProperty, declaredField.getType());
-                } else {
-                    methodToCall = Arrays.stream(builderClass.getDeclaredMethods())
-                            .filter(method -> method.getName().equals(camelCaseProperty)).findFirst().get();
-                }
-                if (methodToCall == null) {
-                    LOGGER.warning("No method found for " + property + " for bean " + beanName);
-                } else {
-                    boolean applied = false;
-                    for (PluginPropertyConverter converter : CONVERTERS) {
-                        if (converter.satisfies(targetClass, builderClass, camelCaseProperty)) {
-                            Object value = converter.convert(lookup, targetClass, builderClass, beanName, key, llmConfig);
-                            LOGGER.info("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : "
-                                    + String.valueOf(value));
-                            methodToCall.invoke(builder, value);
-                            applied = true;
-                        }
+                // determine field in builder
+                List<Field> fields = getFieldsInAllHierarchy(builderClass);
+                Field propertyFieldInBuilder = fields.stream()
+                        .filter(field -> field.getName().equals(camelCaseProperty))
+                        .findFirst()
+                        .orElse(null);
+                if (propertyFieldInBuilder == null)
+                    throw new NoSuchFieldException(
+                            "Can't find Field for property '" + property + "' (" + camelCaseProperty + ")");
+                //
+                Method setterMethod = builderClass.getMethod(camelCaseProperty, propertyFieldInBuilder.getType());
+                String propertyKey = "config." + property;
+                boolean applied = false;
+                for (PluginPropertyConverter converter : CONVERTERS) {
+                    if (converter.satisfies(targetClass, builderClass, camelCaseProperty)) {
+                        Object value = converter.convert(lookup, targetClass, builderClass, beanName, propertyKey, llmConfig);
+                        LOGGER.fine("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : "
+                                + value);
+                        setterMethod.invoke(builder, value);
+                        applied = true;
                     }
+                }
 
-                    if (!applied) {
-                        String stringValue = llmConfig.getBeanPropertyValue(beanName, key, String.class);
-                        LOGGER.info("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : " + stringValue);
+                if (!applied) {
+                    String stringValue = llmConfig.getBeanPropertyValue(beanName, propertyKey, String.class);
+                    LOGGER.fine("Attempt to feed : " + property + " (" + camelCaseProperty + ") with : " + stringValue);
 
-                        Class<?> parameterType = declaredField.getType();
-                        if (stringValue.startsWith("lookup:")) {
-                            String lookupableBean = stringValue.substring("lookup:".length());
-                            LOGGER.info("Lookup " + lookupableBean + " " + parameterType);
-                            Instance<?> inst;
-                            if ("default".equals(lookupableBean)) {
-                                inst = getInstance(lookup, parameterType);
-                            } else {
-                                inst = getInstance(lookup, parameterType, lookupableBean);
-                            }
-                            methodToCall.invoke(builder, inst.get());
+                    Class<?> parameterType = propertyFieldInBuilder.getType();
+                    if (stringValue.startsWith("lookup:")) {
+                        String lookupableBean = stringValue.substring("lookup:".length());
+                        LOGGER.info("Lookup " + lookupableBean + " " + parameterType);
+                        Instance<?> inst;
+                        if ("default".equals(lookupableBean)) {
+                            inst = getInstance(lookup, parameterType);
                         } else {
-                            Object value = llmConfig.getBeanPropertyValue(beanName, key, parameterType);
-                            methodToCall.invoke(builder, value);
+                            inst = getInstance(lookup, parameterType, lookupableBean);
                         }
+                        setterMethod.invoke(builder, inst.get());
+                    } else {
+                        Object value = llmConfig.getBeanPropertyValue(beanName, propertyKey, parameterType);
+                        setterMethod.invoke(builder, value);
                     }
                 }
             }
             return builderClass.getMethod("build").invoke(builder);
-        } catch (IllegalAccessException | IllegalArgumentException | NoSuchMethodException | SecurityException
-                | InvocationTargetException e) {
-            throw new RuntimeException(e);
+        } catch (
+                IllegalAccessException | IllegalArgumentException | NoSuchMethodException | SecurityException
+                | NoSuchFieldException | InvocationTargetException e) {
+            throw new RuntimeException("Current property : " + currentProperty, e);
         }
     }
 
-    private static List<Field> getFieldsUpToObject(Class<?> startClass) {
+    private static List<Field> getFieldsInAllHierarchy(Class<?> startClass) {
 
         List<Field> currentClassFields = new ArrayList<>(Arrays.asList(startClass.getDeclaredFields()));
         Class<?> parentClass = startClass.getSuperclass();
 
         if (parentClass != null && !parentClass.equals(Object.class)) {
-            List<Field> parentClassFields = getFieldsUpToObject(parentClass);
+            List<Field> parentClassFields = getFieldsInAllHierarchy(parentClass);
             currentClassFields.addAll(parentClassFields);
         }
 
@@ -237,9 +218,9 @@ public class CommonLLMPluginCreator {
 
     interface PluginPropertyConverter {
 
-        public boolean satisfies(final Class<?> beanClass, final Class<?> builderClass, final String propertyName);
+        boolean satisfies(final Class<?> beanClass, final Class<?> builderClass, final String propertyName);
 
-        public Object convert(final Instance<Object> lookup, final Class<?> beanClass, final Class<?> builderClass,
+        Object convert(final Instance<Object> lookup, final Class<?> beanClass, final Class<?> builderClass,
                 final String beanName, final String key, final LLMConfig config);
     }
 
@@ -319,12 +300,10 @@ public class CommonLLMPluginCreator {
         public Object convert(Instance<Object> lookup, Class<?> beanClass, Class<?> builderClass, String beanName,
                 final String key,
                 LLMConfig config) {
-            // TODO Auto-generated method stub
             final Field declaredField = Arrays.stream(builderClass.getDeclaredFields())
                     .filter(field -> field.getName().equals(PROPERTY_NAME)).findFirst().get();
-            Class<?> typeParameterClass = null;
-            if (declaredField.getGenericType() instanceof ParameterizedType) {
-                ParameterizedType pType = (ParameterizedType) declaredField.getGenericType();
+            Class<?> typeParameterClass;
+            if (declaredField.getGenericType() instanceof ParameterizedType pType) {
                 typeParameterClass = (Class<?>) pType.getActualTypeArguments()[0];
             } else
                 typeParameterClass = Capability.class;
@@ -339,7 +318,6 @@ public class CommonLLMPluginCreator {
 
                 return enums;
             } catch (ClassNotFoundException e) {
-                // TODO Auto-generated catch block
                 throw new IllegalArgumentException(e);
             }
         }
