@@ -4,6 +4,7 @@ import static dev.langchain4j.data.document.loader.FileSystemDocumentLoader.load
 
 import java.io.File;
 import java.util.List;
+import java.util.logging.Logger;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
@@ -11,7 +12,6 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Produces;
 
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.parser.TextDocumentParser;

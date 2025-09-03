@@ -31,10 +31,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.jboss.logging</groupId>
-            <artifactId>jboss-logging</artifactId>
-        </dependency>
-        <dependency>
             <groupId>dev.langchain4j.cdi</groupId>
             <artifactId>langchain4j-cdi-integration-tests-common</artifactId>
             <version>${project.version}</version>

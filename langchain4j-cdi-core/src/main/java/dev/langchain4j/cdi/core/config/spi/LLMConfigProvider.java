@@ -3,14 +3,13 @@ package dev.langchain4j.cdi.core.config.spi;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
-
-import org.jboss.logging.Logger;
+import java.util.logging.Logger;
 
 public class LLMConfigProvider {
 
     private static LLMConfig llmConfig;
     private static volatile boolean initialized = false;
-    private static final Logger LOGGER = Logger.getLogger(LLMConfigProvider.class);
+    private static final Logger LOGGER = Logger.getLogger(LLMConfigProvider.class.getName());
 
     static {
         ServiceLoader<LLMConfig> loader = ServiceLoader.load(LLMConfig.class,
@@ -26,7 +25,7 @@ public class LLMConfigProvider {
             }
         }
         llmConfig = factories.iterator().next(); //loader.findFirst().orElse(null);
-        LOGGER.debug("Found LLMConfig interface: " + llmConfig.getClass().getName());
+        LOGGER.fine("Found LLMConfig interface: " + llmConfig.getClass().getName());
     }
 
     public static LLMConfig getLlmConfig() {
