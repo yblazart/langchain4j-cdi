@@ -37,13 +37,13 @@ jobs:
           git config --global user.email 'langchain4j.cdi@gmail.com'
 
       - name: Release Prepare
-        run: mvn --batch-mode release:prepare -P !unpublished -e -DreleaseVersion=${{ github.event.inputs.version }} -DdevelopmentVersion=${{ github.event.inputs.nextVersion }}-SNAPSHOT
+        run: mvn --batch-mode release:prepare -P\!unpublished -e -DreleaseVersion=${{ github.event.inputs.version }} -DdevelopmentVersion=${{ github.event.inputs.nextVersion }}-SNAPSHOT
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Release Perform
         run: |
-          mvn --batch-mode release:perform -P !unpublished
+          mvn --batch-mode release:perform -P\!unpublished
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
