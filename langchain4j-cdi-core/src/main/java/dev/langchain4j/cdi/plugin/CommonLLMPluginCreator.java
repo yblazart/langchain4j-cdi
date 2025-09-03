@@ -13,7 +13,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.util.TypeLiteral;
-import org.jboss.logging.Logger;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -30,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
@@ -44,7 +44,7 @@ dev.langchain4j.plugin.content-retriever.config.embedding-model=lookup:my-model
  */
 public class CommonLLMPluginCreator {
 
-    public static final Logger LOGGER = Logger.getLogger(CommonLLMPluginCreator.class);
+    public static final Logger LOGGER = Logger.getLogger(CommonLLMPluginCreator.class.getName());
 
     private static final Map<Class<?>, TypeLiteral<?>> TYPE_LITERALS = new HashMap<>();
     private static final Set<PluginPropertyConverter> CONVERTERS = Set.of(new ChatListenerPluginPropertyConverter(),
@@ -80,7 +80,7 @@ public class CommonLLMPluginCreator {
                         .filter(declClass -> declClass.getName().endsWith("Builder")).findFirst().orElse(null);
                 LOGGER.info("Builder class : " + builderCLass);
                 if (builderCLass == null) {
-                    LOGGER.warn("No builder class found, cancel " + beanName);
+                    LOGGER.warning("No builder class found, cancel " + beanName);
                     return;
                 }
                 beanBuilder.accept(
@@ -143,10 +143,10 @@ public class CommonLLMPluginCreator {
             Set<String> properties = llmConfig.getPropertyNamesForBean(beanName);
             for (String property : properties) {
                 String camelCaseProperty = LLMConfig.dashToCamel(property);
-                LOGGER.debug("Bean " + beanName + " " + property + "look for " + camelCaseProperty);
+                LOGGER.fine("Bean " + beanName + " " + property + "look for " + camelCaseProperty);
                 String key = "config." + property;
                 List<Field> fields = getFieldsUpToObject(builderClass);
-                LOGGER.debug("In " + builderClass + " find fields : " + fields);
+                LOGGER.fine("In " + builderClass + " find fields : " + fields);
                 Field declaredField = fields.stream()
                         .filter(field -> field.getName().equals(camelCaseProperty)).findFirst().get();
                 Method methodToCall;
@@ -159,7 +159,7 @@ public class CommonLLMPluginCreator {
                             .filter(method -> method.getName().equals(camelCaseProperty)).findFirst().get();
                 }
                 if (methodToCall == null) {
-                    LOGGER.warn("No method found for " + property + " for bean " + beanName);
+                    LOGGER.warning("No method found for " + property + " for bean " + beanName);
                 } else {
                     boolean applied = false;
                     for (PluginPropertyConverter converter : CONVERTERS) {

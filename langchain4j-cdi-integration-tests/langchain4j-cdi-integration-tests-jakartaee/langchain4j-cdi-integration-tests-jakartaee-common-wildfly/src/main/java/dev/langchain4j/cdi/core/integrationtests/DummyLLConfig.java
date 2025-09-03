@@ -8,15 +8,14 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
-import org.jboss.logging.Logger;
 
 import dev.langchain4j.cdi.core.config.spi.LLMConfig;
 
 public class DummyLLConfig implements LLMConfig {
     Properties properties = new Properties();
-    private static final Logger LOGGER = Logger.getLogger(DummyLLConfig.class);
+    private static final Logger LOGGER = Logger.getLogger(DummyLLConfig.class.getName());
 
     @Override
     public void init() {

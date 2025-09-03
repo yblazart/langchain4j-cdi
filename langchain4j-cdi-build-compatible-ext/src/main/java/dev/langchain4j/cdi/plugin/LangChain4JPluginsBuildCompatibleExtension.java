@@ -6,14 +6,14 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 
-import org.jboss.logging.Logger;
-
 import dev.langchain4j.cdi.core.config.spi.LLMConfig;
 import dev.langchain4j.cdi.core.config.spi.LLMConfigProvider;
 import dev.langchain4j.cdi.spi.AISyntheticBeanCreatorClassProvider;
 
+import java.util.logging.Logger;
+
 public class LangChain4JPluginsBuildCompatibleExtension implements BuildCompatibleExtension {
-    public static final Logger LOGGER = Logger.getLogger(LangChain4JPluginsBuildCompatibleExtension.class);
+    public static final Logger LOGGER = Logger.getLogger(LangChain4JPluginsBuildCompatibleExtension.class.getName());
     public static final String PARAM_BEANNAME = "beanName";
     public static final String PARAM_TARGET_CLASS = "targetClass";
     public static final String PARAM_BUILDER_CLASS = "builderClass";

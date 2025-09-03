@@ -161,11 +161,6 @@
                 <scope>runtime</scope>
             </dependency>
             <dependency>
-                <groupId>org.jboss.logging</groupId>
-                <artifactId>jboss-logging</artifactId>
-                <version>${version.org.jboss.logging}</version>
-            </dependency>
-            <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j</artifactId>
                 <version>${dev.langchain4j.version}</version>

@@ -5,6 +5,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Logger;
 
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
@@ -16,12 +17,10 @@ import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
 import jakarta.enterprise.inject.spi.ProcessInjectionPoint;
 import jakarta.enterprise.inject.spi.WithAnnotations;
 
-import org.jboss.logging.Logger;
-
 import dev.langchain4j.cdi.spi.RegisterAIService;
 
 public class LangChain4JAIServicePortableExtension implements Extension {
-    private static final Logger LOGGER = Logger.getLogger(LangChain4JAIServicePortableExtension.class);
+    private static final Logger LOGGER = Logger.getLogger(LangChain4JAIServicePortableExtension.class.getName());
     private static final Set<Class<?>> detectedAIServicesDeclaredInterfaces = new HashSet<>();
 
     public static Set<Class<?>> getDetectedAIServicesDeclaredInterfaces() {
@@ -33,7 +32,7 @@ public class LangChain4JAIServicePortableExtension implements Extension {
             LOGGER.info("processAnnotatedType register " + pat.getAnnotatedType().getJavaClass().getName());
             detectedAIServicesDeclaredInterfaces.add(pat.getAnnotatedType().getJavaClass());
         } else {
-            LOGGER.warn("processAnnotatedType reject " + pat.getAnnotatedType().getJavaClass().getName()
+            LOGGER.warning("processAnnotatedType reject " + pat.getAnnotatedType().getJavaClass().getName()
                     + " which is not an interface");
             pat.veto();
         }

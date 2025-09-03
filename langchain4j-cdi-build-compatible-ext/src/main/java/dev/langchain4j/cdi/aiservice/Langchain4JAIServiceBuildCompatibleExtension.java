@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.aiservice;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.Priority;
@@ -20,12 +21,10 @@ import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.lang.model.types.ClassType;
 import jakarta.inject.Named;
 
-import org.jboss.logging.Logger;
-
 import dev.langchain4j.cdi.spi.RegisterAIService;
 
 public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompatibleExtension {
-    private static final Logger LOGGER = Logger.getLogger(Langchain4JAIServiceBuildCompatibleExtension.class);
+    private static final Logger LOGGER = Logger.getLogger(Langchain4JAIServiceBuildCompatibleExtension.class.getName());
     private static final Set<Class<?>> detectedAIServicesDeclaredInterfaces = new HashSet<>();
     private static final Set<String> detectedTools = new HashSet<>();
     public static final String PARAM_INTERFACE_CLASS = "interfaceClass";
@@ -65,7 +64,7 @@ public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompat
             if (classInfo.name().equals(Object.class.getName())) {
                 return;
             }
-            LOGGER.debug("Detecting RegisterAIService on type " + classInfo.name());
+            LOGGER.fine("Detecting RegisterAIService on type " + classInfo.name());
             AnnotationInfo annotationInfo = classInfo.annotation(RegisterAIService.class);
             if (annotationInfo != null) {
                 registerAIService(classInfo);
@@ -85,7 +84,7 @@ public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompat
             RegisterAIService annotation = interfaceClass.getAnnotation(RegisterAIService.class);
             detectedTools.addAll(Arrays.stream(annotation.tools()).map(Class::getName).collect(Collectors.toList()));
         } else {
-            LOGGER.warn("The class is Annotated with @RegisterAIService, but only interface are allowed" + classInfo);
+            LOGGER.warning("The class is Annotated with @RegisterAIService, but only interface are allowed" + classInfo);
         }
     }
 
