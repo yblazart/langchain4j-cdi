@@ -24,7 +24,7 @@ public class LangChain4JPluginsPortableExtension implements Extension {
             llmConfig = LLMConfigProvider.getLlmConfig();
         }
 
-        CommonLLMPluginCreator.createAllLLMBeans(
+        CommonLLMPluginCreator.prepareAllLLMBeans(
                 llmConfig,
                 beanData -> {
                     LOGGER.fine("Add Bean " + beanData.targetClass() + " " + beanData.scopeClass() + " "

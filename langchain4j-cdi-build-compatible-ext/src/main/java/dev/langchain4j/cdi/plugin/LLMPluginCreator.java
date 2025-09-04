@@ -9,7 +9,7 @@ dev.langchain4j.plugin.content-retriever.class=dev.langchain4j.rag.content.retri
 dev.langchain4j.plugin.content-retriever.scope=jakarta.enterprise.context.ApplicationScoped
 dev.langchain4j.plugin.content-retriever.config.api-key=${azure.openai.api.key}
 dev.langchain4j.plugin.content-retriever.config.endpoint=${azure.openai.endpoint}
-dev.langchain4j.plugin.content-retriever.config.embedding-store=lookup:default
+dev.langchain4j.plugin.content-retriever.config.embedding-store=lookup:@default
 dev.langchain4j.plugin.content-retriever.config.embedding-model=lookup:my-model
  */
 public class LLMPluginCreator implements SyntheticBeanCreator<Object> {

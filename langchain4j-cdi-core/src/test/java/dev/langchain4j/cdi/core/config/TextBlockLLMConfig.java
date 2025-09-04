@@ -4,7 +4,6 @@ import dev.langchain4j.cdi.core.config.spi.LLMConfig;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -18,11 +17,12 @@ import java.util.stream.Collectors;
  * """;
  * LLMConfig config = new TestTextBlockLLMConfig(cfg);
  */
-public class TextBlockLLMConfig implements LLMConfig {
+public class TextBlockLLMConfig extends LLMConfig {
 
     private final Properties properties = new Properties();
     private String textBlock;
 
+    @SuppressWarnings("unused")
     public TextBlockLLMConfig() {
         this("");
     }
@@ -31,7 +31,7 @@ public class TextBlockLLMConfig implements LLMConfig {
         this.textBlock = textBlock == null ? "" : textBlock;
     }
 
-    public void reinit(String textBlock) {
+    public void reinitForTest(String textBlock) {
         this.textBlock = textBlock;
         init();
     }
@@ -46,44 +46,13 @@ public class TextBlockLLMConfig implements LLMConfig {
     }
 
     @Override
-    public Set<String> getBeanNames() {
-        return properties.keySet().stream().map(Object::toString)
-                .filter(prop -> prop.startsWith(PREFIX + "."))
-                .map(prop -> prop.substring(PREFIX.length() + 1, prop.indexOf(".", PREFIX.length() + 2)))
-                .collect(Collectors.toSet());
+    public Set<String> getPropertyKeys() {
+        return properties.keySet().stream().map(Object::toString).collect(Collectors.toSet());
     }
 
     @Override
-    public <T> T getBeanPropertyValue(String beanName, String propertyName, Class<T> type) {
-        String key = PREFIX + "." + beanName + "." + propertyName;
-        String value = properties.getProperty(key);
-        if (value == null)
-            return null;
-        if (type == String.class)
-            return type.cast(value);
-        if (type == Duration.class)
-            return type.cast(Duration.parse(value));
-        if (type == Integer.class || type == int.class)
-            return type.cast(Integer.valueOf(value));
-        if (type == Long.class || type == long.class)
-            return type.cast(Long.valueOf(value));
-        if (type == Boolean.class || type == boolean.class)
-            return type.cast(Boolean.valueOf(value));
-        if (type == Double.class || type == double.class)
-            return type.cast(Double.valueOf(value));
-        try {
-            return type.getConstructor(String.class).newInstance(value);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Unsupported type for value conversion: " + type, e);
-        }
+    public String getValue(String key) {
+        return properties.getProperty(key);
     }
 
-    @Override
-    public Set<String> getPropertyNamesForBean(String beanName) {
-        String configPrefix = PREFIX + "." + beanName + ".config.";
-        return properties.keySet().stream().map(Object::toString)
-                .filter(prop -> prop.startsWith(configPrefix))
-                .map(prop -> prop.substring(configPrefix.length()))
-                .collect(Collectors.toSet());
-    }
 }
