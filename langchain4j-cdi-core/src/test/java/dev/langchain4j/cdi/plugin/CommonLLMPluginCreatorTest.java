@@ -44,6 +44,8 @@ class CommonLLMPluginCreatorTest {
                 dev.langchain4j.plugin.beanA.config.api-key=01
                 dev.langchain4j.plugin.beanA.config.param1=test
                 dev.langchain4j.plugin.beanA.config.timeout=30
+                dev.langchain4j.plugin.beanA.config.dummyEnum=A
+                dev.langchain4j.plugin.beanA.config.dummyEnumList=C,D
                 dev.langchain4j.plugin.beanA.config.dummyInjected=lookup:@default
 
                 # No scope defined to get ApplicationScoped by default
@@ -51,6 +53,8 @@ class CommonLLMPluginCreatorTest {
                 dev.langchain4j.plugin.beanB.config.api-key=01
                 dev.langchain4j.plugin.beanB.config.param1=test
                 dev.langchain4j.plugin.beanB.config.timeout=30
+                dev.langchain4j.plugin.beanB.config.dummyEnum=A
+                dev.langchain4j.plugin.beanB.config.dummyEnumList=C,D
                 dev.langchain4j.plugin.beanB.config.dummyInjected=lookup:dev.langchain4j.cdi.plugin.DummyInjected
 
                 # No scope defined to get ApplicationScoped by default
@@ -60,7 +64,13 @@ class CommonLLMPluginCreatorTest {
                 """);
         llmConfig.registerProducer(
                 "ProducerC",
-                (lookup, beanName, llmCOnfig) -> new DummyModel("01", 30, dummyInjectedMocked, "test"));
+                (lookup, beanName, llmCOnfig) -> new DummyModel(
+                        "01",
+                        30,
+                        dummyInjectedMocked,
+                        "test",
+                        DummyEnum.A,
+                        List.of(DummyEnum.C, DummyEnum.D)));
     }
 
     private static boolean assertBean(DummyModel dummyModel, String beanName) {
@@ -68,6 +78,11 @@ class CommonLLMPluginCreatorTest {
         assertNotNull(dummyModel.param1, "For " + beanName + " param1");
         assertNotNull(dummyModel.timeout, "For " + beanName + " timeout");
         assertNotNull(dummyModel.dummyInjected, "For " + beanName + " dummyInjected");
+        assertNotNull(dummyModel.dummyEnum, "For " + beanName + " dummyEnum");
+        assertNotNull(dummyModel.dummyEnumList, "For " + beanName + " dummyEnumList");
+
+        assertEquals(DummyEnum.A, dummyModel.dummyEnum, "For " + beanName + " dummyEnum");
+        assertEquals(List.of(DummyEnum.C, DummyEnum.D), dummyModel.dummyEnumList, "For " + beanName + " dummyEnumList");
         return true;
     }
 

@@ -6,8 +6,13 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.util.TypeLiteral;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -77,46 +82,76 @@ public abstract class LLMConfig {
         producers.putIfAbsent(producersName, producer);
     }
 
-    public <T> T getBeanPropertyValue(String beanName, String propertyName, Class<T> type) {
+    public Object getBeanPropertyValue(String beanName, String propertyName, Type type) {
+        ParameterizedType parameterizedType = null;
+        Class<?> clazz;
+        if (type instanceof ParameterizedType) {
+            parameterizedType = (ParameterizedType) type;
+            clazz = (Class<?>) parameterizedType.getRawType();
+        } else {
+            clazz = (Class<?>) type;
+        }
         String stringValue = getBeanPropertyValue(beanName, propertyName);
-        if (type == ProducerFunction.class && stringValue != null) {
-            return type.cast(producers.get(stringValue));
+        if (clazz == ProducerFunction.class && stringValue != null) {
+            return producers.get(stringValue);
         }
         if (stringValue == null)
             return null;
-
-        if (type == String.class)
-            return type.cast(stringValue);
-        if (type == Duration.class)
-            return type.cast(Duration.parse(stringValue));
-        if (type == Integer.class || type == int.class)
-            return type.cast(Integer.valueOf(stringValue));
-        if (type == Long.class || type == long.class)
-            return type.cast(Long.valueOf(stringValue));
-        if (type == Boolean.class || type == boolean.class)
-            return type.cast(Boolean.valueOf(stringValue));
-        if (type == Double.class || type == double.class)
-            return type.cast(Double.valueOf(stringValue));
+        stringValue = stringValue.trim();
         try {
-            return type.getConstructor(String.class).newInstance(stringValue);
+            return getObject(clazz, parameterizedType, stringValue);
         } catch (Exception e) {
             throw new IllegalArgumentException("Unsupported type for value conversion: " + type, e);
         }
 
     }
 
-    public <T> T getBeanPropertyValue(Instance<Object> lookup, String beanName, String propertyName, Class<T> type) {
+    private Object getObject(Class<?> clazz, ParameterizedType parameterizedType, String stringValue)
+            throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        if (clazz == String.class)
+            return stringValue;
+        if (clazz == Duration.class)
+            return Duration.parse(stringValue);
+        if (clazz == Integer.class || clazz == int.class)
+            return Integer.valueOf(stringValue);
+        if (clazz == Long.class || clazz == long.class)
+            return Long.valueOf(stringValue);
+        if (clazz == Boolean.class || clazz == boolean.class)
+            return Boolean.valueOf(stringValue);
+        if (clazz == Double.class || clazz == double.class)
+            return Double.valueOf(stringValue);
+        // Enum support
+        if (clazz.isEnum()) {
+            @SuppressWarnings({"unchecked", "rawtypes"}) Class<? extends Enum> enumClass = (Class<? extends Enum<?>>) clazz;
+            //noinspection unchecked
+            return Enum.valueOf(enumClass, stringValue);
+        }
+        if (clazz.isAssignableFrom(List.class) && parameterizedType != null) {
+            // Try to resolve generic parameter (e.g., List<SomeEnum>)
+            List<Object> list = new ArrayList<>();
+            Type arg = parameterizedType.getActualTypeArguments()[0];
+            for (String val : stringValue.split(",")) {
+                list.add(getObject((Class<?>) arg, null, val));
+            }
+            return list;
+        }
+        return clazz.getConstructor(String.class).newInstance(stringValue);
+    }
+
+    public Object getBeanPropertyValue(Instance<Object> lookup, String beanName, String propertyName, Type type) {
         String stringValue = getBeanPropertyValue(beanName, propertyName);
+        if (stringValue == null)
+            return null;
 
         if (stringValue.startsWith("lookup:")) {
             String lookupableBean = stringValue.substring("lookup:".length());
             Instance<?> inst;
             if ("@default".equals(lookupableBean)) {
-                inst = getInstance(lookup, type);
+                inst = getInstance(lookup, (Class<?>) type);
             } else {
-                inst = getInstance(lookup, type, lookupableBean);
+                inst = getInstance(lookup, (Class<?>) type, lookupableBean);
             }
-            return type.cast(inst.get());
+            return inst.get();
         } else {
             return getBeanPropertyValue(beanName, propertyName, type);
         }

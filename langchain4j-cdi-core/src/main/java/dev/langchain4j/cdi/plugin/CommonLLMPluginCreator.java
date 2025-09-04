@@ -10,6 +10,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -59,7 +60,7 @@ public class CommonLLMPluginCreator {
             }
             Class<? extends Annotation> scopeClass = (Class<? extends Annotation>) loadClass(scopeClassName);
             Class<?> targetClass = loadClass(className);
-            ProducerFunction<Object> producer = llmConfig.getBeanPropertyValue(beanName, PRODUCER,
+            ProducerFunction<Object> producer = (ProducerFunction<Object>) llmConfig.getBeanPropertyValue(beanName, PRODUCER,
                     ProducerFunction.class);
             Class<?> builderCLass;
             if (producer == null) {
@@ -121,8 +122,8 @@ public class CommonLLMPluginCreator {
                 Method setterMethod = builderClass.getMethod(camelCaseProperty, propertyFieldInBuilder.getType());
                 String propertyKey = "config." + property;
 
-                Class<?> parameterType = propertyFieldInBuilder.getType();
-                Object value = llmConfig.getBeanPropertyValue(lookup, beanName, propertyKey, parameterType);
+                Type genericType = propertyFieldInBuilder.getGenericType();
+                Object value = llmConfig.getBeanPropertyValue(lookup, beanName, propertyKey, genericType);
                 setterMethod.invoke(builder, value);
             }
             return builderClass.getMethod("build").invoke(builder);
