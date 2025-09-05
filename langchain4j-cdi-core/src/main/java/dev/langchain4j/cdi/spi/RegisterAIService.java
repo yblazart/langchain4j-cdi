@@ -19,12 +19,6 @@ public @interface RegisterAIService {
 
     Class<?>[] tools() default {};
 
-    @Deprecated
-    String chatLanguageModelName() default "#default";
-
-    @Deprecated
-    String streamingChatLanguageModelName() default "";
-
     String chatModelName() default "#default";
 
     String streamingChatModelName() default "";

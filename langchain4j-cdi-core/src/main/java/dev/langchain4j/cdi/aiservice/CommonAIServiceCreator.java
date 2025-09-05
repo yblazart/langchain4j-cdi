@@ -28,21 +28,9 @@ public class CommonAIServiceCreator {
     public static <X> X create(Instance<Object> lookup, Class<X> interfaceClass) {
         RegisterAIService annotation = interfaceClass.getAnnotation(RegisterAIService.class);
         String chatModelName = Objects.requireNonNull(annotation).chatModelName();
-        if (chatModelName == null || chatModelName.isBlank() || "#default".equals(chatModelName)) {
-            String _chatModelName = Objects.requireNonNull(annotation).chatLanguageModelName();
-            if (_chatModelName != null && !_chatModelName.isBlank() && !"#default".equals(_chatModelName)) {
-                chatModelName = _chatModelName;
-            }
-        }
-        Instance<ChatModel> chatLanguageModel = getInstance(lookup, ChatModel.class, chatModelName);
         String streamingChatModelName = Objects.requireNonNull(annotation).streamingChatModelName();
-        if (streamingChatModelName == null || streamingChatModelName.isBlank() || "#default".equals(streamingChatModelName)) {
-            String _streamingChatModelName = Objects.requireNonNull(annotation).streamingChatLanguageModelName();
-            if (_streamingChatModelName != null && !_streamingChatModelName.isBlank()
-                    && !"#default".equals(_streamingChatModelName)) {
-                streamingChatModelName = _streamingChatModelName;
-            }
-        }
+        // Instances
+        Instance<ChatModel> chatModelInstance = getInstance(lookup, ChatModel.class, chatModelName);
         Instance<StreamingChatModel> streamingChatModel = getInstance(lookup, StreamingChatModel.class, streamingChatModelName);
         Instance<ContentRetriever> contentRetriever = getInstance(lookup, ContentRetriever.class,
                 annotation.contentRetrieverName());
@@ -51,9 +39,9 @@ public class CommonAIServiceCreator {
         Instance<ToolProvider> toolProvider = getInstance(lookup, ToolProvider.class, annotation.toolProviderName());
 
         AiServices<X> aiServices = AiServices.builder(interfaceClass);
-        if (chatLanguageModel != null && chatLanguageModel.isResolvable()) {
-            LOGGER.fine("ChatModel " + chatLanguageModel.get());
-            aiServices.chatModel(chatLanguageModel.get());
+        if (chatModelInstance != null && chatModelInstance.isResolvable()) {
+            LOGGER.fine("ChatModel " + chatModelInstance.get());
+            aiServices.chatModel(chatModelInstance.get());
         }
         if (streamingChatModel != null && streamingChatModel.isResolvable()) {
             LOGGER.fine("StreamingChatModel " + streamingChatModel.get());
