@@ -39,6 +39,7 @@ public class TextBlockLLMConfig extends LLMConfig {
     @Override
     public void init() {
         try (StringReader reader = new StringReader(textBlock)) {
+            properties.clear();
             properties.load(reader);
         } catch (IOException e) {
             throw new RuntimeException(e);

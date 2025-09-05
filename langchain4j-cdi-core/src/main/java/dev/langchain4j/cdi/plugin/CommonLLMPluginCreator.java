@@ -93,10 +93,6 @@ public class CommonLLMPluginCreator {
 
     }
 
-    public static Object create(Instance<Object> lookup, String beanName, Class<?> targetClass, Class<?> builderClass) {
-        return create(lookup, LLMConfigProvider.getLlmConfig(), beanName, targetClass, builderClass);
-    }
-
     public static Object create(Instance<Object> lookup, LLMConfig llmConfig, String beanName, Class<?> targetClass,
             Class<?> builderClass) {
         LOGGER.info(

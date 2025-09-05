@@ -7,6 +7,7 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -28,8 +30,8 @@ class CommonLLMPluginCreatorTest {
     private final static TextBlockLLMConfig llmConfig = (TextBlockLLMConfig) LLMConfigProvider.getLlmConfig();
     public static final List<String> BEAN_NAMES_LIST = List.of("beanA", "beanB", "beanC");
 
-    @BeforeAll
-    static void beforeAll() {
+    @BeforeEach
+    void beforeEach() {
         DummyInjected dummyInjectedMocked = mock(DummyInjected.class);
         //
         when(LOOKUP_MOCKED.select(DummyInjected.class)).thenReturn(DUMMY_INJECTED_INSTANCE_MOCKED);
@@ -93,7 +95,8 @@ class CommonLLMPluginCreatorTest {
                 llmConfig,
                 beanDataList::add);
 
-        assertEquals(BEAN_NAMES_LIST.size(), beanDataList.size());
+        assertEquals(BEAN_NAMES_LIST.size(), beanDataList.size(), "Found " + beanDataList.size() + " beans: "
+                + beanDataList.stream().map(CommonLLMPluginCreator.BeanData::beanName).toList());
         assertTrue(
                 beanDataList.stream().map(CommonLLMPluginCreator.BeanData::beanName).toList()
                         .containsAll(BEAN_NAMES_LIST));
@@ -112,6 +115,71 @@ class CommonLLMPluginCreatorTest {
                 beanDataList.stream().filter(bd -> !bd.beanName().equals("beanA"))
                         .allMatch(bd -> bd.scopeClass().equals(ApplicationScoped.class)));
 
+    }
+
+    @Test
+    void prepareAllLLMBeans_noBuilderClass_leadsToNoBeanData() throws ClassNotFoundException {
+        llmConfig.reinitForTest("""
+                dev.langchain4j.plugin.noBuilder.class=dev.langchain4j.cdi.plugin.NoBuilderModel
+                """);
+        List<CommonLLMPluginCreator.BeanData> list = new ArrayList<>();
+        CommonLLMPluginCreator.prepareAllLLMBeans(llmConfig, list::add);
+        // The method logs a warning and returns (stops processing this bean). Ensure nothing added.
+        assertTrue(list.isEmpty(), "No BeanData should be created when builder class is missing: "
+                + list.stream().map(CommonLLMPluginCreator.BeanData::beanName).toList());
+    }
+
+    @Test
+    void create_missingField_throwsRuntimeWrappingNoSuchField() throws ClassNotFoundException {
+        llmConfig.reinitForTest("""
+                dev.langchain4j.plugin.bad.class=dev.langchain4j.cdi.plugin.DummyModel
+                dev.langchain4j.plugin.bad.config.unknown-prop=value
+                """);
+        Class<?> target = CommonLLMPluginCreator.loadClass("dev.langchain4j.cdi.plugin.DummyModel");
+        Class<?> builder = target.getDeclaredClasses()[0];
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> CommonLLMPluginCreator.create(LOOKUP_MOCKED, llmConfig, "bad", target, builder));
+        assertTrue(ex.getCause() instanceof NoSuchFieldException);
+        assertTrue(ex.getMessage().contains("unknown-prop"));
+    }
+
+    @Test
+    void getFieldsInAllHierarchy_handlesNullAndIncludesParent() throws Exception {
+        // Null case via reflection
+        var method = CommonLLMPluginCreator.class.getDeclaredMethod("getFieldsInAllHierarchy", Class.class);
+        method.setAccessible(true);
+        List<?> empty = (List<?>) method.invoke(null, new Object[] { null });
+        assertNotNull(empty);
+        assertTrue(empty.isEmpty());
+        // Parent+child aggregation
+        Class<?> builder = DummyModel.DummyModelBuilder.class;
+        @SuppressWarnings("unchecked")
+        List<java.lang.reflect.Field> fields = (List<java.lang.reflect.Field>) method.invoke(null, builder);
+        // Should include fields from DummyBaseModel.Builder: apiKey, timeout, dummyInjected
+        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("apiKey")));
+        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("timeout")));
+        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("dummyInjected")));
+        // And from DummyModel.DummyModelBuilder: param1, dummyEnum, dummyEnumList
+        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("param1")));
+        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("dummyEnum")));
+        assertTrue(fields.stream().anyMatch(f -> f.getName().equals("dummyEnumList")));
+    }
+
+    @Test
+    void loadClass_usesFallbackWhenContextClassLoaderCannotFind() throws Exception {
+        ClassLoader original = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(new ClassLoader(null) {
+                @Override
+                public Class<?> loadClass(String name) throws ClassNotFoundException {
+                    throw new ClassNotFoundException("forced");
+                }
+            });
+            Class<?> cls = CommonLLMPluginCreator.loadClass("dev.langchain4j.cdi.plugin.DummyModel");
+            assertEquals(DummyModel.class, cls);
+        } finally {
+            Thread.currentThread().setContextClassLoader(original);
+        }
     }
 
 }
