@@ -4,7 +4,7 @@ This example is based on a simplified car booking application inspired from the 
 
 These are the steps to run this service.
 
-1. Go to the root `smallrye-llm` directory, then build it using the command:
+1. Go to the root `langchain4j-cdi` directory, then build it using the command:
  	> `mvn clean install -e`
 2. Once the project is built, move to directory `cd examples/liberty-car-booking` and run the following command to install the bundle as a user liberty feature:
  	> `mvn liberty:dev -e`
@@ -54,7 +54,7 @@ To run in JVM mode (after packaging): `mvn liberty:start`. To stop the running s
 
 The application exposes a REST API documented with OpenAPI. 
 
-To interact with the application go to: [http://localhost:9080/openapi/ui](http://localhost:8080/openapi/ui).
+To interact with the application go to: [http://localhost:9080/openapi/ui](http://localhost:9080/openapi/ui).
 
 
 Typical questions you can ask in the Chat:
