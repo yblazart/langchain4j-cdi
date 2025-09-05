@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +48,8 @@ class CommonLLMPluginCreatorTest {
                 dev.langchain4j.plugin.beanA.config.dummyEnum=A
                 dev.langchain4j.plugin.beanA.config.dummyEnumList=C,D
                 dev.langchain4j.plugin.beanA.config.dummyInjected=lookup:@default
-
+                dev.langchain4j.plugin.beanA.config.dummyWithStringConstructor=ok
+                
                 # No scope defined to get ApplicationScoped by default
                 dev.langchain4j.plugin.beanB.class=dev.langchain4j.cdi.plugin.DummyModel
                 dev.langchain4j.plugin.beanB.config.api-key=01
@@ -58,11 +58,12 @@ class CommonLLMPluginCreatorTest {
                 dev.langchain4j.plugin.beanB.config.dummyEnum=A
                 dev.langchain4j.plugin.beanB.config.dummyEnumList=C,D
                 dev.langchain4j.plugin.beanB.config.dummyInjected=lookup:dev.langchain4j.cdi.plugin.DummyInjected
-
+                dev.langchain4j.plugin.beanB.config.dummyWithStringConstructor=ok
+                
                 # No scope defined to get ApplicationScoped by default
                 dev.langchain4j.plugin.beanC.class=dev.langchain4j.cdi.plugin.DummyModel
                 dev.langchain4j.plugin.beanC.defined_bean_producer=ProducerC
-
+                
                 """);
         llmConfig.registerProducer(
                 "ProducerC",
@@ -72,7 +73,10 @@ class CommonLLMPluginCreatorTest {
                         dummyInjectedMocked,
                         "test",
                         DummyEnum.A,
-                        List.of(DummyEnum.C, DummyEnum.D)));
+                        List.of(DummyEnum.C, DummyEnum.D),
+                        new DummyWithStringConstructor("ok")
+                )
+        );
     }
 
     private static boolean assertBean(DummyModel dummyModel, String beanName) {
@@ -82,8 +86,10 @@ class CommonLLMPluginCreatorTest {
         assertNotNull(dummyModel.dummyInjected, "For " + beanName + " dummyInjected");
         assertNotNull(dummyModel.dummyEnum, "For " + beanName + " dummyEnum");
         assertNotNull(dummyModel.dummyEnumList, "For " + beanName + " dummyEnumList");
+        assertNotNull(dummyModel.dummyWithStringConstructor, "For " + beanName + " dummyWithStringConstructor");
 
         assertEquals(DummyEnum.A, dummyModel.dummyEnum, "For " + beanName + " dummyEnum");
+        assertEquals("ok", dummyModel.dummyWithStringConstructor.getValue(), "For " + beanName + " dummyWithStringConstructor");
         assertEquals(List.of(DummyEnum.C, DummyEnum.D), dummyModel.dummyEnumList, "For " + beanName + " dummyEnumList");
         return true;
     }
@@ -148,7 +154,7 @@ class CommonLLMPluginCreatorTest {
         // Null case via reflection
         var method = CommonLLMPluginCreator.class.getDeclaredMethod("getFieldsInAllHierarchy", Class.class);
         method.setAccessible(true);
-        List<?> empty = (List<?>) method.invoke(null, new Object[] { null });
+        List<?> empty = (List<?>) method.invoke(null, new Object[]{null});
         assertNotNull(empty);
         assertTrue(empty.isEmpty());
         // Parent+child aggregation
