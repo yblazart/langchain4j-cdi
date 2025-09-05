@@ -32,13 +32,6 @@ dev.langchain4j.plugin.content-retriever.config.embedding-model=lookup:my-model
  * It aims to works lile Smallrye Config, but with pure CDI.
  */
 public abstract class LLMConfig {
-    static final Map<Class<?>, TypeLiteral<?>> TYPE_LITERALS = new HashMap<>();
-
-    static {
-        TYPE_LITERALS.put(EmbeddingStore.class, new TypeLiteral<EmbeddingStore<TextSegment>>() {
-        });
-    }
-
     Map<String, ProducerFunction<?>> producers = new ConcurrentHashMap<>();
 
     /**
@@ -122,7 +115,8 @@ public abstract class LLMConfig {
             return Double.valueOf(stringValue);
         // Enum support
         if (clazz.isEnum()) {
-            @SuppressWarnings({"unchecked", "rawtypes"}) Class<? extends Enum> enumClass = (Class<? extends Enum<?>>) clazz;
+            @SuppressWarnings({ "unchecked", "rawtypes" })
+            Class<? extends Enum> enumClass = (Class<? extends Enum<?>>) clazz;
             //noinspection unchecked
             return Enum.valueOf(enumClass, stringValue);
         }
@@ -148,6 +142,8 @@ public abstract class LLMConfig {
             Instance<?> inst;
             if ("@default".equals(lookupableBean)) {
                 inst = getInstance(lookup, (Class<?>) type);
+            } else if ("@all".equals(lookupableBean)) {
+                return lookup.select((Class<?>) type).stream().toList();
             } else {
                 inst = getInstance(lookup, (Class<?>) type, lookupableBean);
             }
@@ -157,10 +153,7 @@ public abstract class LLMConfig {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private <T> Instance<T> getInstance(Instance<Object> lookup, Class<T> clazz) {
-        if (TYPE_LITERALS.containsKey(clazz))
-            return (Instance<T>) lookup.select(TYPE_LITERALS.get(clazz));
         return lookup.select(clazz);
     }
 
