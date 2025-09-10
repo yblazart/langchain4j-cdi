@@ -37,7 +37,7 @@ jobs:
           git config --global user.email 'langchain4j.cdi@gmail.com'
 
       - name: Release Prepare
-        run: mvn --batch-mode release:prepare -P\!unpublished -e -DreleaseVersion=${{ github.event.inputs.version }} -DdevelopmentVersion=${{ github.event.inputs.nextVersion }}-SNAPSHOT
+        run: mvn --batch-mode release:prepare -e -DreleaseVersion=${{ github.event.inputs.version }} -DdevelopmentVersion=${{ github.event.inputs.nextVersion }}-SNAPSHOT
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
@@ -60,7 +60,7 @@ jobs:
     needs: deploy
     steps:
       - name: "Determine tag"
-        run: "echo \"RELEASE_TAG=langchain4j-cdi-${{ github.event.inputs.version }}\" >> $GITHUB_ENV"
+        run: "echo \"RELEASE_TAG=${{ github.event.inputs.version }}\" >> $GITHUB_ENV"
       - name: "Determine Release Name"
         run: "echo \"RELEASE_NAME=LangChain4J CDI ${{ github.event.inputs.version }}\" >> $GITHUB_ENV"
 
