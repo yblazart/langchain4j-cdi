@@ -45,12 +45,11 @@ jobs:
           cache-dependency-path: '**/pom.xml'
 
       - name: build with maven
-        run: mvn -B formatter:validate verify --file pom.xml
+        run: ./mvnw -B formatter:validate verify --file pom.xml
 
   build-windows:
     runs-on: windows-latest
     name: build with jdk 17 on windows
-
     steps:
       - name: git configure long path
         run: git config --global core.longpaths true
@@ -67,4 +66,4 @@ jobs:
           cache-dependency-path: '**/pom.xml'
 
       - name: build with maven
-        run: mvn -B formatter:validate verify --file pom.xml
+        run: .\mvnw -B formatter:validate verify --file pom.xml
