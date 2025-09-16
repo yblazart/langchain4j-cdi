@@ -1,5 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>dev.langchain4j.cdi.examples</groupId>
@@ -13,21 +13,9 @@
 
     <properties>
         <payara.version>6.2025.6</payara.version>
-        <format.skip>true</format.skip> <!-- war plugin with sorts import do not support java 21-->
+        <format.skip>true</format.skip>
+        <!-- war plugin with sorts import do not support java 21-->
     </properties>
-
-    <repositories>
-        <repository>
-            <id>payara-nexus-artifacts</id>
-            <url>https://nexus.dev.payara.fish/repository/payara-artifacts</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -50,8 +38,8 @@
         <dependency>
             <groupId>org.eclipse.microprofile</groupId>
             <artifactId>microprofile</artifactId>
-            <scope>provided</scope>
             <type>pom</type>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>fish.payara.api</groupId>
@@ -117,6 +105,19 @@
             <scope>runtime</scope>
         </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <id>payara-nexus-artifacts</id>
+            <url>https://nexus.dev.payara.fish/repository/payara-artifacts</url>
+        </repository>
+    </repositories>
     <build>
         <plugins>
             <plugin>
@@ -153,13 +154,12 @@
                 <executions>
                     <execution>
                         <id>copy-swagger-resources</id>
-                        <phase>process-resources</phase>
                         <goals>
                             <goal>copy-resources</goal>
                         </goals>
+                        <phase>process-resources</phase>
                         <configuration>
-                            <outputDirectory>${project.build.directory}/${project.artifactId}-${project.version}
-                            </outputDirectory>
+                            <outputDirectory>${project.build.directory}/${project.artifactId}-${project.version}</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${project.build.directory}/swagger-ui-master/dist</directory>

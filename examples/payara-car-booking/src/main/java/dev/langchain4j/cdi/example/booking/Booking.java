@@ -12,9 +12,7 @@ public class Booking {
     private boolean canceled = false;
     private String carModel;
 
-    /**
-     *
-     */
+    /** */
     public Booking() {
         super();
     }
@@ -27,7 +25,12 @@ public class Booking {
      * @param canceled
      * @param carModel
      */
-    public Booking(String bookingNumber, LocalDate start, LocalDate end, Customer customer, boolean canceled,
+    public Booking(
+            String bookingNumber,
+            LocalDate start,
+            LocalDate end,
+            Customer customer,
+            boolean canceled,
             String carModel) {
         super();
         this.bookingNumber = bookingNumber;
@@ -38,86 +41,62 @@ public class Booking {
         this.carModel = carModel;
     }
 
-    /**
-     * @return the bookingNumber
-     */
+    /** @return the bookingNumber */
     public String getBookingNumber() {
         return bookingNumber;
     }
 
-    /**
-     * @param bookingNumber the bookingNumber to set
-     */
+    /** @param bookingNumber the bookingNumber to set */
     public void setBookingNumber(String bookingNumber) {
         this.bookingNumber = bookingNumber;
     }
 
-    /**
-     * @return the start
-     */
+    /** @return the start */
     public LocalDate getStart() {
         return start;
     }
 
-    /**
-     * @param start the start to set
-     */
+    /** @param start the start to set */
     public void setStart(LocalDate start) {
         this.start = start;
     }
 
-    /**
-     * @return the end
-     */
+    /** @return the end */
     public LocalDate getEnd() {
         return end;
     }
 
-    /**
-     * @param end the end to set
-     */
+    /** @param end the end to set */
     public void setEnd(LocalDate end) {
         this.end = end;
     }
 
-    /**
-     * @return the customer
-     */
+    /** @return the customer */
     public Customer getCustomer() {
         return customer;
     }
 
-    /**
-     * @param customer the customer to set
-     */
+    /** @param customer the customer to set */
     public void setCustomer(Customer customer) {
         this.customer = customer;
     }
 
-    /**
-     * @return the canceled
-     */
+    /** @return the canceled */
     public boolean isCanceled() {
         return canceled;
     }
 
-    /**
-     * @param canceled the canceled to set
-     */
+    /** @param canceled the canceled to set */
     public void setCanceled(boolean canceled) {
         this.canceled = canceled;
     }
 
-    /**
-     * @return the carModel
-     */
+    /** @return the carModel */
     public String getCarModel() {
         return carModel;
     }
 
-    /**
-     * @param carModel the carModel to set
-     */
+    /** @param carModel the carModel to set */
     public void setCarModel(String carModel) {
         this.carModel = carModel;
     }
@@ -129,16 +108,16 @@ public class Booking {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
+        if (this == obj) return true;
+        if (obj == null) return false;
+        if (getClass() != obj.getClass()) return false;
         Booking other = (Booking) obj;
-        return Objects.equals(bookingNumber, other.bookingNumber) && canceled == other.canceled
-                && Objects.equals(carModel, other.carModel) && Objects.equals(customer, other.customer)
-                && Objects.equals(end, other.end) && Objects.equals(start, other.start);
+        return Objects.equals(bookingNumber, other.bookingNumber)
+                && canceled == other.canceled
+                && Objects.equals(carModel, other.carModel)
+                && Objects.equals(customer, other.customer)
+                && Objects.equals(end, other.end)
+                && Objects.equals(start, other.start);
     }
 
     @Override

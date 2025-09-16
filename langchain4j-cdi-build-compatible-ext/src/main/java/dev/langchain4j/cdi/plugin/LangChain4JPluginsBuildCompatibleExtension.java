@@ -8,7 +8,6 @@ import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.literal.NamedLiteral;
-
 import java.util.logging.Logger;
 
 public class LangChain4JPluginsBuildCompatibleExtension implements BuildCompatibleExtension {
@@ -19,7 +18,7 @@ public class LangChain4JPluginsBuildCompatibleExtension implements BuildCompatib
 
     private LLMConfig llmConfig;
 
-    @SuppressWarnings({ "unused", "unchecked" })
+    @SuppressWarnings({"unused", "unchecked"})
     @Synthesis
     public void createSynthetics(SyntheticComponents syntheticComponents) throws ClassNotFoundException {
         if (llmConfig == null) {
@@ -27,23 +26,20 @@ public class LangChain4JPluginsBuildCompatibleExtension implements BuildCompatib
         }
         LOGGER.info("CDI BCE Langchain4j plugin");
 
-        CommonLLMPluginCreator.prepareAllLLMBeans(
-                llmConfig,
-                beanData -> {
-                    SyntheticBeanBuilder<Object> builder = (SyntheticBeanBuilder<Object>) syntheticComponents
-                            .addBean(beanData.targetClass());
+        CommonLLMPluginCreator.prepareAllLLMBeans(llmConfig, beanData -> {
+            SyntheticBeanBuilder<Object> builder =
+                    (SyntheticBeanBuilder<Object>) syntheticComponents.addBean(beanData.targetClass());
 
-                    builder.createWith(AISyntheticBeanCreatorClassProvider.getSyntheticBeanCreatorClass())
-                            .type(beanData.targetClass())
-                            .scope(beanData.scopeClass())
-                            .name(beanData.beanName())
-                            .qualifier(NamedLiteral.of(beanData.beanName()))
-                            .withParam(PARAM_BEANNAME, beanData.beanName())
-                            .withParam(PARAM_TARGET_CLASS, beanData.targetClass())
-                            .withParam(PARAM_BUILDER_CLASS, beanData.builderClass());
+            builder.createWith(AISyntheticBeanCreatorClassProvider.getSyntheticBeanCreatorClass())
+                    .type(beanData.targetClass())
+                    .scope(beanData.scopeClass())
+                    .name(beanData.beanName())
+                    .qualifier(NamedLiteral.of(beanData.beanName()))
+                    .withParam(PARAM_BEANNAME, beanData.beanName())
+                    .withParam(PARAM_TARGET_CLASS, beanData.targetClass())
+                    .withParam(PARAM_BUILDER_CLASS, beanData.builderClass());
 
-                    for (Class<?> newInterface : beanData.targetClass().getInterfaces())
-                        builder.type(newInterface);
-                });
+            for (Class<?> newInterface : beanData.targetClass().getInterfaces()) builder.type(newInterface);
+        });
     }
 }

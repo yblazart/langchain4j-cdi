@@ -1,18 +1,15 @@
-/**
- *
- */
+/** */
 package dev.langchain4j.cdi.faulttolerance.spi;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.util.List;
-import java.util.Map;
 
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InterceptionType;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.interceptor.InvocationContext;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Buhake Sindi
@@ -30,8 +27,8 @@ class FaultToleranceInterceptorHandler {
      * @param interceptionType
      * @param interceptors
      */
-    FaultToleranceInterceptorHandler(BeanManager beanManager, InterceptionType interceptionType,
-            List<Interceptor<?>> interceptors) {
+    FaultToleranceInterceptorHandler(
+            BeanManager beanManager, InterceptionType interceptionType, List<Interceptor<?>> interceptors) {
         super();
         this.beanManager = beanManager;
         this.interceptionType = interceptionType;
@@ -45,8 +42,8 @@ class FaultToleranceInterceptorHandler {
             CreationalContext<?> context = beanManager.createCreationalContext(interceptor);
             try {
                 Object interceptorInstance = beanManager.getReference(interceptor, interceptor.getBeanClass(), context);
-                return interceptor.intercept(interceptionType, interceptorInstance,
-                        new InvocationContextChain(invocationContext));
+                return interceptor.intercept(
+                        interceptionType, interceptorInstance, new InvocationContextChain(invocationContext));
             } finally {
                 context.release();
             }
@@ -59,9 +56,7 @@ class FaultToleranceInterceptorHandler {
 
         private final InvocationContext delegate;
 
-        /**
-         * @param delegate
-         */
+        /** @param delegate */
         public InvocationContextChain(InvocationContext delegate) {
             super();
             this.delegate = delegate;

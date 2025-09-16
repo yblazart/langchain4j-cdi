@@ -11,10 +11,9 @@ public interface AISyntheticBeanCreatorClassFactory extends Comparable<AISynthet
     Class<? extends SyntheticBeanCreator<Object>> getSyntheticBeanCreatorClass();
 
     /**
-     * The priority for the BeanCreatorFactory when resolving the service to get
-     * the implementation. This is used when selecting the implementation when
-     * several implementations are loaded. The highest priority implementation
-     * will be used.
+     * The priority for the BeanCreatorFactory when resolving the service to get the implementation. This is used when
+     * selecting the implementation when several implementations are loaded. The highest priority implementation will be
+     * used.
      *
      * @return the priority.
      */

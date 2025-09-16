@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
@@ -17,7 +18,6 @@
         <payara.version>6.2025.9</payara.version>
         <payara-arquillian.version>3.1</payara-arquillian.version>
     </properties>
-
 
     <dependencies>
         <!-- Payara dependencies -->
@@ -45,7 +45,6 @@
         </dependency>
     </dependencies>
 
-
     <build>
         <testResources>
             <testResource>
@@ -59,10 +58,10 @@
                 <executions>
                     <execution>
                         <id>unpack</id>
-                        <phase>process-test-classes</phase>
                         <goals>
                             <goal>unpack</goal>
                         </goals>
+                        <phase>process-test-classes</phase>
                         <configuration>
                             <artifactItems>
                                 <artifactItem>
@@ -84,8 +83,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <payara.home>${project.build.directory}/payara6</payara.home>
-                        <java.util.logging.config.file>${project.build.testOutputDirectory}/logging.properties
-                        </java.util.logging.config.file>
+                        <java.util.logging.config.file>${project.build.testOutputDirectory}/logging.properties</java.util.logging.config.file>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

@@ -1,16 +1,13 @@
-/**
- *
- */
+/** */
 package dev.langchain4j.cdi.faulttolerance.spi;
 
+import jakarta.enterprise.util.AnnotationLiteral;
+import jakarta.interceptor.InterceptorBinding;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-
-import jakarta.enterprise.util.AnnotationLiteral;
-import jakarta.interceptor.InterceptorBinding;
 
 /**
  * @author Buhake Sindi
@@ -18,11 +15,10 @@ import jakarta.interceptor.InterceptorBinding;
  */
 @Inherited
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD, ElementType.TYPE })
+@Target({ElementType.METHOD, ElementType.TYPE})
 @InterceptorBinding
 @interface ApplyFaultTolerance {
 
-    static class ApplyFaultToleranceLiteral extends AnnotationLiteral<ApplyFaultTolerance> implements ApplyFaultTolerance {
-
-    }
+    static class ApplyFaultToleranceLiteral extends AnnotationLiteral<ApplyFaultTolerance>
+            implements ApplyFaultTolerance {}
 }

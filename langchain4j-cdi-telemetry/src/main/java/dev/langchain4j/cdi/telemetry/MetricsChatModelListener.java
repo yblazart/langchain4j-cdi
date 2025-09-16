@@ -1,12 +1,5 @@
 package dev.langchain4j.cdi.telemetry;
 
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.Dependent;
-import jakarta.inject.Inject;
-
 import dev.langchain4j.model.chat.listener.ChatModelErrorContext;
 import dev.langchain4j.model.chat.listener.ChatModelListener;
 import dev.langchain4j.model.chat.listener.ChatModelRequestContext;
@@ -18,11 +11,15 @@ import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.DoubleHistogram;
 import io.opentelemetry.api.metrics.LongHistogram;
 import io.opentelemetry.api.metrics.Meter;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Inject;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Creates metrics that follow the
- * <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/">Semantic Conventions
- * for GenAI Metrics</a>.
+ * Creates metrics that follow the <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/">Semantic
+ * Conventions for GenAI Metrics</a>.
  *
  * @author Buhake Sindi
  * @since 25 November 2024
@@ -46,8 +43,9 @@ public class MetricsChatModelListener implements ChatModelListener {
         clientTokenUsage = meter.histogramBuilder(METRIC_CLIENT_TOKEN_USAGE_NAME)
                 .ofLongs()
                 .setDescription("Measures number of input and output tokens used")
-                .setExplicitBucketBoundariesAdvice(List.of(1L, 4L, 16L, 64L, 256L, 1024L, 4096L, 16384L, 65536L, 262144L,
-                        1048576L, 4194304L, 16777216L, 67108864L))
+                .setExplicitBucketBoundariesAdvice(List.of(
+                        1L, 4L, 16L, 64L, 256L, 1024L, 4096L, 16384L, 65536L, 262144L, 1048576L, 4194304L, 16777216L,
+                        67108864L))
                 .build();
 
         clientOperationDuration = meter.histogramBuilder(METRIC_CLIENT_OPERATION_DURATION_NAME)
@@ -71,25 +69,39 @@ public class MetricsChatModelListener implements ChatModelListener {
         final ChatRequest request = responseContext.chatRequest();
         final ChatResponse response = responseContext.chatResponse();
 
-        Attributes inputTokenCountAttributes = Attributes.of(AttributeKey.stringKey("gen_ai.operation.name"), "chat",
-                AttributeKey.stringKey("gen_ai.request.model"), request.parameters().modelName(),
-                AttributeKey.stringKey("gen_ai.response.model"), response.metadata().modelName(),
-                AttributeKey.stringKey("gen_ai.token.type"), "input");
-        //Record
+        Attributes inputTokenCountAttributes = Attributes.of(
+                AttributeKey.stringKey("gen_ai.operation.name"),
+                "chat",
+                AttributeKey.stringKey("gen_ai.request.model"),
+                request.parameters().modelName(),
+                AttributeKey.stringKey("gen_ai.response.model"),
+                response.metadata().modelName(),
+                AttributeKey.stringKey("gen_ai.token.type"),
+                "input");
+        // Record
         clientTokenUsage.record(response.tokenUsage().inputTokenCount(), inputTokenCountAttributes);
 
-        Attributes outputTokenCountAttributes = Attributes.of(AttributeKey.stringKey("gen_ai.operation.name"), "chat",
-                AttributeKey.stringKey("gen_ai.request.model"), request.parameters().modelName(),
-                AttributeKey.stringKey("gen_ai.response.model"), response.metadata().modelName(),
-                AttributeKey.stringKey("gen_ai.token.type"), "output");
+        Attributes outputTokenCountAttributes = Attributes.of(
+                AttributeKey.stringKey("gen_ai.operation.name"),
+                "chat",
+                AttributeKey.stringKey("gen_ai.request.model"),
+                request.parameters().modelName(),
+                AttributeKey.stringKey("gen_ai.response.model"),
+                response.metadata().modelName(),
+                AttributeKey.stringKey("gen_ai.token.type"),
+                "output");
 
-        //Record
+        // Record
         clientTokenUsage.record(response.tokenUsage().outputTokenCount(), outputTokenCountAttributes);
 
-        //Record duration
-        Attributes durationAttributes = Attributes.of(AttributeKey.stringKey("gen_ai.operation.name"), "chat",
-                AttributeKey.stringKey("gen_ai.request.model"), request.parameters().modelName(),
-                AttributeKey.stringKey("gen_ai.response.model"), response.metadata().modelName());
+        // Record duration
+        Attributes durationAttributes = Attributes.of(
+                AttributeKey.stringKey("gen_ai.operation.name"),
+                "chat",
+                AttributeKey.stringKey("gen_ai.request.model"),
+                request.parameters().modelName(),
+                AttributeKey.stringKey("gen_ai.response.model"),
+                response.metadata().modelName());
         recordClientOperationDuration(startTime, endTime, durationAttributes);
     }
 
@@ -101,12 +113,17 @@ public class MetricsChatModelListener implements ChatModelListener {
 
         StringBuilder sb = new StringBuilder()
                 .append(errorContext.error().getClass().getName())
-                .append(";").append(errorContext.error().getLocalizedMessage());
+                .append(";")
+                .append(errorContext.error().getLocalizedMessage());
 
-        //Record duration
-        Attributes durationAttributes = Attributes.of(AttributeKey.stringKey("gen_ai.operation.name"), "chat",
-                AttributeKey.stringKey("gen_ai.request.model"), request.parameters().modelName(),
-                AttributeKey.stringKey("error.type"), sb.toString());
+        // Record duration
+        Attributes durationAttributes = Attributes.of(
+                AttributeKey.stringKey("gen_ai.operation.name"),
+                "chat",
+                AttributeKey.stringKey("gen_ai.request.model"),
+                request.parameters().modelName(),
+                AttributeKey.stringKey("error.type"),
+                sb.toString());
         recordClientOperationDuration(startTime, endTime, durationAttributes);
     }
 

@@ -146,12 +146,12 @@
         <finalName>${project.artifactId}</finalName>
         <resources>
             <resource>
-                <directory>src/main/resources</directory>
                 <filtering>false</filtering>
+                <directory>src/main/resources</directory>
             </resource>
             <resource>
-                <directory>src/main/filtered-resources</directory>
                 <filtering>true</filtering>
+                <directory>src/main/filtered-resources</directory>
             </resource>
         </resources>
         <plugins>
@@ -185,10 +185,10 @@
                 <executions>
                     <execution>
                         <id>copy-libs</id>
-                        <phase>prepare-package</phase>
                         <goals>
                             <goal>copy-dependencies</goal>
                         </goals>
+                        <phase>prepare-package</phase>
                         <configuration>
                             <outputDirectory>${project.build.directory}/libs</outputDirectory>
                             <overWriteReleases>false</overWriteReleases>

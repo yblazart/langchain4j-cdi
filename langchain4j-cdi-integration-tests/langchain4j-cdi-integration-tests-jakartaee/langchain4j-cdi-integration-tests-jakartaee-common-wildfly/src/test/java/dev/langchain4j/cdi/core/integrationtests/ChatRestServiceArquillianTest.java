@@ -1,5 +1,7 @@
 package dev.langchain4j.cdi.core.integrationtests;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import dev.langchain4j.cdi.integrationtests.ChatAiService;
 import dev.langchain4j.cdi.integrationtests.ChatRestService;
 import jakarta.ws.rs.client.Client;
@@ -8,6 +10,9 @@ import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.io.File;
+import java.net.URL;
+import java.util.stream.Stream;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit5.ArquillianExtension;
 import org.jboss.arquillian.test.api.ArquillianResource;
@@ -18,12 +23,6 @@ import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.io.File;
-import java.net.URL;
-import java.util.stream.Stream;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 @ExtendWith(ArquillianExtension.class)
 public class ChatRestServiceArquillianTest {
 
@@ -31,24 +30,23 @@ public class ChatRestServiceArquillianTest {
     @Deployment
     public static WebArchive createDeployment() {
         // Include the application classes and the portable extension as a library
-        File langchain4jCdiPortableExtFile = new File(
-                "../../../langchain4j-cdi-portable-ext/target/langchain4j-cdi-portable-ext-" +
-                        System.getProperty("project.version", "1.0.0-SNAPSHOT") + ".jar");
-        File langchain4jCdiCoreFile = new File("../../../langchain4j-cdi-core/target/langchain4j-cdi-core-" +
-                System.getProperty("project.version", "1.0.0-SNAPSHOT") + ".jar");
+        File langchain4jCdiPortableExtFile =
+                new File("../../../langchain4j-cdi-portable-ext/target/langchain4j-cdi-portable-ext-"
+                        + System.getProperty("project.version", "1.0.0-SNAPSHOT") + ".jar");
+        File langchain4jCdiCoreFile = new File("../../../langchain4j-cdi-core/target/langchain4j-cdi-core-"
+                + System.getProperty("project.version", "1.0.0-SNAPSHOT") + ".jar");
 
         File[] deps = Maven.resolver()
                 .loadPomFromFile("pom.xml") // lit ton pom
                 .importRuntimeDependencies() // récupère ce qu'il faut pour tourner
-                .resolve(
-                        "dev.langchain4j.cdi:langchain4j-cdi-portable-ext",
-                        "org.assertj:assertj-core")
+                .resolve("dev.langchain4j.cdi:langchain4j-cdi-portable-ext", "org.assertj:assertj-core")
                 .withTransitivity()
                 .asFile();
 
         File[] fixedDeps = Stream.concat(
-                Stream.of(langchain4jCdiPortableExtFile, langchain4jCdiCoreFile),
-                Stream.of(deps).filter(f -> !f.getName().startsWith("langchain4j-cdi-"))).toArray(File[]::new);
+                        Stream.of(langchain4jCdiPortableExtFile, langchain4jCdiCoreFile),
+                        Stream.of(deps).filter(f -> !f.getName().startsWith("langchain4j-cdi-")))
+                .toArray(File[]::new);
 
         return ShrinkWrap.create(WebArchive.class, "chat-test.war")
                 .addClasses(
@@ -78,8 +76,8 @@ public class ChatRestServiceArquillianTest {
         WebTarget target = client.target(chatEndpoint);
 
         String question = "What is the meaning of life?";
-        Response response = target.request(MediaType.APPLICATION_JSON)
-                .post(Entity.entity(question, MediaType.APPLICATION_JSON));
+        Response response =
+                target.request(MediaType.APPLICATION_JSON).post(Entity.entity(question, MediaType.APPLICATION_JSON));
 
         assertThat(response.getStatus()).isEqualTo(200);
         String result = response.readEntity(String.class);

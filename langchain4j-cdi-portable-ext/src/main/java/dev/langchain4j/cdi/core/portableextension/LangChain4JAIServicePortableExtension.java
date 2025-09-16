@@ -1,12 +1,6 @@
 package dev.langchain4j.cdi.core.portableextension;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.logging.Logger;
-
+import dev.langchain4j.cdi.spi.RegisterAIService;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
@@ -16,8 +10,12 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
 import jakarta.enterprise.inject.spi.ProcessInjectionPoint;
 import jakarta.enterprise.inject.spi.WithAnnotations;
-
-import dev.langchain4j.cdi.spi.RegisterAIService;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.logging.Logger;
 
 public class LangChain4JAIServicePortableExtension implements Extension {
     private static final Logger LOGGER = Logger.getLogger(LangChain4JAIServicePortableExtension.class.getName());
@@ -27,13 +25,14 @@ public class LangChain4JAIServicePortableExtension implements Extension {
         return detectedAIServicesDeclaredInterfaces;
     }
 
-    <T> void processAnnotatedType(@Observes @WithAnnotations({ RegisterAIService.class }) ProcessAnnotatedType<T> pat) {
+    <T> void processAnnotatedType(@Observes @WithAnnotations({RegisterAIService.class}) ProcessAnnotatedType<T> pat) {
         if (pat.getAnnotatedType().getJavaClass().isInterface()) {
-            LOGGER.info("processAnnotatedType register " + pat.getAnnotatedType().getJavaClass().getName());
+            LOGGER.info("processAnnotatedType register "
+                    + pat.getAnnotatedType().getJavaClass().getName());
             detectedAIServicesDeclaredInterfaces.add(pat.getAnnotatedType().getJavaClass());
         } else {
-            LOGGER.warning("processAnnotatedType reject " + pat.getAnnotatedType().getJavaClass().getName()
-                    + " which is not an interface");
+            LOGGER.warning("processAnnotatedType reject "
+                    + pat.getAnnotatedType().getJavaClass().getName() + " which is not an interface");
             pat.veto();
         }
     }
@@ -46,11 +45,11 @@ public class LangChain4JAIServicePortableExtension implements Extension {
     void processInjectionPoints(@Observes ProcessInjectionPoint<?, ?> event) {
         if (event.getInjectionPoint().getBean() == null) {
             Class<?> rawType = Reflections.getRawType(event.getInjectionPoint().getType());
-            if (classSatisfies(rawType, RegisterAIService.class))
-                detectedAIServicesDeclaredInterfaces.add(rawType);
+            if (classSatisfies(rawType, RegisterAIService.class)) detectedAIServicesDeclaredInterfaces.add(rawType);
         }
 
-        if (Instance.class.equals(Reflections.getRawType(event.getInjectionPoint().getType()))) {
+        if (Instance.class.equals(
+                Reflections.getRawType(event.getInjectionPoint().getType()))) {
             Class<?> parameterizedType = Reflections.getRawType(getFacadeType(event.getInjectionPoint()));
             if (classSatisfies(parameterizedType, RegisterAIService.class))
                 detectedAIServicesDeclaredInterfaces.add(parameterizedType);
@@ -66,8 +65,7 @@ public class LangChain4JAIServicePortableExtension implements Extension {
     }
 
     private <T extends Annotation> boolean classSatisfies(Class<?> clazz, Class<T> annotationClass) {
-        if (!clazz.isInterface())
-            return false;
+        if (!clazz.isInterface()) return false;
         T annotation = clazz.getAnnotation(annotationClass);
         return (annotation != null);
     }

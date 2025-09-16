@@ -3,12 +3,15 @@ package dev.langchain4j.cdi.example.booking;
 import dev.langchain4j.cdi.spi.RegisterAIService;
 import dev.langchain4j.service.SystemMessage;
 
-
 @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
-@RegisterAIService(tools = BookingService.class, chatMemoryName = "chat-ai-service-memory", chatModelName = "chat-model")
+@RegisterAIService(
+        tools = BookingService.class,
+        chatMemoryName = "chat-ai-service-memory",
+        chatModelName = "chat-model")
 public interface ChatAiService {
 
-    @SystemMessage("""
+    @SystemMessage(
+            """
             You are a customer support agent of a car rental company named 'Miles of Smiles'.
             Before providing information about booking or canceling a booking, you MUST always check:
             booking number, customer name and surname.
@@ -22,8 +25,6 @@ public interface ChatAiService {
 
     default String chatFallback(String question) {
         return String.format(
-                "Sorry, I am not able to answer your request %s at the moment. Please try again later.",
-                question);
+                "Sorry, I am not able to answer your request %s at the moment. Please try again later.", question);
     }
-
 }

@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
@@ -7,11 +8,10 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <name>Langchain4J CDI Integration Tests: JakartaEE - Common and Wildfly</name>
-
     <artifactId>langchain4j-cdi-integration-tests-jakartaee-common-wildfly</artifactId>
     <packaging>jar</packaging>
 
+    <name>Langchain4J CDI Integration Tests: JakartaEE - Common and Wildfly</name>
 
     <properties>
         <!-- WildFly -->
@@ -73,10 +73,10 @@
                         <executions>
                             <execution>
                                 <id>unpack</id>
-                                <phase>process-test-classes</phase>
                                 <goals>
                                     <goal>unpack</goal>
                                 </goals>
+                                <phase>process-test-classes</phase>
                                 <configuration>
                                     <artifactItems>
                                         <artifactItem>
