@@ -1,11 +1,16 @@
 Thank you for investing your time and effort in contributing to our project, we appreciate it a lot! 🤗
 
+# Important
+
+**Build Requirements**: While this project targets JDK 17, you must use at least JDK 21 for building as some integration tests cannot be run on Java 17.
+
 # General guidelines
 
 - Fork the repo and create PRs from your fork. Please don't create remote branches. The remote branches should only be `main` and the released branches.
 - If you want to contribute a bug fix or a new feature that isn't listed in the [issues](https://github.com/langchain4j/langchain4j-cdi/issues) yet, please open a new issue for it. We will prioritize is shortly.
 - Follow [Google's Best Practices for Java Libraries](https://jlbp.dev/)
 - Keep the code compatible with Java 17.
+- **Important**: While the project targets JDK 17, you must use at least JDK 21 for building as some integration tests cannot be run on Java 17.
 - Avoid adding new dependencies as much as possible (new dependencies with test scope are OK). If absolutely necessary, try to use the same libraries which are already used in the project. Make sure you run `mvn dependency:analyze` to identify unnecessary dependencies.
 - Write unit and/or integration tests for your code. This is critical: no tests, no review!
 - The tests should cover both positive and negative cases.
