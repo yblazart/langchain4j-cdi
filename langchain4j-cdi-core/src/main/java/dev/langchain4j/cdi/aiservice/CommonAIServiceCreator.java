@@ -1,15 +1,5 @@
 package dev.langchain4j.cdi.aiservice;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.inject.literal.NamedLiteral;
-
 import dev.langchain4j.cdi.spi.RegisterAIService;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
@@ -20,19 +10,24 @@ import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolProvider;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.literal.NamedLiteral;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Utility to build LangChain4j AiServices proxies from CDI beans and the @RegisterAIService metadata.
- * <p>
- * The method create() inspects the provided service interface for @RegisterAIService and tries to resolve
- * optional collaborating beans from the CDI container (by name or default):
- * - ChatModel or StreamingChatModel
- * - ContentRetriever or RetrievalAugmentor (RetrievalAugmentor has priority)
- * - ToolProvider, or if missing, instantiate tools classes declared in the annotation via no-arg constructors
- * - ChatMemory or ChatMemoryProvider
- * - ModerationModel
- * <p>
- * Only the components that are resolvable are wired into the AiServices builder.
+ *
+ * <p>The method create() inspects the provided service interface for @RegisterAIService and tries to resolve optional
+ * collaborating beans from the CDI container (by name or default): - ChatModel or StreamingChatModel - ContentRetriever
+ * or RetrievalAugmentor (RetrievalAugmentor has priority) - ToolProvider, or if missing, instantiate tools classes
+ * declared in the annotation via no-arg constructors - ChatMemory or ChatMemoryProvider - ModerationModel
+ *
+ * <p>Only the components that are resolvable are wired into the AiServices builder.
  */
 public class CommonAIServiceCreator {
 
@@ -57,11 +52,12 @@ public class CommonAIServiceCreator {
             // try default chat model
             chatModelInstance = lookup.select(ChatModel.class);
         }
-        Instance<StreamingChatModel> streamingChatModel = getInstance(lookup, StreamingChatModel.class, streamingChatModelName);
-        Instance<ContentRetriever> contentRetriever = getInstance(lookup, ContentRetriever.class,
-                annotation.contentRetrieverName());
-        Instance<RetrievalAugmentor> retrievalAugmentor = getInstance(lookup, RetrievalAugmentor.class,
-                annotation.retrievalAugmentorName());
+        Instance<StreamingChatModel> streamingChatModel =
+                getInstance(lookup, StreamingChatModel.class, streamingChatModelName);
+        Instance<ContentRetriever> contentRetriever =
+                getInstance(lookup, ContentRetriever.class, annotation.contentRetrieverName());
+        Instance<RetrievalAugmentor> retrievalAugmentor =
+                getInstance(lookup, RetrievalAugmentor.class, annotation.retrievalAugmentorName());
         Instance<ToolProvider> toolProvider = getInstance(lookup, ToolProvider.class, annotation.toolProviderName());
 
         AiServices<X> aiServices = AiServices.builder(interfaceClass);
@@ -93,31 +89,36 @@ public class CommonAIServiceCreator {
             for (Class<?> toolClass : annotation.tools()) {
                 try {
                     tools.add(toolClass.getConstructor((Class<?>[]) null).newInstance((Object[]) null));
-                } catch (NoSuchMethodException | SecurityException | InstantiationException | IllegalAccessException
-                        | IllegalArgumentException | InvocationTargetException ex) {
-                    LOGGER.log(Level.SEVERE,
-                            "Can't add toolClass " + toolClass + " for " + interfaceClass + " : " + ex.getMessage(), ex);
+                } catch (NoSuchMethodException
+                        | SecurityException
+                        | InstantiationException
+                        | IllegalAccessException
+                        | IllegalArgumentException
+                        | InvocationTargetException ex) {
+                    LOGGER.log(
+                            Level.SEVERE,
+                            "Can't add toolClass " + toolClass + " for " + interfaceClass + " : " + ex.getMessage(),
+                            ex);
                 }
             }
             aiServices.tools(tools);
         }
-        Instance<ChatMemory> chatMemory = getInstance(lookup, ChatMemory.class,
-                annotation.chatMemoryName());
+        Instance<ChatMemory> chatMemory = getInstance(lookup, ChatMemory.class, annotation.chatMemoryName());
         if (chatMemory != null && chatMemory.isResolvable()) {
             ChatMemory chatMemoryInstance = chatMemory.get();
             LOGGER.fine("ChatMemory " + chatMemoryInstance);
             aiServices.chatMemory(chatMemoryInstance);
         }
 
-        Instance<ChatMemoryProvider> chatMemoryProvider = getInstance(lookup, ChatMemoryProvider.class,
-                annotation.chatMemoryProviderName());
+        Instance<ChatMemoryProvider> chatMemoryProvider =
+                getInstance(lookup, ChatMemoryProvider.class, annotation.chatMemoryProviderName());
         if (chatMemoryProvider != null && chatMemoryProvider.isResolvable()) {
             LOGGER.fine("ChatMemoryProvider " + chatMemoryProvider.get());
             aiServices.chatMemoryProvider(chatMemoryProvider.get());
         }
 
-        Instance<ModerationModel> moderationModelInstance = getInstance(lookup, ModerationModel.class,
-                annotation.moderationModelName());
+        Instance<ModerationModel> moderationModelInstance =
+                getInstance(lookup, ModerationModel.class, annotation.moderationModelName());
         if (moderationModelInstance != null && moderationModelInstance.isResolvable()) {
             LOGGER.fine("ModerationModel " + moderationModelInstance.get());
             aiServices.moderationModel(moderationModelInstance.get());
@@ -127,15 +128,13 @@ public class CommonAIServiceCreator {
     }
 
     /**
-     * Resolve a CDI Instance for the given type and name.
-     * If name is "#default", select the default bean of the given type.
-     * If name is blank or null, returns null (meaning: do not attempt to resolve).
+     * Resolve a CDI Instance for the given type and name. If name is "#default", select the default bean of the given
+     * type. If name is blank or null, returns null (meaning: do not attempt to resolve).
      */
     private static <X> Instance<X> getInstance(Instance<Object> lookup, Class<X> type, String name) {
         LOGGER.fine("CDI get instance of type '" + type + "' with name '" + name + "'");
         if (name != null && !name.isBlank()) {
-            if ("#default".equals(name))
-                return lookup.select(type);
+            if ("#default".equals(name)) return lookup.select(type);
 
             return lookup.select(type, NamedLiteral.of(name));
         }

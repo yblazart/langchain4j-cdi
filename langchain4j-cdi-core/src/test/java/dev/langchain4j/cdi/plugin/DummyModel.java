@@ -8,9 +8,15 @@ public class DummyModel extends DummyBaseModel {
     final List<DummyEnum> dummyEnumList;
     final DummyWithStringConstructor dummyWithStringConstructor;
 
-    DummyModel(String apiKey, Integer timeout, DummyInjected dummyInjected, DummyParam<Integer> dummyParamInt, String param1,
+    DummyModel(
+            String apiKey,
+            Integer timeout,
+            DummyInjected dummyInjected,
+            DummyParam<Integer> dummyParamInt,
+            String param1,
             DummyEnum dummyEnum,
-            List<DummyEnum> dummyEnumList, DummyWithStringConstructor dummyWithStringConstructor) {
+            List<DummyEnum> dummyEnumList,
+            DummyWithStringConstructor dummyWithStringConstructor) {
         super(apiKey, timeout, dummyInjected, dummyParamInt);
         this.param1 = param1;
         this.dummyEnum = dummyEnum;
@@ -49,7 +55,14 @@ public class DummyModel extends DummyBaseModel {
         }
 
         public DummyModel build() {
-            return new DummyModel(apiKey, timeout, dummyInjected, dummyParamInt, param1, dummyEnum, dummyEnumList,
+            return new DummyModel(
+                    apiKey,
+                    timeout,
+                    dummyInjected,
+                    dummyParamInt,
+                    param1,
+                    dummyEnum,
+                    dummyEnumList,
                     dummyWithStringConstructor);
         }
     }

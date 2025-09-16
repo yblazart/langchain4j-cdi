@@ -1,12 +1,11 @@
 package dev.langchain4j.cdi.core.integrationtests;
 
-import jakarta.enterprise.context.ApplicationScoped;
-
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
+import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class ChatModelMock implements ChatModel {
@@ -37,6 +36,5 @@ public class ChatModelMock implements ChatModel {
         public ChatModelMock build() {
             return new ChatModelMock();
         }
-
     }
 }

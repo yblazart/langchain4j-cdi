@@ -1,25 +1,22 @@
 package dev.langchain4j.cdi.core;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.UndeclaredThrowableException;
-import java.util.concurrent.Callable;
-
+import dev.langchain4j.cdi.aiservice.Langchain4JAIServiceBuildCompatibleExtension;
+import dev.langchain4j.model.chat.ChatModel;
+import io.smallrye.config.inject.ConfigExtension;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
-
+import java.lang.annotation.Annotation;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.concurrent.Callable;
 import org.jboss.weld.junit5.WeldInitiator;
 import org.jboss.weld.junit5.WeldJunit5Extension;
 import org.jboss.weld.junit5.WeldSetup;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-
-import dev.langchain4j.cdi.aiservice.Langchain4JAIServiceBuildCompatibleExtension;
-import dev.langchain4j.model.chat.ChatModel;
-import io.smallrye.config.inject.ConfigExtension;
 
 @ExtendWith(WeldJunit5Extension.class)
 public class BceExtensionTest {
@@ -41,13 +38,13 @@ public class BceExtensionTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.from(
-            MyDummyAIService.class,
-            MyDummyApplicationScopedAIService.class,
-            RequestContextCaller.class,
-            DummyChatModel.class,
-            DummyEmbeddingStore.class,
-            DummyEmbeddingModel.class,
-            ConfigExtension.class)
+                    MyDummyAIService.class,
+                    MyDummyApplicationScopedAIService.class,
+                    RequestContextCaller.class,
+                    DummyChatModel.class,
+                    DummyEmbeddingStore.class,
+                    DummyEmbeddingModel.class,
+                    ConfigExtension.class)
             .build();
 
     @Test
@@ -59,14 +56,10 @@ public class BceExtensionTest {
 
     @Test
     void detectAIServiceInterface() {
-        Assertions.assertTrue(
-                Langchain4JAIServiceBuildCompatibleExtension
-                        .getDetectedAIServicesDeclaredInterfaces()
-                        .contains(MyDummyAIService.class));
-        Assertions.assertTrue(
-                Langchain4JAIServiceBuildCompatibleExtension
-                        .getDetectedAIServicesDeclaredInterfaces()
-                        .contains(MyDummyApplicationScopedAIService.class));
+        Assertions.assertTrue(Langchain4JAIServiceBuildCompatibleExtension.getDetectedAIServicesDeclaredInterfaces()
+                .contains(MyDummyAIService.class));
+        Assertions.assertTrue(Langchain4JAIServiceBuildCompatibleExtension.getDetectedAIServicesDeclaredInterfaces()
+                .contains(MyDummyApplicationScopedAIService.class));
     }
 
     @Test
@@ -80,7 +73,6 @@ public class BceExtensionTest {
     @Test
     void callEffectiveCreation() {
         Assertions.assertNotNull(requestContextCaller.run(() -> myDummyAIService.toString()));
-
     }
 
     @ActivateRequestContext
@@ -95,8 +87,8 @@ public class BceExtensionTest {
     }
 
     private void assertBeanScope(Class<?> beanType, Class<?> scopedClass) {
-        Class<? extends Annotation> scope = beanManager.getBeans(beanType).iterator().next().getScope();
+        Class<? extends Annotation> scope =
+                beanManager.getBeans(beanType).iterator().next().getScope();
         Assertions.assertTrue(scope.isAssignableFrom(scopedClass));
     }
-
 }

@@ -4,20 +4,19 @@
  */
 package dev.langchain4j.cdi.spi;
 
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
-
-import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 
 public class AISyntheticBeanCreatorClassProvider {
 
     private static final AISyntheticBeanCreatorClassFactory factory;
 
     static {
-        ServiceLoader<AISyntheticBeanCreatorClassFactory> loader = ServiceLoader.load(AISyntheticBeanCreatorClassFactory.class,
-                Thread.currentThread().getContextClassLoader());
+        ServiceLoader<AISyntheticBeanCreatorClassFactory> loader = ServiceLoader.load(
+                AISyntheticBeanCreatorClassFactory.class, Thread.currentThread().getContextClassLoader());
         final List<AISyntheticBeanCreatorClassFactory> factories = new ArrayList<>();
         loader.forEach(factories::add);
         if (factories.isEmpty()) {
@@ -25,7 +24,8 @@ public class AISyntheticBeanCreatorClassProvider {
                 @Override
                 public Class<? extends SyntheticBeanCreator<Object>> getSyntheticBeanCreatorClass() {
                     try {
-                        return (Class<? extends SyntheticBeanCreator<Object>>) Thread.currentThread().getContextClassLoader()
+                        return (Class<? extends SyntheticBeanCreator<Object>>) Thread.currentThread()
+                                .getContextClassLoader()
                                 .loadClass("dev.langchain4j.cdi.plugin.LLMPluginCreator");
                     } catch (ClassNotFoundException ex) {
                         throw new RuntimeException(ex);

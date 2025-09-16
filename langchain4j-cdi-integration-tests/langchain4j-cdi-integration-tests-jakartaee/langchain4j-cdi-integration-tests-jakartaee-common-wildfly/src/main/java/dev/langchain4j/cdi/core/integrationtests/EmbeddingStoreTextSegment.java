@@ -6,7 +6,6 @@ import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import jakarta.enterprise.context.ApplicationScoped;
-
 import java.util.List;
 
 @ApplicationScoped
@@ -17,9 +16,7 @@ public class EmbeddingStoreTextSegment implements EmbeddingStore<TextSegment> {
     }
 
     @Override
-    public void add(String s, Embedding embedding) {
-
-    }
+    public void add(String s, Embedding embedding) {}
 
     @Override
     public String add(Embedding embedding, TextSegment textSegment) {

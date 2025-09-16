@@ -45,7 +45,7 @@ jobs:
           cache-dependency-path: '**/pom.xml'
 
       - name: build with maven
-        run: ./mvnw -B formatter:validate verify --file pom.xml
+        run: ./mvnw -B spotless:check verify --file pom.xml
 
   build-windows:
     runs-on: windows-latest
@@ -67,4 +67,4 @@ jobs:
           cache-dependency-path: '**/pom.xml'
 
       - name: build with maven
-        run: .\mvnw -B formatter:validate verify --file pom.xml
+        run: .\mvnw -B spotless:check verify --file pom.xml

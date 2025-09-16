@@ -6,9 +6,7 @@ public class Customer {
     private String name;
     private String surname;
 
-    /**
-     *
-     */
+    /** */
     public Customer() {
         super();
     }
@@ -23,30 +21,22 @@ public class Customer {
         this.surname = surname;
     }
 
-    /**
-     * @return the name
-     */
+    /** @return the name */
     public String getName() {
         return name;
     }
 
-    /**
-     * @param name the name to set
-     */
+    /** @param name the name to set */
     public void setName(String name) {
         this.name = name;
     }
 
-    /**
-     * @return the surname
-     */
+    /** @return the surname */
     public String getSurname() {
         return surname;
     }
 
-    /**
-     * @param surname the surname to set
-     */
+    /** @param surname the surname to set */
     public void setSurname(String surname) {
         this.surname = surname;
     }
@@ -58,12 +48,9 @@ public class Customer {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
+        if (this == obj) return true;
+        if (obj == null) return false;
+        if (getClass() != obj.getClass()) return false;
         Customer other = (Customer) obj;
         return Objects.equals(name, other.name) && Objects.equals(surname, other.surname);
     }

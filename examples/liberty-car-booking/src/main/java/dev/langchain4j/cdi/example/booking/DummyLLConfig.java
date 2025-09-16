@@ -1,7 +1,6 @@
 package dev.langchain4j.cdi.example.booking;
 
 import dev.langchain4j.cdi.core.config.spi.LLMConfig;
-
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
@@ -23,7 +22,8 @@ public class DummyLLConfig extends LLMConfig {
 
     @Override
     public Set<String> getPropertyKeys() {
-        return properties.keySet().stream().map(Object::toString)
+        return properties.keySet().stream()
+                .map(Object::toString)
                 .filter(prop -> prop.startsWith(PREFIX))
                 .collect(Collectors.toSet());
     }

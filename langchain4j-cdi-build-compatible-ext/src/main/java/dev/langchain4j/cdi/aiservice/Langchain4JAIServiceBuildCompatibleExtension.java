@@ -1,11 +1,6 @@
 package dev.langchain4j.cdi.aiservice;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.logging.Logger;
-import java.util.stream.Collectors;
-
+import dev.langchain4j.cdi.spi.RegisterAIService;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
@@ -20,8 +15,11 @@ import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.lang.model.types.ClassType;
 import jakarta.inject.Named;
-
-import dev.langchain4j.cdi.spi.RegisterAIService;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompatibleExtension {
     private static final Logger LOGGER = Logger.getLogger(Langchain4JAIServiceBuildCompatibleExtension.class.getName());
@@ -40,7 +38,8 @@ public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompat
         if (detectedTools.contains(classConfig.info().name())) {
             Class<?> toolClass = getLoadClass(classConfig.info().name());
             if (toolClass.getAnnotation(Named.class) == null) {
-                classConfig.addAnnotation(NamedLiteral.of("quarkus-protected-" + classConfig.info().name()));
+                classConfig.addAnnotation(NamedLiteral.of(
+                        "quarkus-protected-" + classConfig.info().name()));
                 LOGGER.info("Add a Name to " + classConfig.info().name());
             }
         }
@@ -82,9 +81,11 @@ public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompat
             }
 
             RegisterAIService annotation = interfaceClass.getAnnotation(RegisterAIService.class);
-            detectedTools.addAll(Arrays.stream(annotation.tools()).map(Class::getName).collect(Collectors.toList()));
+            detectedTools.addAll(
+                    Arrays.stream(annotation.tools()).map(Class::getName).collect(Collectors.toList()));
         } else {
-            LOGGER.warning("The class is Annotated with @RegisterAIService, but only interface are allowed" + classInfo);
+            LOGGER.warning(
+                    "The class is Annotated with @RegisterAIService, but only interface are allowed" + classInfo);
         }
     }
 
@@ -92,7 +93,7 @@ public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompat
         return Thread.currentThread().getContextClassLoader().loadClass(className);
     }
 
-    @SuppressWarnings({ "unused", "unchecked" })
+    @SuppressWarnings({"unused", "unchecked"})
     @Synthesis
     public void synthesisAllRegisterAIServices(SyntheticComponents syntheticComponents) throws ClassNotFoundException {
         LOGGER.info("synthesisAllRegisterAIServices");
@@ -101,17 +102,17 @@ public class Langchain4JAIServiceBuildCompatibleExtension implements BuildCompat
             LOGGER.info("Create synthetic " + interfaceClass);
             RegisterAIService annotation = interfaceClass.getAnnotation(RegisterAIService.class);
 
-            detectedTools.addAll(Arrays.stream(annotation.tools()).map(Class::getName).collect(Collectors.toSet()));
+            detectedTools.addAll(
+                    Arrays.stream(annotation.tools()).map(Class::getName).collect(Collectors.toSet()));
 
-            SyntheticBeanBuilder<Object> builder = (SyntheticBeanBuilder<Object>) syntheticComponents.addBean(interfaceClass);
+            SyntheticBeanBuilder<Object> builder =
+                    (SyntheticBeanBuilder<Object>) syntheticComponents.addBean(interfaceClass);
 
             builder.createWith(AIServiceCreator.class)
                     .type(interfaceClass)
                     .scope(annotation.scope())
                     .name("registeredAIService-" + interfaceClass.getName())
                     .withParam(PARAM_INTERFACE_CLASS, interfaceClass);
-
         }
     }
-
 }

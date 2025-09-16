@@ -8,8 +8,7 @@ public class AIServiceCreator implements SyntheticBeanCreator<Object> {
 
     @Override
     public Object create(Instance<Object> lookup, Parameters params) {
-        return CommonAIServiceCreator.create(lookup,
-                params.get(Langchain4JAIServiceBuildCompatibleExtension.PARAM_INTERFACE_CLASS, Class.class));
+        return CommonAIServiceCreator.create(
+                lookup, params.get(Langchain4JAIServiceBuildCompatibleExtension.PARAM_INTERFACE_CLASS, Class.class));
     }
-
 }

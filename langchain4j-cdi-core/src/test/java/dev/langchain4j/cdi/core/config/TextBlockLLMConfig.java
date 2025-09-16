@@ -1,7 +1,6 @@
 package dev.langchain4j.cdi.core.config;
 
 import dev.langchain4j.cdi.core.config.spi.LLMConfig;
-
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.Properties;
@@ -9,13 +8,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Test utility LLMConfig implementation that reads configuration from a Java 17 text block (multiline string).
- * Example usage:
- * String cfg = """
- * dev.langchain4j.plugin.content-retriever.class=dev.example.MyRetriever
- * dev.langchain4j.plugin.content-retriever.config.api-key=xyz
- * """;
- * LLMConfig config = new TestTextBlockLLMConfig(cfg);
+ * Test utility LLMConfig implementation that reads configuration from a Java 17 text block (multiline string). Example
+ * usage: String cfg = """ dev.langchain4j.plugin.content-retriever.class=dev.example.MyRetriever
+ * dev.langchain4j.plugin.content-retriever.config.api-key=xyz """; LLMConfig config = new TestTextBlockLLMConfig(cfg);
  */
 public class TextBlockLLMConfig extends LLMConfig {
 
@@ -55,5 +50,4 @@ public class TextBlockLLMConfig extends LLMConfig {
     public String getValue(String key) {
         return properties.getProperty(key);
     }
-
 }

@@ -1,25 +1,25 @@
 package dev.langchain4j.cdi.example.booking;
 
-import java.time.temporal.ChronoUnit;
-
-import org.eclipse.microprofile.faulttolerance.Fallback;
-import org.eclipse.microprofile.faulttolerance.Retry;
-import org.eclipse.microprofile.faulttolerance.Timeout;
-
 import dev.langchain4j.cdi.spi.RegisterAIService;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
+import java.time.temporal.ChronoUnit;
+import org.eclipse.microprofile.faulttolerance.Fallback;
+import org.eclipse.microprofile.faulttolerance.Retry;
+import org.eclipse.microprofile.faulttolerance.Timeout;
 
 @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
 @RegisterAIService(chatMemoryName = "fraud-ai-service-memory")
 public interface FraudAiService {
 
-    @SystemMessage("""
+    @SystemMessage(
+            """
             You are a car booking fraud detection AI for Miles of Smiles.
             You have to detect customer fraud in bookings.
             """)
-    @UserMessage("""
+    @UserMessage(
+            """
             Your task is to detect whether a fraud was committed for the customer {{name}} {{surname}}.
 
             To detect a fraud, perform the following actions:
@@ -54,9 +54,7 @@ public interface FraudAiService {
     FraudResponse detectFraudForCustomer(@V("name") String name, @V("surname") String surname);
 
     default FraudResponse fraudFallback(String name, String surname) {
-        throw new RuntimeException(
-                "Sorry, I am not able to detect fraud for customer " + name + " " + surname
-                        + " at the moment. Please try again later.");
+        throw new RuntimeException("Sorry, I am not able to detect fraud for customer " + name + " " + surname
+                + " at the moment. Please try again later.");
     }
-
 }

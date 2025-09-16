@@ -11,5 +11,4 @@ public interface ChatAiService {
             my system message.
             """)
     String chat(String question);
-
 }

@@ -7,8 +7,8 @@ import java.util.logging.Logger;
 
 /**
  * Bootstrap and access point for the LLMConfig implementation.
- * <p>
- * It discovers an implementation via ServiceLoader and initializes it lazily on first access.
+ *
+ * <p>It discovers an implementation via ServiceLoader and initializes it lazily on first access.
  */
 public class LLMConfigProvider {
 
@@ -17,8 +17,8 @@ public class LLMConfigProvider {
     private static final Logger LOGGER = Logger.getLogger(LLMConfigProvider.class.getName());
 
     static {
-        ServiceLoader<LLMConfig> loader = ServiceLoader.load(LLMConfig.class,
-                Thread.currentThread().getContextClassLoader());
+        ServiceLoader<LLMConfig> loader =
+                ServiceLoader.load(LLMConfig.class, Thread.currentThread().getContextClassLoader());
         final List<LLMConfig> factories = new ArrayList<>();
         loader.forEach(factories::add);
         if (factories.isEmpty()) {
@@ -29,7 +29,7 @@ public class LLMConfigProvider {
                 throw new RuntimeException("No service Found for LLMConfig interface");
             }
         }
-        llmConfig = factories.iterator().next(); //loader.findFirst().orElse(null);
+        llmConfig = factories.iterator().next(); // loader.findFirst().orElse(null);
         LOGGER.fine("Found LLMConfig interface: " + llmConfig.getClass().getName());
     }
 

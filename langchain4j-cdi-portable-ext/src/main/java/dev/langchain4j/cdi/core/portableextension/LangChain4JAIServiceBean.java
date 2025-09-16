@@ -1,11 +1,7 @@
 package dev.langchain4j.cdi.core.portableextension;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Type;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-
+import dev.langchain4j.cdi.aiservice.CommonAIServiceCreator;
+import dev.langchain4j.cdi.spi.RegisterAIService;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
@@ -16,9 +12,11 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.PassivationCapable;
 import jakarta.enterprise.util.AnnotationLiteral;
-
-import dev.langchain4j.cdi.aiservice.CommonAIServiceCreator;
-import dev.langchain4j.cdi.spi.RegisterAIService;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * @author Buhake Sindi
@@ -40,8 +38,8 @@ public class LangChain4JAIServiceBean<T> implements Bean<T>, PassivationCapable 
      */
     public LangChain4JAIServiceBean(Class<T> aiServiceInterfaceClass, BeanManager beanManager) {
         super();
-        final RegisterAIService annotation = (this.aiServiceInterfaceClass = aiServiceInterfaceClass)
-                .getAnnotation(RegisterAIService.class);
+        final RegisterAIService annotation =
+                (this.aiServiceInterfaceClass = aiServiceInterfaceClass).getAnnotation(RegisterAIService.class);
         this.scope = annotation.scope();
         this.beanManager = beanManager;
     }
@@ -65,7 +63,8 @@ public class LangChain4JAIServiceBean<T> implements Bean<T>, PassivationCapable 
     public T create(CreationalContext<T> creationalContext) {
         T instance = CommonAIServiceCreator.create(CDI.current(), aiServiceInterfaceClass);
         if (!getInterceptorBindings().isEmpty()) {
-            InterceptionFactory<T> factory = beanManager.createInterceptionFactory(creationalContext, aiServiceInterfaceClass);
+            InterceptionFactory<T> factory =
+                    beanManager.createInterceptionFactory(creationalContext, aiServiceInterfaceClass);
             interceptorBindings.stream().forEach(factory.configure()::add);
             instance = factory.createInterceptedInstance(instance);
         }
@@ -80,8 +79,7 @@ public class LangChain4JAIServiceBean<T> implements Bean<T>, PassivationCapable 
      * jakarta.enterprise.context.spi.CreationalContext)
      */
     @Override
-    public void destroy(T instance, CreationalContext<T> creationalContext) {
-    }
+    public void destroy(T instance, CreationalContext<T> creationalContext) {}
 
     /*
      * (non-Javadoc)
@@ -101,10 +99,8 @@ public class LangChain4JAIServiceBean<T> implements Bean<T>, PassivationCapable 
     @Override
     public Set<Annotation> getQualifiers() {
         Set<Annotation> annotations = new HashSet<>();
-        annotations.add(new AnnotationLiteral<Default>() {
-        });
-        annotations.add(new AnnotationLiteral<Any>() {
-        });
+        annotations.add(new AnnotationLiteral<Default>() {});
+        annotations.add(new AnnotationLiteral<Any>() {});
         return Collections.unmodifiableSet(annotations);
     }
 
@@ -168,12 +164,9 @@ public class LangChain4JAIServiceBean<T> implements Bean<T>, PassivationCapable 
         return Collections.emptySet();
     }
 
-    /**
-     * @return the interceptorBindings
-     */
+    /** @return the interceptorBindings */
     public Set<Annotation> getInterceptorBindings() {
-        if (interceptorBindings == null)
-            interceptorBindings = new HashSet<>();
+        if (interceptorBindings == null) interceptorBindings = new HashSet<>();
         return interceptorBindings;
     }
 

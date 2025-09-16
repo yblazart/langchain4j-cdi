@@ -21,8 +21,7 @@ public class CarBookingResource {
     @GET
     @Produces(MediaType.TEXT_PLAIN)
     @Path("/chat")
-    public String chatWithAssistant(
-            @QueryParam("question") String question) {
+    public String chatWithAssistant(@QueryParam("question") String question) {
 
         String answer;
         try {
@@ -39,10 +38,8 @@ public class CarBookingResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/fraud")
     public FraudResponse detectFraudForCustomer(
-            @QueryParam("name") String name,
+            @QueryParam("name") String name, @QueryParam("surname") String surname) {
 
-            @QueryParam("surname") String surname) {
         return fraudService.detectFraudForCustomer(name, surname);
     }
-
 }

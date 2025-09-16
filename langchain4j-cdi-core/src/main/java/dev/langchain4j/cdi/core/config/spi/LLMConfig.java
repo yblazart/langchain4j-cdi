@@ -6,7 +6,6 @@ import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
-
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -20,22 +19,19 @@ import java.util.stream.Collectors;
 
 /**
  * Base abstraction to provide configuration for LLM-related beans.
- * <p>
- * This API is intentionally lightweight and relies purely on CDI (no external config dependency). It is inspired by
+ *
+ * <p>This API is intentionally lightweight and relies purely on CDI (no external config dependency). It is inspired by
  * MicroProfile/SmallRye Config, but kept minimal for portability.
  */
 public abstract class LLMConfig {
     Map<String, ProducerFunction<?>> producers = new ConcurrentHashMap<>();
 
-    /**
-     * Prefix for all LLM beans properties.
-     */
+    /** Prefix for all LLM beans properties. */
     public static final String PREFIX = "dev.langchain4j.plugin";
 
-    /**
-     * Called by @see LLMConfigProvider.
-     */
+    /** Called by @see LLMConfigProvider. */
     public static final String PRODUCER = "defined_bean_producer";
+
     public static final String CLASS = "class";
     public static final String SCOPE = "scope";
 
@@ -46,8 +42,8 @@ public abstract class LLMConfig {
     public abstract String getValue(String key);
 
     /**
-     * Get all Langchain4j-cdi LLM beans names, prefixed by PREFIX
-     * For example: dev.langchain4j.plugin.content-retriever.class -> content-retriever
+     * Get all Langchain4j-cdi LLM beans names, prefixed by PREFIX For example:
+     * dev.langchain4j.plugin.content-retriever.class -> content-retriever
      *
      * @return a set of property names
      */
@@ -81,38 +77,30 @@ public abstract class LLMConfig {
         if (clazz == ProducerFunction.class && stringValue != null) {
             return producers.get(stringValue);
         }
-        if (stringValue == null)
-            return null;
+        if (stringValue == null) return null;
         stringValue = stringValue.trim();
         try {
             return getObject(clazz, parameterizedType, stringValue);
         } catch (Exception e) {
             throw new IllegalArgumentException("Unsupported type for value conversion: " + type, e);
         }
-
     }
 
     private Object getObject(Class<?> clazz, ParameterizedType parameterizedType, String stringValue)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        if (clazz == String.class)
-            return stringValue;
+        if (clazz == String.class) return stringValue;
         if (clazz == Duration.class) {
             String durationString = stringValue.toUpperCase();
-            if (!durationString.startsWith("PT"))
-                durationString = "PT" + durationString;
+            if (!durationString.startsWith("PT")) durationString = "PT" + durationString;
             return Duration.parse(durationString);
         }
-        if (clazz == Integer.class || clazz == int.class)
-            return Integer.valueOf(stringValue);
-        if (clazz == Long.class || clazz == long.class)
-            return Long.valueOf(stringValue);
-        if (clazz == Boolean.class || clazz == boolean.class)
-            return Boolean.valueOf(stringValue);
-        if (clazz == Double.class || clazz == double.class)
-            return Double.valueOf(stringValue);
+        if (clazz == Integer.class || clazz == int.class) return Integer.valueOf(stringValue);
+        if (clazz == Long.class || clazz == long.class) return Long.valueOf(stringValue);
+        if (clazz == Boolean.class || clazz == boolean.class) return Boolean.valueOf(stringValue);
+        if (clazz == Double.class || clazz == double.class) return Double.valueOf(stringValue);
         // Enum support
         if (clazz.isEnum()) {
-            @SuppressWarnings({ "unchecked", "rawtypes" })
+            @SuppressWarnings({"unchecked", "rawtypes"})
             Class<? extends Enum> enumClass = (Class<? extends Enum<?>>) clazz;
             //noinspection unchecked
             return Enum.valueOf(enumClass, stringValue);
@@ -129,19 +117,16 @@ public abstract class LLMConfig {
         return clazz.getConstructor(String.class).newInstance(stringValue);
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Object getBeanPropertyValue(Instance<Object> lookup, String beanName, String propertyName, Type type) {
         String stringValue = getBeanPropertyValue(beanName, propertyName);
-        if (stringValue == null)
-            return null;
+        if (stringValue == null) return null;
         if (stringValue.startsWith("lookup:")) {
             String lookupableBean = stringValue.substring("lookup:".length());
             switch (lookupableBean) {
                 case "@default":
-                    if (type instanceof ParameterizedType)
-                        return selectByBeanManager((ParameterizedType) type);
-                    else
-                        return lookup.select((Class) type).get();
+                    if (type instanceof ParameterizedType) return selectByBeanManager((ParameterizedType) type);
+                    else return lookup.select((Class) type).get();
                 case "@all":
                     return lookup.select((Class<?>) type).stream().toList();
                 default:
@@ -152,7 +137,8 @@ public abstract class LLMConfig {
         }
     }
 
-    private static java.util.function.Supplier<BeanManager> beanManagerSupplier = () -> CDI.current().getBeanManager();
+    private static java.util.function.Supplier<BeanManager> beanManagerSupplier =
+            () -> CDI.current().getBeanManager();
 
     /** For tests only: override how BeanManager is obtained. */
     public static void setBeanManagerSupplier(java.util.function.Supplier<BeanManager> supplier) {
@@ -171,14 +157,14 @@ public abstract class LLMConfig {
     }
 
     private <T> Instance<T> getInstance(Instance<Object> lookup, Class<T> clazz, String lookupName) {
-        if (lookupName == null || lookupName.isBlank())
-            return lookup.select(clazz);
+        if (lookupName == null || lookupName.isBlank()) return lookup.select(clazz);
         return lookup.select(clazz, NamedLiteral.of(lookupName));
     }
 
     public Set<String> getPropertyNamesForBean(String beanName) {
         String configPrefix = PREFIX + "." + beanName + ".config.";
-        return getPropertyKeys().stream().map(Object::toString)
+        return getPropertyKeys().stream()
+                .map(Object::toString)
                 .filter(prop -> prop.startsWith(configPrefix))
                 .map(prop -> prop.substring(configPrefix.length()))
                 .collect(Collectors.toSet());

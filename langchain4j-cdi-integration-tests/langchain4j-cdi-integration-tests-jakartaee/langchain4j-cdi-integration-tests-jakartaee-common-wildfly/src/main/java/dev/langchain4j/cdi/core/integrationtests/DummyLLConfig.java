@@ -1,7 +1,6 @@
 package dev.langchain4j.cdi.core.integrationtests;
 
 import dev.langchain4j.cdi.core.config.spi.LLMConfig;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.UndeclaredThrowableException;
@@ -17,8 +16,8 @@ public class DummyLLConfig extends LLMConfig {
     @Override
     public void init() {
         LOGGER.info("Initializing Dummy LLConfig");
-        try (InputStream inputStream = Thread.currentThread().getContextClassLoader()
-                .getResourceAsStream("llm-config.properties")) {
+        try (InputStream inputStream =
+                Thread.currentThread().getContextClassLoader().getResourceAsStream("llm-config.properties")) {
             properties.load(inputStream);
         } catch (IOException e) {
             throw new UndeclaredThrowableException(e);
@@ -30,7 +29,8 @@ public class DummyLLConfig extends LLMConfig {
 
     @Override
     public Set<String> getPropertyKeys() {
-        return properties.keySet().stream().map(Object::toString)
+        return properties.keySet().stream()
+                .map(Object::toString)
                 .filter(prop -> prop.startsWith(PREFIX))
                 .collect(Collectors.toSet());
     }

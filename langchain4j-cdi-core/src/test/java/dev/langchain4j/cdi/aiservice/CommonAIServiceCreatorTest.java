@@ -1,5 +1,8 @@
 package dev.langchain4j.cdi.aiservice;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import dev.langchain4j.cdi.spi.RegisterAIService;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
@@ -8,17 +11,10 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.moderation.ModerationModel;
 import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.tool.ToolProvider;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import org.junit.jupiter.api.Test;
-
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class CommonAIServiceCreatorTest {
 
@@ -33,8 +29,15 @@ class CommonAIServiceCreatorTest {
     }
 
     @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
-    @RegisterAIService(tools = {
-            ToolAImpl.class }, chatModelName = "#default", contentRetrieverName = "cr1", retrievalAugmentorName = "ra1", toolProviderName = "", chatMemoryName = "mem1", chatMemoryProviderName = "cmp1", moderationModelName = "mod1")
+    @RegisterAIService(
+            tools = {ToolAImpl.class},
+            chatModelName = "#default",
+            contentRetrieverName = "cr1",
+            retrievalAugmentorName = "ra1",
+            toolProviderName = "",
+            chatMemoryName = "mem1",
+            chatMemoryProviderName = "cmp1",
+            moderationModelName = "mod1")
     interface MyAIService {
         String chat(String question);
     }
@@ -75,10 +78,12 @@ class CommonAIServiceCreatorTest {
 
         // lookup.select for names
         when(lookup.select(ChatModel.class)).thenReturn(cm);
-        when(lookup.select(StreamingChatModel.class, NamedLiteral.of("stream1"))).thenReturn(scm);
+        when(lookup.select(StreamingChatModel.class, NamedLiteral.of("stream1")))
+                .thenReturn(scm);
         when(lookup.select(ContentRetriever.class, NamedLiteral.of("cr1"))).thenReturn(cr);
         when(lookup.select(RetrievalAugmentor.class, NamedLiteral.of("ra1"))).thenReturn(ra);
-        when(lookup.select(ToolProvider.class, NamedLiteral.of(""))).thenReturn(tp); // not used since blank name returns null in code
+        when(lookup.select(ToolProvider.class, NamedLiteral.of("")))
+                .thenReturn(tp); // not used since blank name returns null in code
         when(lookup.select(ChatMemory.class, NamedLiteral.of("mem1"))).thenReturn(mem);
         when(lookup.select(ChatMemoryProvider.class, NamedLiteral.of("cmp1"))).thenReturn(cmp);
         when(lookup.select(ModerationModel.class, NamedLiteral.of("mod1"))).thenReturn(mod);
@@ -103,7 +108,9 @@ class CommonAIServiceCreatorTest {
     }
 
     @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
-    @RegisterAIService(toolProviderName = "provider1", tools = {})
+    @RegisterAIService(
+            toolProviderName = "provider1",
+            tools = {})
     interface MyAIServiceWithToolProvider {
         String chat(String question);
     }
@@ -130,7 +137,8 @@ class CommonAIServiceCreatorTest {
 
     @Test
     void getInstance_returnsNullWhenNameBlank() throws Exception {
-        var m = CommonAIServiceCreator.class.getDeclaredMethod("getInstance", Instance.class, Class.class, String.class);
+        var m = CommonAIServiceCreator.class.getDeclaredMethod(
+                "getInstance", Instance.class, Class.class, String.class);
         m.setAccessible(true);
         @SuppressWarnings("unchecked")
         Instance<Object> lookup = mock(Instance.class);
