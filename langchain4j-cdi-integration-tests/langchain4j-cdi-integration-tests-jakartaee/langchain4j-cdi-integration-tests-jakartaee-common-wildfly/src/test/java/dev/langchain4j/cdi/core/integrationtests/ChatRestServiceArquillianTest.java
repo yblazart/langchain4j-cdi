@@ -11,7 +11,14 @@ import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Optional;
+import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit5.ArquillianExtension;
@@ -28,13 +35,17 @@ public class ChatRestServiceArquillianTest {
 
     @SuppressWarnings("unused")
     @Deployment
-    public static WebArchive createDeployment() {
+    public static WebArchive createDeployment() throws IOException {
         // Include the application classes and the portable extension as a library
-        File langchain4jCdiPortableExtFile =
-                new File("../../../langchain4j-cdi-portable-ext/target/langchain4j-cdi-portable-ext-"
-                        + System.getProperty("project.version", "1.0.0-SNAPSHOT") + ".jar");
-        File langchain4jCdiCoreFile = new File("../../../langchain4j-cdi-core/target/langchain4j-cdi-core-"
-                + System.getProperty("project.version", "1.0.0-SNAPSHOT") + ".jar");
+        File langchain4jCdiPortableExtFile = findBuildFiles(
+                        new File("../../../langchain4j-cdi-portable-ext/target").toPath(),
+                        "langchain4j-cdi-portable-ext-")
+                .get()
+                .toFile();
+        File langchain4jCdiCoreFile = findBuildFiles(
+                        new File("../../../langchain4j-cdi-core/target").toPath(), "langchain4j-cdi-core-")
+                .get()
+                .toFile();
 
         File[] deps = Maven.resolver()
                 .loadPomFromFile("pom.xml") // lit ton pom
@@ -63,6 +74,21 @@ public class ChatRestServiceArquillianTest {
                 .addAsResource("llm-config.properties")
                 .addAsResource("META-INF/services/jakarta.enterprise.inject.spi.Extension")
                 .addAsResource("META-INF/services/dev.langchain4j.cdi.core.config.spi.LLMConfig");
+    }
+
+    private static Optional<Path> findBuildFiles(Path folder, String prefix) throws IOException {
+        return Files.find(
+                        folder,
+                        1,
+                        new BiPredicate<Path, BasicFileAttributes>() {
+                            @Override
+                            public boolean test(Path t, BasicFileAttributes u) {
+                                String finleName = t.getFileName().toString();
+                                return finleName.startsWith(prefix) && finleName.endsWith(".jar");
+                            }
+                        },
+                        FileVisitOption.FOLLOW_LINKS)
+                .findFirst();
     }
 
     @SuppressWarnings("unused")
