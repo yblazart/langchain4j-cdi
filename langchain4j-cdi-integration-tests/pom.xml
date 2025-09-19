@@ -20,7 +20,19 @@
 
     <properties>
         <junit-jupiter.version>5.12.2</junit-jupiter.version>
+        <version.smallrye.testing>2.4.0</version.smallrye.testing>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.smallrye.testing</groupId>
+                <artifactId>smallrye-testing-bom</artifactId>
+                <version>${version.smallrye.testing}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>

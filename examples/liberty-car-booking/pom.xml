@@ -27,6 +27,7 @@
         <maven.compiler.source combine.self="override"></maven.compiler.source>
         <maven.compiler.target combine.self="override"></maven.compiler.target>
 
+        <version.io.smallrye.fault-tolerance>6.7.3</version.io.smallrye.fault-tolerance>
         <!--Strictly for OpenLiberty-->
         <liberty.env.ENGINE_CACHE_DIR>${project.build.directory}/liberty/wlp/usr/shared/resources/lib/</liberty.env.ENGINE_CACHE_DIR>
     </properties>
