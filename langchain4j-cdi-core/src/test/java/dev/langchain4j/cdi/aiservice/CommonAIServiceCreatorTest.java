@@ -23,6 +23,8 @@ class CommonAIServiceCreatorTest {
     }
 
     static class ToolAImpl implements ToolA {
+        public ToolAImpl() {}
+
         public String ping() {
             return "pong";
         }

@@ -35,7 +35,7 @@ jobs:
       - run: |
           git config --global user.name 'Langchain4J CDI'
           git config --global user.email 'langchain4j.cdi@gmail.com'
-      - name: Git environement
+      - name: Git environment
         run: |
           git remote -v
           git log
@@ -50,7 +50,7 @@ jobs:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      - uses: actions/checkout@v5
+
       - name: Push result report
         run: |
           git remote -v

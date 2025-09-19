@@ -33,13 +33,6 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>org.eclipse.microprofile.telemetry</groupId>
-                <artifactId>microprofile-telemetry-api</artifactId>
-                <version>${version.eclipse.microprofile.telemetry}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
                 <groupId>io.smallrye.common</groupId>
                 <artifactId>smallrye-common-bom</artifactId>
                 <version>${version.smallrye.common}</version>
