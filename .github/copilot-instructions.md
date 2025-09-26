@@ -35,7 +35,7 @@ Run these commands in sequence for first-time setup:
 
 - **Format and validate code style:**
   ```bash
-  ./mvnw -B formatter:validate -pl '!examples/payara-car-booking'
+  ./mvnw -B -B spotless:check -pl '!examples/payara-car-booking'
   ```
   Takes ~30 seconds.
 
