@@ -41,7 +41,7 @@ Run these commands in sequence for first-time setup:
 
 - **Format code (auto-fix):**
   ```bash
-  ./mvnw -B formatter:format -pl '!examples/payara-car-booking'
+  ./mvnw -B spotless:apply -pl '!examples/payara-car-booking'
   ```
   Takes ~30 seconds.
 
