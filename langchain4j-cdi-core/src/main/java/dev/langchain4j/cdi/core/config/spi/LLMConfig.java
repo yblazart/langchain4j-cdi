@@ -128,7 +128,10 @@ public abstract class LLMConfig {
                     if (type instanceof ParameterizedType) return selectByBeanManager((ParameterizedType) type);
                     else return lookup.select((Class) type).get();
                 case "@all":
-                    return lookup.select((Class<?>) type).stream().toList();
+                    if (type instanceof ParameterizedType pt)
+                        return lookup.select((Class<?>) pt.getActualTypeArguments()[0]).stream()
+                                .toList();
+                    else return lookup.select((Class<?>) type).stream().toList();
                 default:
                     return getInstance(lookup, (Class<?>) type, lookupableBean).get();
             }
