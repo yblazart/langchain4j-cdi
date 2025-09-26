@@ -7,7 +7,7 @@ Always reference these instructions first and fallback to search or bash command
 
 ### Prerequisites
 - Java 17 (OpenJDK Temurin recommended)
-- Maven 3.9.5+ (use `./mvnw` wrapper included in the repository)
+- Maven 3.9.11+ (use `./mvnw` wrapper included in the repository)
 - Docker or Podman (for running examples with Ollama)
 
 ### Bootstrap and Build
