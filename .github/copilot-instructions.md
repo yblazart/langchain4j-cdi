@@ -1,5 +1,5 @@
 # LangChain4J CDI Integration
-LangChain4J CDI is a Java library that integrates LangChain4J with CDI (Jakarta EE and Eclipse MicroProfile). It provides CDI extensions for building AI-powered applications using Java 17, Maven, and various application servers.
+LangChain4J CDI is a Java library that integrates LangChain4J with CDI (Jakarta EE and Eclipse MicroProfile). It provides CDI extensions for building AI-powered applications using Java, Maven, and various application servers.
 
 Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
 
