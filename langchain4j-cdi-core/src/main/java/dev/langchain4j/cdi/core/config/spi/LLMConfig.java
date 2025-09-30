@@ -6,7 +6,6 @@ import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
-
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -28,14 +27,10 @@ import java.util.stream.Stream;
 public abstract class LLMConfig {
     Map<String, ProducerFunction<?>> producers = new ConcurrentHashMap<>();
 
-    /**
-     * Prefix for all LLM beans properties.
-     */
+    /** Prefix for all LLM beans properties. */
     public static final String PREFIX = "dev.langchain4j.plugin";
 
-    /**
-     * Called by @see LLMConfigProvider.
-     */
+    /** Called by @see LLMConfigProvider. */
     public static final String PRODUCER = "defined_bean_producer";
 
     public static final String CLASS = "class";
@@ -163,9 +158,7 @@ public abstract class LLMConfig {
     private static java.util.function.Supplier<BeanManager> beanManagerSupplier =
             () -> CDI.current().getBeanManager();
 
-    /**
-     * For tests only: override how BeanManager is obtained.
-     */
+    /** For tests only: override how BeanManager is obtained. */
     public static void setBeanManagerSupplier(java.util.function.Supplier<BeanManager> supplier) {
         beanManagerSupplier = (supplier == null) ? () -> CDI.current().getBeanManager() : supplier;
     }

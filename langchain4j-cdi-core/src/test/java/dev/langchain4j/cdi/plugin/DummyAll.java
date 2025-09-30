@@ -33,32 +33,19 @@ public class DummyAll {
         }
 
         public DummyAll build() {
-            return new DummyAll(
-                    toInjectAll,
-                    toInjectAllParameterized
-            );
+            return new DummyAll(toInjectAll, toInjectAllParameterized);
         }
     }
 
+    interface ToInjectAll {}
 
-    interface ToInjectAll {
+    interface ToInjectAllParameterized<T> {}
 
-    }
+    public static class ToInjectAllBeanA implements ToInjectAll {}
 
-    interface ToInjectAllParameterized<T> {
-    }
+    public static class ToInjectAllBeanB implements ToInjectAll {}
 
+    public static class ToInjectAllParameterizedBeanA implements ToInjectAllParameterized<String> {}
 
-    public static class ToInjectAllBeanA implements ToInjectAll {
-    }
-
-    public static class ToInjectAllBeanB implements ToInjectAll {
-    }
-
-    public static class ToInjectAllParameterizedBeanA implements ToInjectAllParameterized<String> {
-    }
-
-    public static class ToInjectAllParameterizedBeanB implements ToInjectAllParameterized<String> {
-    }
-
+    public static class ToInjectAllParameterizedBeanB implements ToInjectAllParameterized<String> {}
 }
