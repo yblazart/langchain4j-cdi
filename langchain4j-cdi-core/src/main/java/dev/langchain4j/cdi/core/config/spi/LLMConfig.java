@@ -6,6 +6,7 @@ import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Base abstraction to provide configuration for LLM-related beans.
@@ -26,10 +28,14 @@ import java.util.stream.Collectors;
 public abstract class LLMConfig {
     Map<String, ProducerFunction<?>> producers = new ConcurrentHashMap<>();
 
-    /** Prefix for all LLM beans properties. */
+    /**
+     * Prefix for all LLM beans properties.
+     */
     public static final String PREFIX = "dev.langchain4j.plugin";
 
-    /** Called by @see LLMConfigProvider. */
+    /**
+     * Called by @see LLMConfigProvider.
+     */
     public static final String PRODUCER = "defined_bean_producer";
 
     public static final String CLASS = "class";
@@ -128,10 +134,24 @@ public abstract class LLMConfig {
                     if (type instanceof ParameterizedType) return selectByBeanManager((ParameterizedType) type);
                     else return lookup.select((Class) type).get();
                 case "@all":
-                    if (type instanceof ParameterizedType pt)
-                        return lookup.select((Class<?>) pt.getActualTypeArguments()[0]).stream()
-                                .toList();
-                    else return lookup.select((Class<?>) type).stream().toList();
+                    if (type instanceof ParameterizedType pt) {
+                        Type actualTypeArgument = pt.getActualTypeArguments()[0];
+                        Stream<?> toReturn;
+                        if (actualTypeArgument instanceof ParameterizedType) {
+                            toReturn = selectAllByBeanManager((ParameterizedType) actualTypeArgument).stream();
+                        } else {
+                            toReturn = lookup.select((Class<?>) actualTypeArgument).stream();
+                        }
+                        if (pt.getRawType().equals(List.class)) {
+                            return toReturn.toList();
+                        } else if (pt.getRawType().equals(Set.class)) {
+                            return toReturn.collect(Collectors.toSet());
+                        } else {
+                            throw new IllegalConfigurationException("@all can only be used with List or Set");
+                        }
+                    } else {
+                        throw new IllegalConfigurationException("Cannot use @all for non generic types");
+                    }
                 default:
                     return getInstance(lookup, (Class<?>) type, lookupableBean).get();
             }
@@ -143,7 +163,9 @@ public abstract class LLMConfig {
     private static java.util.function.Supplier<BeanManager> beanManagerSupplier =
             () -> CDI.current().getBeanManager();
 
-    /** For tests only: override how BeanManager is obtained. */
+    /**
+     * For tests only: override how BeanManager is obtained.
+     */
     public static void setBeanManagerSupplier(java.util.function.Supplier<BeanManager> supplier) {
         beanManagerSupplier = (supplier == null) ? () -> CDI.current().getBeanManager() : supplier;
     }
@@ -157,6 +179,20 @@ public abstract class LLMConfig {
         Bean<?> bean = bm.resolve(beans);
         var ctx = bm.createCreationalContext(bean);
         return bm.getReference(bean, type, ctx);
+    }
+
+    private List<Object> selectAllByBeanManager(ParameterizedType type) {
+        BeanManager bm = beanManagerSupplier.get();
+        Set<Bean<?>> beans = bm.getBeans(type);
+        if (beans.isEmpty()) {
+            throw new IllegalConfigurationException("The type " + type + " is not found in the CDI container.");
+        }
+        List<Object> beansList = new ArrayList<>();
+        for (Bean<?> bean : beans) {
+            var ctx = bm.createCreationalContext(bean);
+            beansList.add(bm.getReference(bean, type, ctx));
+        }
+        return beansList;
     }
 
     private <T> Instance<T> getInstance(Instance<Object> lookup, Class<T> clazz, String lookupName) {

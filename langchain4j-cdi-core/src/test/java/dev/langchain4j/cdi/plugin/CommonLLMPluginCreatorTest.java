@@ -1,25 +1,27 @@
 package dev.langchain4j.cdi.plugin;
 
+import dev.langchain4j.cdi.core.config.TextBlockLLMConfig;
+import dev.langchain4j.cdi.core.config.spi.LLMConfigProvider;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.literal.NamedLiteral;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
-import dev.langchain4j.cdi.core.config.TextBlockLLMConfig;
-import dev.langchain4j.cdi.core.config.spi.LLMConfigProvider;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.RequestScoped;
-import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.inject.literal.NamedLiteral;
-import jakarta.enterprise.inject.spi.Bean;
-import jakarta.enterprise.inject.spi.BeanManager;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 class CommonLLMPluginCreatorTest {
 
@@ -28,10 +30,13 @@ class CommonLLMPluginCreatorTest {
 
     @SuppressWarnings("unchecked")
     public static final Instance<DummyInjected> DUMMY_INJECTED_INSTANCE_MOCKED = mock(Instance.class);
+    public static final Instance<DummyAll.ToInjectAll> DUMMYALL_TOINJECTALL_INSTANCE_MOCKED = mock(Instance.class);
+    public static final Instance<DummyAll.ToInjectAllParameterized> DUMMYALL_TOINJECTALLPARAM_INSTANCE_MOCKED = mock(Instance.class);
 
     private static final TextBlockLLMConfig llmConfig = (TextBlockLLMConfig) LLMConfigProvider.getLlmConfig();
     public static final List<String> BEAN_NAMES_LIST = List.of("beanA", "beanB", "beanC");
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @BeforeEach
     void beforeEach() {
         DummyInjected dummyInjectedMocked = mock(DummyInjected.class);
@@ -45,17 +50,16 @@ class CommonLLMPluginCreatorTest {
         BeanManager bm = mock(BeanManager.class);
         @SuppressWarnings("unchecked")
         Bean<Object> dummyParamBean = (Bean<Object>) mock(Bean.class);
-        jakarta.enterprise.context.spi.CreationalContext<Object> ctx =
-                mock(jakarta.enterprise.context.spi.CreationalContext.class);
+        CreationalContext<Object> ctx = mock(CreationalContext.class);
         java.util.Set<Bean<?>> set = java.util.Set.of(dummyParamBean);
         when(bm.getBeans(org.mockito.ArgumentMatchers.any(java.lang.reflect.Type.class)))
-                .thenReturn((java.util.Set) set);
+                .thenReturn(set);
         when(bm.resolve(org.mockito.ArgumentMatchers.anySet())).thenReturn((Bean) dummyParamBean);
         when(bm.createCreationalContext(dummyParamBean)).thenReturn(ctx);
         when(bm.getReference(
-                        org.mockito.ArgumentMatchers.eq(dummyParamBean),
-                        org.mockito.ArgumentMatchers.any(java.lang.reflect.Type.class),
-                        org.mockito.ArgumentMatchers.eq(ctx)))
+                org.mockito.ArgumentMatchers.eq(dummyParamBean),
+                org.mockito.ArgumentMatchers.any(java.lang.reflect.Type.class),
+                org.mockito.ArgumentMatchers.eq(ctx)))
                 .thenReturn(new DummyIntegerParam());
         dev.langchain4j.cdi.core.config.spi.LLMConfig.setBeanManagerSupplier(() -> bm);
         //
@@ -71,7 +75,7 @@ class CommonLLMPluginCreatorTest {
                         dev.langchain4j.plugin.beanA.config.dummyInjected=lookup:@default
                         dev.langchain4j.plugin.beanA.config.dummy-param-int=lookup:@default
                         dev.langchain4j.plugin.beanA.config.dummyWithStringConstructor=ok
-
+                        
                         # No scope defined to get ApplicationScoped by default
                         dev.langchain4j.plugin.beanB.class=dev.langchain4j.cdi.plugin.DummyModel
                         dev.langchain4j.plugin.beanB.config.api-key=01
@@ -82,12 +86,14 @@ class CommonLLMPluginCreatorTest {
                         dev.langchain4j.plugin.beanB.config.dummyInjected=lookup:dev.langchain4j.cdi.plugin.DummyInjected
                         dev.langchain4j.plugin.beanB.config.dummy-param-int=lookup:@default
                         dev.langchain4j.plugin.beanB.config.dummyWithStringConstructor=ok
-
+                        
                         # No scope defined to get ApplicationScoped by default
                         dev.langchain4j.plugin.beanC.class=dev.langchain4j.cdi.plugin.DummyModel
                         dev.langchain4j.plugin.beanC.defined_bean_producer=ProducerC
-
+                        
                         """);
+
+
         llmConfig.registerProducer(
                 "ProducerC",
                 (lookup, beanName, llmCOnfig) -> new DummyModel(
@@ -130,8 +136,8 @@ class CommonLLMPluginCreatorTest {
                 beanDataList.size(),
                 "Found " + beanDataList.size() + " beans: "
                         + beanDataList.stream()
-                                .map(CommonLLMPluginCreator.BeanData::beanName)
-                                .toList());
+                        .map(CommonLLMPluginCreator.BeanData::beanName)
+                        .toList());
         assertTrue(beanDataList.stream()
                 .map(CommonLLMPluginCreator.BeanData::beanName)
                 .toList()
@@ -164,8 +170,82 @@ class CommonLLMPluginCreatorTest {
                 list.isEmpty(),
                 "No BeanData should be created when builder class is missing: "
                         + list.stream()
-                                .map(CommonLLMPluginCreator.BeanData::beanName)
-                                .toList());
+                        .map(CommonLLMPluginCreator.BeanData::beanName)
+                        .toList());
+    }
+
+    @SuppressWarnings("SuspiciousMethodCalls")
+    @Test
+    void useAllLookup() throws ClassNotFoundException {
+        ;
+        when(LOOKUP_MOCKED.select(DummyAll.ToInjectAll.class)).thenReturn(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED);
+        when(LOOKUP_MOCKED.select(DummyAll.ToInjectAll.class, NamedLiteral.of(DummyAll.ToInjectAll.class.getName()))).thenReturn(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED);
+        List<DummyAll.ToInjectAll> toInjectAllList = new ArrayList<>();
+        toInjectAllList.add(new DummyAll.ToInjectAllBeanA());
+        toInjectAllList.add(new DummyAll.ToInjectAllBeanB());
+        when(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED.stream()).thenReturn(toInjectAllList.stream());
+
+        BeanManager bm = mock(BeanManager.class);
+        @SuppressWarnings("unchecked")
+        Bean<Object> beanA = (Bean<Object>) mock(Bean.class);
+        Bean<Object> beanB = (Bean<Object>) mock(Bean.class);
+        CreationalContext<Object> ctxA = mock(CreationalContext.class);
+        CreationalContext<Object> ctxB = mock(CreationalContext.class);
+        java.util.Set<Bean<?>> set = java.util.Set.of(beanA,beanB);
+        when(bm.getBeans(org.mockito.ArgumentMatchers.any(java.lang.reflect.Type.class))).thenReturn(set);
+        when(bm.createCreationalContext(beanA)).thenReturn(ctxA);
+        when(bm.createCreationalContext(beanB)).thenReturn(ctxB);
+        when(bm.getReference(
+                org.mockito.ArgumentMatchers.eq(beanA),
+                org.mockito.ArgumentMatchers.any(java.lang.reflect.Type.class),
+                org.mockito.ArgumentMatchers.eq(ctxA)))
+                .thenReturn(new DummyAll.ToInjectAllParameterizedBeanA());
+        when(bm.getReference(
+                org.mockito.ArgumentMatchers.eq(beanB),
+                org.mockito.ArgumentMatchers.any(java.lang.reflect.Type.class),
+                org.mockito.ArgumentMatchers.eq(ctxB)))
+                .thenReturn(new DummyAll.ToInjectAllParameterizedBeanB());
+        dev.langchain4j.cdi.core.config.spi.LLMConfig.setBeanManagerSupplier(() -> bm);
+
+
+        llmConfig.reinitForTest(
+                """
+                        dev.langchain4j.plugin.beanAll.class=dev.langchain4j.cdi.plugin.DummyAll
+                        dev.langchain4j.plugin.beanAll.config.toInjectAll=lookup:@all
+                        dev.langchain4j.plugin.beanAll.config.toInjectAllParameterized=lookup:@all
+                        """);
+
+        List<CommonLLMPluginCreator.BeanData> beanDataList = new ArrayList<>();
+        CommonLLMPluginCreator.prepareAllLLMBeans(llmConfig, beanDataList::add);
+
+
+        assertEquals(1, beanDataList.size());
+        CommonLLMPluginCreator.BeanData beanData = beanDataList.get(0);
+
+        DummyAll object = (DummyAll) beanData.callback().apply(LOOKUP_MOCKED);
+
+        assertTrue(
+                object.toInjectAll.stream()
+                        .map(Object::getClass)
+                        .toList()
+                        .containsAll(
+                                List.of(
+                                        DummyAll.ToInjectAllBeanA.class,
+                                        DummyAll.ToInjectAllBeanB.class
+                                )
+                        )
+        );
+        assertTrue(
+                object.toInjectAllParameterized.stream()
+                        .map(Object::getClass)
+                        .toList()
+                        .containsAll(
+                                List.of(
+                                        DummyAll.ToInjectAllParameterizedBeanA.class,
+                                        DummyAll.ToInjectAllParameterizedBeanB.class
+                                )
+                        )
+        );
     }
 
     @Test
@@ -189,7 +269,7 @@ class CommonLLMPluginCreatorTest {
         // Null case via reflection
         var method = CommonLLMPluginCreator.class.getDeclaredMethod("getFieldsInAllHierarchy", Class.class);
         method.setAccessible(true);
-        List<?> empty = (List<?>) method.invoke(null, new Object[] {null});
+        List<?> empty = (List<?>) method.invoke(null, new Object[]{null});
         assertNotNull(empty);
         assertTrue(empty.isEmpty());
         // Parent+child aggregation
