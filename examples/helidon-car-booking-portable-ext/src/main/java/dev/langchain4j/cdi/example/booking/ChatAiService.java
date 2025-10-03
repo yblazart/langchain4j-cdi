@@ -10,6 +10,7 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
 @RegisterAIService(
         tools = BookingService.class,
+        contentRetrieverName = "docRagRetriever",
         chatMemoryName = "chat-ai-service-memory",
         chatModelName = "chat-model")
 public interface ChatAiService {

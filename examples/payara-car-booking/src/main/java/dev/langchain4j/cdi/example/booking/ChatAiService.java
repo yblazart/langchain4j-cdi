@@ -6,6 +6,7 @@ import dev.langchain4j.service.SystemMessage;
 @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
 @RegisterAIService(
         tools = BookingService.class,
+        contentRetrieverName = "docRagRetriever",
         chatMemoryName = "chat-ai-service-memory",
         chatModelName = "chat-model")
 public interface ChatAiService {

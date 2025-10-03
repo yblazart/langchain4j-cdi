@@ -9,7 +9,10 @@ import org.eclipse.microprofile.faulttolerance.Fallback;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
 
-@RegisterAIService(chatMemoryName = "fraud-ai-service-memory", chatModelName = "chat-model")
+@RegisterAIService(
+        contentRetrieverName = "docRagRetriever",
+        chatMemoryName = "fraud-ai-service-memory",
+        chatModelName = "chat-model")
 public interface FraudAiService {
 
     @SystemMessage(

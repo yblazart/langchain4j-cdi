@@ -8,7 +8,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -96,30 +95,48 @@ public class CommonLLMPluginCreator {
             for (String property : properties) {
                 currentProperty = property;
                 String camelCaseProperty = dashToCamel(property);
+                String propertyKey = "config." + property;
+                boolean propertySet = false;
+
                 // determine field in builder
                 List<Field> fields = getFieldsInAllHierarchy(builderClass);
                 Field propertyFieldInBuilder = fields.stream()
                         .filter(field -> field.getName().equals(camelCaseProperty))
                         .findFirst()
                         .orElse(null);
-                if (propertyFieldInBuilder == null)
-                    throw new NoSuchFieldException("Can't find Field for property '" + property + "' ("
-                            + camelCaseProperty + ") in bean " + beanName + "(" + targetClass.getName() + ")");
-                //
-                Method setterMethod = builderClass.getMethod(camelCaseProperty, propertyFieldInBuilder.getType());
-                String propertyKey = "config." + property;
+                if (propertyFieldInBuilder != null) {
+                    Method setterMethod = builderClass.getMethod(camelCaseProperty, propertyFieldInBuilder.getType());
 
-                Type genericType = propertyFieldInBuilder.getGenericType();
-                Object value = llmConfig.getBeanPropertyValue(lookup, beanName, propertyKey, genericType);
-                setterMethod.invoke(builder, value);
+                    Type genericType = propertyFieldInBuilder.getGenericType();
+                    Object value = llmConfig.getBeanPropertyValue(lookup, beanName, propertyKey, genericType);
+                    try {
+                        setterMethod.invoke(builder, value);
+                        propertySet = true;
+                    } catch (ReflectiveOperationException e) {
+                    }
+                } else {
+                    // Let's try using methods in the builder
+                    List<Method> methods = findMethodsInAllHierarch(builderClass, camelCaseProperty);
+                    if (methods != null && !methods.isEmpty()) {
+                        for (Method setterMethod : methods) {
+                            if (setterMethod.getParameterCount() != 1) continue;
+                            Object value = llmConfig.getBeanPropertyValue(
+                                    lookup, beanName, propertyKey, setterMethod.getParameterTypes()[0]);
+                            try {
+                                setterMethod.invoke(builder, value);
+                                propertySet = true;
+                            } catch (ReflectiveOperationException e) {
+                            }
+                        }
+                    }
+                }
+
+                if (!propertySet)
+                    throw new ReflectiveOperationException("Can't find field or method for config property '" + property
+                            + "' +' (" + camelCaseProperty + ") in builder (" + builderClass.getName() + ")");
             }
             return builderClass.getMethod("build").invoke(builder);
-        } catch (IllegalAccessException
-                | IllegalArgumentException
-                | NoSuchMethodException
-                | SecurityException
-                | NoSuchFieldException
-                | InvocationTargetException e) {
+        } catch (IllegalArgumentException | SecurityException | ReflectiveOperationException e) {
             throw new RuntimeException("Current property : " + currentProperty, e);
         }
     }
@@ -134,7 +151,7 @@ public class CommonLLMPluginCreator {
     }
 
     private static List<Field> getFieldsInAllHierarchy(Class<?> startClass) {
-        if (startClass == null) return new ArrayList<>();
+        if (startClass == null) return List.of();
 
         List<Field> currentClassFields = new ArrayList<>(Arrays.asList(startClass.getDeclaredFields()));
         Class<?> parentClass = startClass.getSuperclass();
@@ -153,5 +170,23 @@ public class CommonLLMPluginCreator {
         } catch (ClassNotFoundException classNotFoundException) {
             return CommonLLMPluginCreator.class.getClassLoader().loadClass(className);
         }
+    }
+
+    private static List<Method> findMethodsInAllHierarch(Class<?> startClass, final String methodName) {
+        if (startClass == null || methodName == null || methodName.isEmpty()) return List.of();
+
+        List<Method> methods = new ArrayList<>();
+        Arrays.stream(startClass.getDeclaredMethods())
+                .filter(method -> method.getName().equals(methodName))
+                .forEach(methods::add);
+
+        Class<?> parentClass = startClass.getSuperclass();
+        if (parentClass != null && !parentClass.equals(Object.class)) {
+            Arrays.stream(parentClass.getDeclaredMethods())
+                    .filter(method -> method.getName().equals(methodName))
+                    .forEach(methods::add);
+        }
+
+        return methods;
     }
 }
