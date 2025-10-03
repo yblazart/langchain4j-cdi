@@ -87,6 +87,7 @@ public abstract class LLMConfig {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private Object getObject(Class<?> clazz, ParameterizedType parameterizedType, String stringValue)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         if (clazz == String.class) return stringValue;
@@ -104,16 +105,17 @@ public abstract class LLMConfig {
             @SuppressWarnings({"unchecked", "rawtypes"})
             Class<? extends Enum> enumClass = (Class<? extends Enum<?>>) clazz;
             //noinspection unchecked
-            return Enum.valueOf(enumClass, stringValue);
+            return Enum.valueOf(enumClass, stringValue.substring(stringValue.lastIndexOf(".") + 1));
         }
-        if (clazz.isAssignableFrom(List.class) && parameterizedType != null) {
+        if (parameterizedType != null) {
             // Try to resolve generic parameter (e.g., List<SomeEnum>)
             List<Object> list = new ArrayList<>();
             Type arg = parameterizedType.getActualTypeArguments()[0];
             for (String val : stringValue.split(",")) {
                 list.add(getObject((Class<?>) arg, null, val));
             }
-            return list;
+            if (clazz.isAssignableFrom(List.class)) return list;
+            if (clazz.isAssignableFrom(Set.class)) return Set.copyOf(list);
         }
         return clazz.getConstructor(String.class).newInstance(stringValue);
     }

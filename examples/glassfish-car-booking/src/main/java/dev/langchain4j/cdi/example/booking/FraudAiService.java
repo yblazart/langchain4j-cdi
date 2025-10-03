@@ -6,7 +6,10 @@ import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
 @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
-@RegisterAIService(chatMemoryName = "fraud-ai-service-memory", chatModelName = "chat-model")
+@RegisterAIService(
+        contentRetrieverName = "docRagRetriever",
+        chatMemoryName = "fraud-ai-service-memory",
+        chatModelName = "chat-model")
 public interface FraudAiService {
 
     @SystemMessage(

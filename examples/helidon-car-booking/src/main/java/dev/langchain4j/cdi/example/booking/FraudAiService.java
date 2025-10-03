@@ -10,7 +10,10 @@ import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
 
 @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
-@RegisterAIService(chatMemoryName = "fraud-ai-service-memory", chatModelName = "chat-model")
+@RegisterAIService(
+        contentRetrieverName = "docRagRetriever",
+        chatMemoryName = "fraud-ai-service-memory",
+        chatModelName = "chat-model")
 public interface FraudAiService {
 
     @SystemMessage(

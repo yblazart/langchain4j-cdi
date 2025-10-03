@@ -236,7 +236,7 @@ class CommonLLMPluginCreatorTest {
     }
 
     @Test
-    void create_missingField_throwsRuntimeWrappingNoSuchField() throws ClassNotFoundException {
+    void create_missingField_throwsRuntimeWrappingReflectiveOperation() throws ClassNotFoundException {
         llmConfig.reinitForTest(
                 """
                         dev.langchain4j.plugin.bad.class=dev.langchain4j.cdi.plugin.DummyModel
@@ -247,7 +247,7 @@ class CommonLLMPluginCreatorTest {
         RuntimeException ex = assertThrows(
                 RuntimeException.class,
                 () -> CommonLLMPluginCreator.create(LOOKUP_MOCKED, llmConfig, "bad", target, builder));
-        assertTrue(ex.getCause() instanceof NoSuchFieldException);
+        assertTrue(ex.getCause() instanceof ReflectiveOperationException);
         assertTrue(ex.getMessage().contains("unknown-prop"));
     }
 
