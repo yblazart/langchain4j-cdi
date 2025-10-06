@@ -18,7 +18,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.langchain4j.cdi</groupId>
     <artifactId>langchain4j-cdi-parent</artifactId>
-    <version>0.0.7-SNAPSHOT</version>
+    <version>0.0.8-SNAPSHOT</version>
 
     <packaging>pom</packaging>
     <name>LangChain4J CDI Parent POM</name>
