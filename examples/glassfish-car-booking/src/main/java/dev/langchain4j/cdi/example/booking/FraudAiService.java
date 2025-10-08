@@ -9,7 +9,8 @@ import dev.langchain4j.service.V;
 @RegisterAIService(
         contentRetrieverName = "docRagRetriever",
         chatMemoryName = "fraud-ai-service-memory",
-        chatModelName = "chat-model")
+        chatModelName = "chat-model",
+        tools = BookingService.class)
 public interface FraudAiService {
 
     @SystemMessage(
