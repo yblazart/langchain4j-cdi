@@ -16,13 +16,11 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
         tools = BookingService.class)
 public interface FraudAiService {
 
-    @SystemMessage(
-            """
+    @SystemMessage("""
             You are a car booking fraud detection AI for Miles of Smiles.
             You have to detect customer fraud in bookings.
             """)
-    @UserMessage(
-            """
+    @UserMessage("""
             Your task is to detect whether a fraud was committed for the customer {{name}} {{surname}}.
 
             To detect a fraud, perform the following actions:

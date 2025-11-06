@@ -64,8 +64,7 @@ class CommonLLMPluginCreatorTest {
                 .thenReturn(new DummyIntegerParam());
         dev.langchain4j.cdi.core.config.spi.LLMConfig.setBeanManagerSupplier(() -> bm);
         //
-        llmConfig.reinitForTest(
-                """
+        llmConfig.reinitForTest("""
                         dev.langchain4j.plugin.beanA.class=dev.langchain4j.cdi.plugin.DummyModel
                         dev.langchain4j.plugin.beanA.scope=jakarta.enterprise.context.RequestScoped
                         dev.langchain4j.plugin.beanA.config.api-key=01
@@ -159,8 +158,7 @@ class CommonLLMPluginCreatorTest {
 
     @Test
     void prepareAllLLMBeans_noBuilderClass_leadsToNoBeanData() throws ClassNotFoundException {
-        llmConfig.reinitForTest(
-                """
+        llmConfig.reinitForTest("""
                         dev.langchain4j.plugin.noBuilder.class=dev.langchain4j.cdi.plugin.NoBuilderModel
                         """);
         List<CommonLLMPluginCreator.BeanData> list = new ArrayList<>();
@@ -209,8 +207,7 @@ class CommonLLMPluginCreatorTest {
                 .thenReturn(new DummyAll.ToInjectAllParameterizedBeanB());
         dev.langchain4j.cdi.core.config.spi.LLMConfig.setBeanManagerSupplier(() -> bm);
 
-        llmConfig.reinitForTest(
-                """
+        llmConfig.reinitForTest("""
                         dev.langchain4j.plugin.beanAll.class=dev.langchain4j.cdi.plugin.DummyAll
                         dev.langchain4j.plugin.beanAll.config.toInjectAll=lookup:@all
                         dev.langchain4j.plugin.beanAll.config.toInjectAllParameterized=lookup:@all
@@ -237,8 +234,7 @@ class CommonLLMPluginCreatorTest {
 
     @Test
     void create_missingField_throwsRuntimeWrappingReflectiveOperation() throws ClassNotFoundException {
-        llmConfig.reinitForTest(
-                """
+        llmConfig.reinitForTest("""
                         dev.langchain4j.plugin.bad.class=dev.langchain4j.cdi.plugin.DummyModel
                         dev.langchain4j.plugin.bad.config.unknown-prop=value
                         """);
