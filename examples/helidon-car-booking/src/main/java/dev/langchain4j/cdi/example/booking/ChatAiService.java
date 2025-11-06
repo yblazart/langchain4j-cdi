@@ -15,8 +15,7 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
         chatModelName = "chat-model")
 public interface ChatAiService {
 
-    @SystemMessage(
-            """
+    @SystemMessage("""
             You are a customer support agent of a car rental company named 'Miles of Smiles'.
             Before providing information about booking or canceling a booking, you MUST always check:
             booking number, customer name and surname.

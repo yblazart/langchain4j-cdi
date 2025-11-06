@@ -98,17 +98,21 @@ public class ChatRestServiceArquillianTest {
     @Test
     public void testChatRestService() {
         String chatEndpoint = baseURL + "chat";
-        Client client = ClientBuilder.newClient();
-        WebTarget target = client.target(chatEndpoint);
+        try (Client client = ClientBuilder.newClient()) {
+            System.out.println(
+                    "***************************************************************************************");
+            System.out.println(chatEndpoint);
+            System.out.println(
+                    "***************************************************************************************");
+            WebTarget target = client.target(chatEndpoint);
 
-        String question = "What is the meaning of life?";
-        Response response =
-                target.request(MediaType.APPLICATION_JSON).post(Entity.entity(question, MediaType.APPLICATION_JSON));
+            String question = "What is the meaning of life?";
+            Response response = target.request(MediaType.APPLICATION_JSON)
+                    .post(Entity.entity(question, MediaType.APPLICATION_JSON));
 
-        assertThat(response.getStatus()).isEqualTo(200);
-        String result = response.readEntity(String.class);
-        assertThat(result).isNotNull().isEqualTo("ok EmbeddingStoreTextSegment{}");
-
-        client.close();
+            assertThat(response.getStatus()).isEqualTo(200);
+            String result = response.readEntity(String.class);
+            assertThat(result).isNotNull().isEqualTo("ok EmbeddingStoreTextSegment{}");
+        }
     }
 }
