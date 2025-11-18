@@ -15,7 +15,7 @@
 
     <properties>
         <!-- WildFly -->
-        <wildfly.version>38.0.0.Final</wildfly.version>
+        <wildfly.version>38.0.1.Final</wildfly.version>
     </properties>
 
     <build>
