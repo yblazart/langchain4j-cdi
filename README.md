@@ -88,13 +88,15 @@ public interface ChatAiService {
 Inject the AI service into your CDI beans:
 
 ```java
-@RestController
-public class ChatController {
+@ApplicationScoped
+@Path("/car-booking")
+public class ChatResource {
     
     @Inject
     ChatAiService chatService;
     
-    @POST
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
     @Path("/chat")
     public String chat(String message) {
         return chatService.chat(message);
@@ -233,7 +235,7 @@ Automatic telemetry integration provides metrics for:
 Define business functions that AI can call:
 
 ```java
-@Component
+@ApplicationScoped
 public class BookingTools {
     
     @Tool("Cancel a booking by ID")
