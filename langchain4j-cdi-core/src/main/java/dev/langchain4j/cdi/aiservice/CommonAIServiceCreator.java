@@ -12,10 +12,8 @@ import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolProvider;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -32,6 +30,7 @@ import java.util.logging.Logger;
 public class CommonAIServiceCreator {
 
     private static final Logger LOGGER = Logger.getLogger(CommonAIServiceCreator.class.getName());
+    private static final String DEFAULT_BEAN_NAME = "#default";
 
     /**
      * Create a LangChain4j AI service proxy for the given annotated interface.
@@ -42,16 +41,14 @@ public class CommonAIServiceCreator {
      */
     public static <X> X create(Instance<Object> lookup, Class<X> interfaceClass) {
         RegisterAIService annotation = interfaceClass.getAnnotation(RegisterAIService.class);
-        String chatModelName = Objects.requireNonNull(annotation).chatModelName();
-        String streamingChatModelName = Objects.requireNonNull(annotation).streamingChatModelName();
-        // Instances
-        Instance<ChatModel> chatModelInstance = getInstance(lookup, ChatModel.class, chatModelName);
-        // If neither name is provided, try to resolve default ChatModel to satisfy AiServices requirement
-        if ((chatModelInstance == null || !chatModelInstance.isResolvable())
-                && (streamingChatModelName == null || streamingChatModelName.isBlank())) {
-            // try default chat model
-            chatModelInstance = lookup.select(ChatModel.class);
+        if (annotation == null) {
+            throw new IllegalArgumentException(
+                    "Interface " + interfaceClass.getName() + " must be annotated with @RegisterAIService");
         }
+        String chatModelName = annotation.chatModelName();
+        String streamingChatModelName = annotation.streamingChatModelName();
+        // Instances
+        Instance<ChatModel> chatModelInstance = resolveChatModel(lookup, chatModelName, streamingChatModelName);
         Instance<StreamingChatModel> streamingChatModel =
                 getInstance(lookup, StreamingChatModel.class, streamingChatModelName);
         Instance<ContentRetriever> contentRetriever =
@@ -60,71 +57,81 @@ public class CommonAIServiceCreator {
                 getInstance(lookup, RetrievalAugmentor.class, annotation.retrievalAugmentorName());
         Instance<ToolProvider> toolProvider = getInstance(lookup, ToolProvider.class, annotation.toolProviderName());
 
-        AiServices<X> aiServices = AiServices.builder(interfaceClass);
+        AiServices<X> builder = AiServices.builder(interfaceClass);
         if (chatModelInstance != null && chatModelInstance.isResolvable()) {
             LOGGER.fine("ChatModel " + chatModelInstance.get());
-            aiServices.chatModel(chatModelInstance.get());
+            builder.chatModel(chatModelInstance.get());
         }
         if (streamingChatModel != null && streamingChatModel.isResolvable()) {
             LOGGER.fine("StreamingChatModel " + streamingChatModel.get());
-            aiServices.streamingChatModel(streamingChatModel.get());
+            builder.streamingChatModel(streamingChatModel.get());
         }
         // AiServices requires only one of [retriever, contentRetriever, retrievalAugmentor].
         // If a RetrievalAugmentor is provided, prefer it and do not set ContentRetriever.
         if (retrievalAugmentor != null && retrievalAugmentor.isResolvable()) {
             LOGGER.fine("RetrievalAugmentor " + retrievalAugmentor.get());
-            aiServices.retrievalAugmentor(retrievalAugmentor.get());
+            builder.retrievalAugmentor(retrievalAugmentor.get());
         } else if (contentRetriever != null && contentRetriever.isResolvable()) {
             LOGGER.fine("ContentRetriever " + contentRetriever.get());
-            aiServices.contentRetriever(contentRetriever.get());
+            builder.contentRetriever(contentRetriever.get());
         }
-        boolean noToolProvider = true;
         if (toolProvider != null && toolProvider.isResolvable()) {
             LOGGER.fine("ToolProvider " + toolProvider.get());
-            aiServices.toolProvider(toolProvider.get());
-            noToolProvider = false;
-        }
-        if (annotation.tools() != null && annotation.tools().length > 0 && noToolProvider) {
+            builder.toolProvider(toolProvider.get());
+        } else if (annotation.tools().length > 0) {
             List<Object> tools = new ArrayList<>(annotation.tools().length);
             for (Class<?> toolClass : annotation.tools()) {
                 try {
                     tools.add(toolClass.getConstructor((Class<?>[]) null).newInstance((Object[]) null));
-                } catch (NoSuchMethodException
-                        | SecurityException
-                        | InstantiationException
-                        | IllegalAccessException
-                        | IllegalArgumentException
-                        | InvocationTargetException ex) {
+                } catch (ReflectiveOperationException | IllegalArgumentException ex) {
                     LOGGER.log(
                             Level.SEVERE,
                             "Can't add toolClass " + toolClass + " for " + interfaceClass + " : " + ex.getMessage(),
                             ex);
                 }
             }
-            aiServices.tools(tools);
+            builder.tools(tools);
         }
         Instance<ChatMemory> chatMemory = getInstance(lookup, ChatMemory.class, annotation.chatMemoryName());
         if (chatMemory != null && chatMemory.isResolvable()) {
             ChatMemory chatMemoryInstance = chatMemory.get();
             LOGGER.fine("ChatMemory " + chatMemoryInstance);
-            aiServices.chatMemory(chatMemoryInstance);
+            builder.chatMemory(chatMemoryInstance);
         }
 
         Instance<ChatMemoryProvider> chatMemoryProvider =
                 getInstance(lookup, ChatMemoryProvider.class, annotation.chatMemoryProviderName());
         if (chatMemoryProvider != null && chatMemoryProvider.isResolvable()) {
             LOGGER.fine("ChatMemoryProvider " + chatMemoryProvider.get());
-            aiServices.chatMemoryProvider(chatMemoryProvider.get());
+            builder.chatMemoryProvider(chatMemoryProvider.get());
         }
 
         Instance<ModerationModel> moderationModelInstance =
                 getInstance(lookup, ModerationModel.class, annotation.moderationModelName());
         if (moderationModelInstance != null && moderationModelInstance.isResolvable()) {
             LOGGER.fine("ModerationModel " + moderationModelInstance.get());
-            aiServices.moderationModel(moderationModelInstance.get());
+            builder.moderationModel(moderationModelInstance.get());
         }
 
-        return aiServices.build();
+        return builder.build();
+    }
+
+    /**
+     * Resolve ChatModel with fallback to default if no named instance and no streaming model configured. If a named
+     * ChatModel is not resolvable and no StreamingChatModel is configured, try to resolve the default ChatModel to
+     * satisfy AiServices requirement.
+     */
+    private static Instance<ChatModel> resolveChatModel(
+            Instance<Object> lookup, String chatModelName, String streamingChatModelName) {
+        Instance<ChatModel> chatModelInstance = getInstance(lookup, ChatModel.class, chatModelName);
+
+        // If neither ChatModel nor StreamingChatModel is configured, try default ChatModel
+        if ((chatModelInstance == null || !chatModelInstance.isResolvable())
+                && (streamingChatModelName == null || streamingChatModelName.isBlank())) {
+            return lookup.select(ChatModel.class);
+        }
+
+        return chatModelInstance;
     }
 
     /**
@@ -134,7 +141,9 @@ public class CommonAIServiceCreator {
     private static <X> Instance<X> getInstance(Instance<Object> lookup, Class<X> type, String name) {
         LOGGER.fine("CDI get instance of type '" + type + "' with name '" + name + "'");
         if (name != null && !name.isBlank()) {
-            if ("#default".equals(name)) return lookup.select(type);
+            if (DEFAULT_BEAN_NAME.equals(name)) {
+                return lookup.select(type);
+            }
 
             return lookup.select(type, NamedLiteral.of(name));
         }
