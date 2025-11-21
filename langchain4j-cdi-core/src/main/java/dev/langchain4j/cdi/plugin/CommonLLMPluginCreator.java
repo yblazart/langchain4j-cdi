@@ -41,31 +41,39 @@ public class CommonLLMPluginCreator {
             if (scopeClassName == null || scopeClassName.isBlank()) {
                 scopeClassName = ApplicationScoped.class.getName();
             }
-            Class<? extends Annotation> scopeClass = (Class<? extends Annotation>) loadClass(scopeClassName);
+
+            // Validate scope class is actually an annotation
+            Class<?> loadedScopeClass = loadClass(scopeClassName);
+            if (!Annotation.class.isAssignableFrom(loadedScopeClass)) {
+                throw new IllegalArgumentException("Scope class " + scopeClassName + " for bean " + beanName
+                        + " is not an annotation type");
+            }
+            Class<? extends Annotation> scopeClass = (Class<? extends Annotation>) loadedScopeClass;
+
             Class<?> targetClass = loadClass(className);
             ProducerFunction<Object> producer = (ProducerFunction<Object>)
                     llmConfig.getBeanPropertyValue(beanName, PRODUCER, ProducerFunction.class);
-            Class<?> builderCLass;
+            Class<?> builderClass;
             if (producer == null) {
-                builderCLass = Arrays.stream(targetClass.getDeclaredClasses())
+                builderClass = Arrays.stream(targetClass.getDeclaredClasses())
                         .filter(declClass -> declClass.getName().endsWith("Builder"))
                         .findFirst()
                         .orElse(null);
-                LOGGER.info("Builder class : " + builderCLass);
-                if (builderCLass == null) {
-                    LOGGER.warning("No builder class found, cancel " + beanName);
-                    return;
+                LOGGER.info("Builder class : " + builderClass);
+                if (builderClass == null) {
+                    LOGGER.warning("No builder class found, skipping bean: " + beanName);
+                    continue;
                 }
                 producer = (creationalContext, beanName1, llmConfig1) ->
-                        create(creationalContext, llmConfig, beanName, targetClass, builderCLass);
+                        create(creationalContext, llmConfig, beanName, targetClass, builderClass);
             } else {
-                builderCLass = null;
+                builderClass = null;
             }
 
             ProducerFunction<Object> finalProducer = producer;
             beanBuilder.accept(new BeanData(
                     targetClass,
-                    builderCLass,
+                    builderClass,
                     scopeClass,
                     beanName,
                     (Instance<Object> creationalContext) ->
@@ -113,6 +121,7 @@ public class CommonLLMPluginCreator {
                         setterMethod.invoke(builder, value);
                         propertySet = true;
                     } catch (ReflectiveOperationException e) {
+                        LOGGER.fine("Failed to set property '" + property + "' via field-based setter: " + e.getMessage());
                     }
                 } else {
                     // Let's try using methods in the builder
@@ -126,6 +135,8 @@ public class CommonLLMPluginCreator {
                                 setterMethod.invoke(builder, value);
                                 propertySet = true;
                             } catch (ReflectiveOperationException e) {
+                                LOGGER.fine("Failed to set property '" + property + "' via method "
+                                        + setterMethod.getName() + ": " + e.getMessage());
                             }
                         }
                     }
@@ -137,7 +148,8 @@ public class CommonLLMPluginCreator {
             }
             return builderClass.getMethod("build").invoke(builder);
         } catch (IllegalArgumentException | SecurityException | ReflectiveOperationException e) {
-            throw new RuntimeException("Current property : " + currentProperty, e);
+            throw new RuntimeException("Failed to create bean '" + beanName + "' of type " + targetClass.getName()
+                    + " while processing property '" + currentProperty + "'", e);
         }
     }
 
