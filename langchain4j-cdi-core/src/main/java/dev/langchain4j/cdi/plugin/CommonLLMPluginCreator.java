@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -41,31 +42,39 @@ public class CommonLLMPluginCreator {
             if (scopeClassName == null || scopeClassName.isBlank()) {
                 scopeClassName = ApplicationScoped.class.getName();
             }
-            Class<? extends Annotation> scopeClass = (Class<? extends Annotation>) loadClass(scopeClassName);
+
+            // Validate scope class is actually an annotation
+            Class<?> loadedScopeClass = loadClass(scopeClassName);
+            if (!Annotation.class.isAssignableFrom(loadedScopeClass)) {
+                throw new IllegalArgumentException(
+                        "Scope class " + scopeClassName + " for bean " + beanName + " is not an annotation type");
+            }
+            Class<? extends Annotation> scopeClass = (Class<? extends Annotation>) loadedScopeClass;
+
             Class<?> targetClass = loadClass(className);
             ProducerFunction<Object> producer = (ProducerFunction<Object>)
                     llmConfig.getBeanPropertyValue(beanName, PRODUCER, ProducerFunction.class);
-            Class<?> builderCLass;
+            Class<?> builderClass;
             if (producer == null) {
-                builderCLass = Arrays.stream(targetClass.getDeclaredClasses())
+                builderClass = Arrays.stream(targetClass.getDeclaredClasses())
                         .filter(declClass -> declClass.getName().endsWith("Builder"))
                         .findFirst()
                         .orElse(null);
-                LOGGER.info("Builder class : " + builderCLass);
-                if (builderCLass == null) {
-                    LOGGER.warning("No builder class found, cancel " + beanName);
-                    return;
+                LOGGER.info("Builder class : " + builderClass);
+                if (builderClass == null) {
+                    LOGGER.warning("No builder class found, skipping bean: " + beanName);
+                    continue;
                 }
                 producer = (creationalContext, beanName1, llmConfig1) ->
-                        create(creationalContext, llmConfig, beanName, targetClass, builderCLass);
+                        create(creationalContext, llmConfig, beanName, targetClass, builderClass);
             } else {
-                builderCLass = null;
+                builderClass = null;
             }
 
             ProducerFunction<Object> finalProducer = producer;
             beanBuilder.accept(new BeanData(
                     targetClass,
-                    builderCLass,
+                    builderClass,
                     scopeClass,
                     beanName,
                     (Instance<Object> creationalContext) ->
@@ -113,45 +122,75 @@ public class CommonLLMPluginCreator {
                         setterMethod.invoke(builder, value);
                         propertySet = true;
                     } catch (ReflectiveOperationException e) {
+                        LOGGER.fine(
+                                "Failed to set property '" + property + "' via field-based setter: " + e.getMessage());
                     }
                 } else {
                     // Let's try using methods in the builder
                     List<Method> methods = findMethodsInAllHierarch(builderClass, camelCaseProperty);
                     if (methods != null && !methods.isEmpty()) {
                         for (Method setterMethod : methods) {
-                            if (setterMethod.getParameterCount() != 1) continue;
+                            if (setterMethod.getParameterCount() != 1) {
+                                continue;
+                            }
                             Object value = llmConfig.getBeanPropertyValue(
                                     lookup, beanName, propertyKey, setterMethod.getParameterTypes()[0]);
                             try {
                                 setterMethod.invoke(builder, value);
                                 propertySet = true;
                             } catch (ReflectiveOperationException e) {
+                                LOGGER.fine("Failed to set property '" + property + "' via method "
+                                        + setterMethod.getName() + ": " + e.getMessage());
                             }
                         }
                     }
                 }
 
-                if (!propertySet)
+                if (!propertySet) {
                     throw new ReflectiveOperationException("Can't find field or method for config property '" + property
                             + "' +' (" + camelCaseProperty + ") in builder (" + builderClass.getName() + ")");
+                }
             }
             return builderClass.getMethod("build").invoke(builder);
         } catch (IllegalArgumentException | SecurityException | ReflectiveOperationException e) {
-            throw new RuntimeException("Current property : " + currentProperty, e);
+            throw new RuntimeException(
+                    "Failed to create bean '" + beanName + "' of type " + targetClass.getName()
+                            + " while processing property '" + currentProperty + "'",
+                    e);
         }
     }
 
+    /**
+     * Converts dash-separated property names to camelCase.
+     *
+     * <p>Examples:
+     *
+     * <ul>
+     *   <li>"api-key" -&gt; "apiKey"
+     *   <li>"base-url" -&gt; "baseUrl"
+     *   <li>"timeout" -&gt; "timeout" (no change)
+     * </ul>
+     *
+     * @param property the dash-separated property name
+     * @return the camelCase version
+     * @throws IllegalArgumentException if property is null or empty
+     */
     static String dashToCamel(String property) {
-        String fixed;
-        fixed = Arrays.stream(property.split("-"))
+        if (property == null || property.isEmpty()) {
+            throw new IllegalArgumentException("Property name cannot be null or empty");
+        }
+
+        String fixed = Arrays.stream(property.split("-"))
                 .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1))
                 .collect(Collectors.joining());
         fixed = fixed.substring(0, 1).toLowerCase() + fixed.substring(1);
         return fixed;
     }
 
-    private static List<Field> getFieldsInAllHierarchy(Class<?> startClass) {
-        if (startClass == null) return List.of();
+    static List<Field> getFieldsInAllHierarchy(Class<?> startClass) {
+        if (startClass == null) {
+            return Collections.emptyList();
+        }
 
         List<Field> currentClassFields = new ArrayList<>(Arrays.asList(startClass.getDeclaredFields()));
         Class<?> parentClass = startClass.getSuperclass();
@@ -172,8 +211,10 @@ public class CommonLLMPluginCreator {
         }
     }
 
-    private static List<Method> findMethodsInAllHierarch(Class<?> startClass, final String methodName) {
-        if (startClass == null || methodName == null || methodName.isEmpty()) return List.of();
+    static List<Method> findMethodsInAllHierarch(Class<?> startClass, final String methodName) {
+        if (startClass == null || methodName == null || methodName.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         List<Method> methods = new ArrayList<>();
         Arrays.stream(startClass.getDeclaredMethods())
@@ -182,9 +223,8 @@ public class CommonLLMPluginCreator {
 
         Class<?> parentClass = startClass.getSuperclass();
         if (parentClass != null && !parentClass.equals(Object.class)) {
-            Arrays.stream(parentClass.getDeclaredMethods())
-                    .filter(method -> method.getName().equals(methodName))
-                    .forEach(methods::add);
+            List<Method> parentMethods = findMethodsInAllHierarch(parentClass, methodName);
+            methods.addAll(parentMethods);
         }
 
         return methods;

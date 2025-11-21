@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -175,7 +176,6 @@ class CommonLLMPluginCreatorTest {
     @SuppressWarnings("SuspiciousMethodCalls")
     @Test
     void useAllLookup() throws ClassNotFoundException {
-        ;
         when(LOOKUP_MOCKED.select(DummyAll.ToInjectAll.class)).thenReturn(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED);
         when(LOOKUP_MOCKED.select(DummyAll.ToInjectAll.class, NamedLiteral.of(DummyAll.ToInjectAll.class.getName())))
                 .thenReturn(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED);
@@ -186,8 +186,8 @@ class CommonLLMPluginCreatorTest {
 
         BeanManager bm = mock(BeanManager.class);
         @SuppressWarnings("unchecked")
-        Bean<Object> beanA = (Bean<Object>) mock(Bean.class);
-        Bean<Object> beanB = (Bean<Object>) mock(Bean.class);
+        Bean<Object> beanA = mock(Bean.class);
+        Bean<Object> beanB = mock(Bean.class);
         CreationalContext<Object> ctxA = mock(CreationalContext.class);
         CreationalContext<Object> ctxB = mock(CreationalContext.class);
         java.util.Set<Bean<?>> set = java.util.Set.of(beanA, beanB);
@@ -249,16 +249,12 @@ class CommonLLMPluginCreatorTest {
 
     @Test
     void getFieldsInAllHierarchy_handlesNullAndIncludesParent() throws Exception {
-        // Null case via reflection
-        var method = CommonLLMPluginCreator.class.getDeclaredMethod("getFieldsInAllHierarchy", Class.class);
-        method.setAccessible(true);
-        List<?> empty = (List<?>) method.invoke(null, new Object[] {null});
+        List<?> empty = CommonLLMPluginCreator.getFieldsInAllHierarchy(null);
         assertNotNull(empty);
         assertTrue(empty.isEmpty());
         // Parent+child aggregation
         Class<?> builder = DummyModel.DummyModelBuilder.class;
-        @SuppressWarnings("unchecked")
-        List<java.lang.reflect.Field> fields = (List<java.lang.reflect.Field>) method.invoke(null, builder);
+        List<java.lang.reflect.Field> fields = CommonLLMPluginCreator.getFieldsInAllHierarchy(builder);
         // Should include fields from DummyBaseModel.Builder: apiKey, timeout, dummyInjected
         assertTrue(fields.stream().anyMatch(f -> f.getName().equals("apiKey")));
         assertTrue(fields.stream().anyMatch(f -> f.getName().equals("timeout")));
@@ -284,5 +280,64 @@ class CommonLLMPluginCreatorTest {
         } finally {
             Thread.currentThread().setContextClassLoader(original);
         }
+    }
+
+    @Test
+    void dashToCamel_convertsCorrectly() throws Exception {
+        assertEquals("apiKey", CommonLLMPluginCreator.dashToCamel("api-key"));
+        assertEquals("baseUrl", CommonLLMPluginCreator.dashToCamel("base-url"));
+        assertEquals("maxRetries", CommonLLMPluginCreator.dashToCamel("max-retries"));
+        assertEquals("timeout", CommonLLMPluginCreator.dashToCamel("timeout"));
+        assertEquals("a", CommonLLMPluginCreator.dashToCamel("a"));
+        assertEquals("myVeryLongPropertyName", CommonLLMPluginCreator.dashToCamel("my-very-long-property-name"));
+    }
+
+    @Test
+    void dashToCamel_throwsOnNullOrEmpty() throws Exception {
+        try {
+            CommonLLMPluginCreator.dashToCamel(null);
+            fail("Expected IllegalArgumentException for null");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("cannot be null or empty"));
+        }
+        try {
+            CommonLLMPluginCreator.dashToCamel("");
+            fail("Expected IllegalArgumentException for empty string");
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("cannot be null or empty"));
+        }
+    }
+
+    @Test
+    void findMethodsInAllHierarch_handlesNullAndIncludesParent() throws Exception {
+        List<java.lang.reflect.Method> emptyFromNull =
+                CommonLLMPluginCreator.findMethodsInAllHierarch(null, "anyMethod");
+        assertNotNull(emptyFromNull);
+        assertTrue(emptyFromNull.isEmpty());
+
+        // Null method name case
+        List<java.lang.reflect.Method> emptyFromNullMethod =
+                CommonLLMPluginCreator.findMethodsInAllHierarch(DummyModel.class, null);
+        assertNotNull(emptyFromNullMethod);
+        assertTrue(emptyFromNullMethod.isEmpty());
+
+        // Empty method name case
+        List<java.lang.reflect.Method> emptyFromEmptyMethod =
+                CommonLLMPluginCreator.findMethodsInAllHierarch(DummyModel.class, "");
+        assertNotNull(emptyFromEmptyMethod);
+        assertTrue(emptyFromEmptyMethod.isEmpty());
+
+        // Parent+child aggregation - look for methods in the builder hierarchy
+        Class<?> builder = DummyModel.DummyModelBuilder.class;
+
+        // Find a method that exists (like "build")
+        List<java.lang.reflect.Method> buildMethods = CommonLLMPluginCreator.findMethodsInAllHierarch(builder, "build");
+        assertTrue(!buildMethods.isEmpty(), "Should find at least one 'build' method");
+
+        // Verify we can find methods from parent builder
+        List<java.lang.reflect.Method> apiKeyMethods =
+                CommonLLMPluginCreator.findMethodsInAllHierarch(builder, "apiKey");
+        assertTrue(
+                !apiKeyMethods.isEmpty(), "Should find 'apiKey' method from parent builder (DummyBaseModel.Builder)");
     }
 }
