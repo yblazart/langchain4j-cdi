@@ -46,8 +46,8 @@ public class CommonLLMPluginCreator {
             // Validate scope class is actually an annotation
             Class<?> loadedScopeClass = loadClass(scopeClassName);
             if (!Annotation.class.isAssignableFrom(loadedScopeClass)) {
-                throw new IllegalArgumentException("Scope class " + scopeClassName + " for bean " + beanName
-                        + " is not an annotation type");
+                throw new IllegalArgumentException(
+                        "Scope class " + scopeClassName + " for bean " + beanName + " is not an annotation type");
             }
             Class<? extends Annotation> scopeClass = (Class<? extends Annotation>) loadedScopeClass;
 
@@ -122,14 +122,17 @@ public class CommonLLMPluginCreator {
                         setterMethod.invoke(builder, value);
                         propertySet = true;
                     } catch (ReflectiveOperationException e) {
-                        LOGGER.fine("Failed to set property '" + property + "' via field-based setter: " + e.getMessage());
+                        LOGGER.fine(
+                                "Failed to set property '" + property + "' via field-based setter: " + e.getMessage());
                     }
                 } else {
                     // Let's try using methods in the builder
                     List<Method> methods = findMethodsInAllHierarch(builderClass, camelCaseProperty);
                     if (methods != null && !methods.isEmpty()) {
                         for (Method setterMethod : methods) {
-                            if (setterMethod.getParameterCount() != 1) continue;
+                            if (setterMethod.getParameterCount() != 1) {
+                                continue;
+                            }
                             Object value = llmConfig.getBeanPropertyValue(
                                     lookup, beanName, propertyKey, setterMethod.getParameterTypes()[0]);
                             try {
@@ -143,24 +146,29 @@ public class CommonLLMPluginCreator {
                     }
                 }
 
-                if (!propertySet)
+                if (!propertySet) {
                     throw new ReflectiveOperationException("Can't find field or method for config property '" + property
                             + "' +' (" + camelCaseProperty + ") in builder (" + builderClass.getName() + ")");
+                }
             }
             return builderClass.getMethod("build").invoke(builder);
         } catch (IllegalArgumentException | SecurityException | ReflectiveOperationException e) {
-            throw new RuntimeException("Failed to create bean '" + beanName + "' of type " + targetClass.getName()
-                    + " while processing property '" + currentProperty + "'", e);
+            throw new RuntimeException(
+                    "Failed to create bean '" + beanName + "' of type " + targetClass.getName()
+                            + " while processing property '" + currentProperty + "'",
+                    e);
         }
     }
 
     /**
      * Converts dash-separated property names to camelCase.
+     *
      * <p>Examples:
+     *
      * <ul>
-     *   <li>"api-key" -&gt; "apiKey"</li>
-     *   <li>"base-url" -&gt; "baseUrl"</li>
-     *   <li>"timeout" -&gt; "timeout" (no change)</li>
+     *   <li>"api-key" -&gt; "apiKey"
+     *   <li>"base-url" -&gt; "baseUrl"
+     *   <li>"timeout" -&gt; "timeout" (no change)
      * </ul>
      *
      * @param property the dash-separated property name
@@ -203,8 +211,10 @@ public class CommonLLMPluginCreator {
         }
     }
 
-    private static List<Method> findMethodsInAllHierarch(Class<?> startClass, final String methodName) {
-        if (startClass == null || methodName == null || methodName.isEmpty()) return List.of();
+    static List<Method> findMethodsInAllHierarch(Class<?> startClass, final String methodName) {
+        if (startClass == null || methodName == null || methodName.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         List<Method> methods = new ArrayList<>();
         Arrays.stream(startClass.getDeclaredMethods())
@@ -213,9 +223,8 @@ public class CommonLLMPluginCreator {
 
         Class<?> parentClass = startClass.getSuperclass();
         if (parentClass != null && !parentClass.equals(Object.class)) {
-            Arrays.stream(parentClass.getDeclaredMethods())
-                    .filter(method -> method.getName().equals(methodName))
-                    .forEach(methods::add);
+            List<Method> parentMethods = findMethodsInAllHierarch(parentClass, methodName);
+            methods.addAll(parentMethods);
         }
 
         return methods;
