@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -153,17 +154,35 @@ public class CommonLLMPluginCreator {
         }
     }
 
+    /**
+     * Converts dash-separated property names to camelCase.
+     * <p>Examples:
+     * <ul>
+     *   <li>"api-key" -&gt; "apiKey"</li>
+     *   <li>"base-url" -&gt; "baseUrl"</li>
+     *   <li>"timeout" -&gt; "timeout" (no change)</li>
+     * </ul>
+     *
+     * @param property the dash-separated property name
+     * @return the camelCase version
+     * @throws IllegalArgumentException if property is null or empty
+     */
     static String dashToCamel(String property) {
-        String fixed;
-        fixed = Arrays.stream(property.split("-"))
+        if (property == null || property.isEmpty()) {
+            throw new IllegalArgumentException("Property name cannot be null or empty");
+        }
+
+        String fixed = Arrays.stream(property.split("-"))
                 .map(part -> part.substring(0, 1).toUpperCase() + part.substring(1))
                 .collect(Collectors.joining());
         fixed = fixed.substring(0, 1).toLowerCase() + fixed.substring(1);
         return fixed;
     }
 
-    private static List<Field> getFieldsInAllHierarchy(Class<?> startClass) {
-        if (startClass == null) return List.of();
+    static List<Field> getFieldsInAllHierarchy(Class<?> startClass) {
+        if (startClass == null) {
+            return Collections.emptyList();
+        }
 
         List<Field> currentClassFields = new ArrayList<>(Arrays.asList(startClass.getDeclaredFields()));
         Class<?> parentClass = startClass.getSuperclass();

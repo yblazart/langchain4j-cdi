@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -285,4 +286,31 @@ class CommonLLMPluginCreatorTest {
             Thread.currentThread().setContextClassLoader(original);
         }
     }
+
+    @Test
+    void dashToCamel_convertsCorrectly() throws Exception {
+        assertEquals("apiKey", CommonLLMPluginCreator.dashToCamel("api-key"));
+        assertEquals("baseUrl",CommonLLMPluginCreator.dashToCamel("base-url"));
+        assertEquals("maxRetries",CommonLLMPluginCreator.dashToCamel("max-retries"));
+        assertEquals("timeout",CommonLLMPluginCreator.dashToCamel("timeout"));
+        assertEquals("a",CommonLLMPluginCreator.dashToCamel("a"));
+        assertEquals("myVeryLongPropertyName",CommonLLMPluginCreator.dashToCamel("my-very-long-property-name"));
+    }
+
+    @Test
+    void dashToCamel_throwsOnNullOrEmpty() throws Exception {
+        try {
+           CommonLLMPluginCreator.dashToCamel(null);
+           fail("Expected IllegalArgumentException for null");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("cannot be null or empty"));
+        }
+        try {
+            CommonLLMPluginCreator.dashToCamel("");
+            fail("Expected IllegalArgumentException for empty string");
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("cannot be null or empty"));
+        }
+    }
+
 }
