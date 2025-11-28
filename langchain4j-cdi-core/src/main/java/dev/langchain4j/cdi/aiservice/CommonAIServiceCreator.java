@@ -82,7 +82,13 @@ public class CommonAIServiceCreator {
             List<Object> tools = new ArrayList<>(annotation.tools().length);
             for (Class<?> toolClass : annotation.tools()) {
                 try {
-                    tools.add(toolClass.getConstructor((Class<?>[]) null).newInstance((Object[]) null));
+                    // First, check CDI.
+                    Instance<? extends Object> toolInstance = lookup.select(toolClass);
+                    if (toolInstance != null && toolInstance.isResolvable()) {
+                        tools.add(toolInstance.get());
+                    } else {
+                        tools.add(toolClass.getConstructor((Class<?>[]) null).newInstance((Object[]) null));
+                    }
                 } catch (ReflectiveOperationException | IllegalArgumentException ex) {
                     LOGGER.log(
                             Level.SEVERE,
