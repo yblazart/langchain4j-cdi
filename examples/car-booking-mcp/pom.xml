@@ -31,7 +31,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jakartaee>10.0.0</jakartaee>
-        <version.wildfly.maven.plugin>5.1.2.Final</version.wildfly.maven.plugin>
+        <version.wildfly.maven.plugin>5.1.5.Final</version.wildfly.maven.plugin>
         <version.wildfly.server>38.0.0.Final</version.wildfly.server>
         <version.wildfly.ai.feature.pack>0.4.0</version.wildfly.ai.feature.pack>
         <version.compiler.plugin>3.13.0</version.compiler.plugin>
