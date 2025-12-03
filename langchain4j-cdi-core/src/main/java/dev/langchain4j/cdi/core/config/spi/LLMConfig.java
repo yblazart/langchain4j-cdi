@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -28,6 +27,7 @@ import java.util.stream.Stream;
  * MicroProfile/SmallRye Config, but kept minimal for portability.
  */
 public abstract class LLMConfig {
+    public static final String LOOKUP_PREFIX = "lookup:";
     Map<String, ProducerFunction<?>> producers = new ConcurrentHashMap<>();
 
     /** Prefix for all LLM beans properties. */
@@ -38,7 +38,6 @@ public abstract class LLMConfig {
 
     public static final String CLASS = "class";
     public static final String SCOPE = "scope";
-    private static final Logger LOGGER = Logger.getLogger(LLMConfig.class.getName());
 
     public abstract void init();
 
@@ -133,18 +132,25 @@ public abstract class LLMConfig {
         String[] values = stringValue.split(",");
         for (String value : values) {
             String trimmedValue = value.trim();
-            if (trimmedValue.startsWith("lookup:")) {
-                String lookupableBean = trimmedValue.substring("lookup:".length());
+            if (trimmedValue.startsWith(LOOKUP_PREFIX)) {
+                String lookupableBean = trimmedValue.substring(LOOKUP_PREFIX.length());
                 switch (lookupableBean) {
                     case "@default" -> {
-                        Object result = null;
+                        Object result;
                         if (type instanceof ParameterizedType parameterizedType) {
                             result = selectByBeanManager(parameterizedType);
-                        } else result = lookup.select((Class) type).get();
-                        if (result != null) results.add(result);
-                        break;
+                        } else {
+                            Instance instance = lookup.select((Class) type);
+                            if (instance != null && instance.isResolvable()) {
+                                result = instance.get();
+                            } else {
+                                result = selectByBeanManager(type);
+                            }
+                        }
+                        if (result != null) {
+                            results.add(result);
+                        }
                     }
-
                     case "@all" -> {
                         if (type instanceof ParameterizedType pt) {
                             Type actualTypeArgument = pt.getActualTypeArguments()[0];
@@ -152,27 +158,32 @@ public abstract class LLMConfig {
                             if (actualTypeArgument instanceof ParameterizedType parameterizedType) {
                                 resultStream = selectAllByBeanManager(parameterizedType).stream();
                             } else {
-                                resultStream = lookup.select((Class<?>) actualTypeArgument).stream();
+                                Instance<?> instance = lookup.select((Class<?>) actualTypeArgument);
+                                if (instance != null && instance.isResolvable()) {
+                                    resultStream = instance.stream();
+                                } else {
+                                    resultStream = selectAllByBeanManager(actualTypeArgument).stream();
+                                }
                             }
-                            if (resultStream != null) resultStream.forEachOrdered(results::add);
+                            if (resultStream != null) {
+                                resultStream.forEachOrdered(results::add);
+                            }
                         } else throw new IllegalConfigurationException("Cannot use @all for non generic types");
-                        break;
                     }
 
                     default -> {
                         Class<?> resultType = type instanceof ParameterizedType pt
                                 ? (Class<?>) pt.getActualTypeArguments()[0]
                                 : (Class<?>) type;
-                        Instance<? extends Object> resultInstance = getInstance(
+                        Instance<?> resultInstance = getInstance(
                                 lookup, resultType, lookupableBean.substring(lookupableBean.startsWith("@") ? 1 : 0));
                         if (resultInstance != null) results.add(resultInstance.get());
-                        break;
                     }
                 }
 
             } else {
                 Optional<Object> optionalValue = lookupObject(lookup, trimmedValue);
-                if (!optionalValue.isEmpty()) results.add(optionalValue.get());
+                optionalValue.ifPresent(results::add);
             }
         }
 
@@ -219,7 +230,7 @@ public abstract class LLMConfig {
         beanManagerSupplier = (supplier == null) ? () -> CDI.current().getBeanManager() : supplier;
     }
 
-    private Object selectByBeanManager(ParameterizedType type) {
+    private Object selectByBeanManager(Type type) {
         BeanManager bm = beanManagerSupplier.get();
         Set<Bean<?>> beans = bm.getBeans(type);
         if (beans.isEmpty()) {
@@ -230,7 +241,7 @@ public abstract class LLMConfig {
         return bm.getReference(bean, type, ctx);
     }
 
-    private List<Object> selectAllByBeanManager(ParameterizedType type) {
+    private List<Object> selectAllByBeanManager(Type type) {
         BeanManager bm = beanManagerSupplier.get();
         Set<Bean<?>> beans = bm.getBeans(type);
         if (beans.isEmpty()) {

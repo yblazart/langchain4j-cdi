@@ -20,6 +20,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Helper to build LangChain4j beans (models, retrievers, stores, etc.) from an LLMConfig source.
@@ -100,7 +101,7 @@ public class CommonLLMPluginCreator {
                 + builderClass);
         String currentProperty = "";
         try {
-            Object builder = null;
+            Object builder;
             try {
                 builder = targetClass.getMethod("builder").invoke(null);
             } catch (NoSuchMethodException e) {
@@ -108,7 +109,7 @@ public class CommonLLMPluginCreator {
                         .getClassLoader()
                         .loadClass(targetClass.getName() + "$Builder")
                         .getConstructor(new Class[0])
-                        .newInstance(new Object[0]);
+                        .newInstance();
             }
             Set<String> properties = llmConfig.getPropertyNamesForBean(beanName);
             for (String property : properties) {
@@ -149,14 +150,21 @@ public class CommonLLMPluginCreator {
                                 propertySet = true;
                             }
                         }
-                    } catch (ReflectiveOperationException e) {
-                        LOGGER.fine(
-                                "Failed to set property '" + property + "' via field-based setter: " + e.getMessage());
+                    } catch (Exception e) {
+                        throw new ReflectiveOperationException(
+                                "Failed to set property '" + property + "' via field-based setter: "
+                                        + setterMethod.getName() + "("
+                                        + Stream.of(setterMethod.getParameterTypes())
+                                                .map(Class::getName)
+                                                .collect(Collectors.joining(","))
+                                        + ") try to set "
+                                        + value.getClass().getName(),
+                                e);
                     }
                 } else {
                     // Let's try using methods in the builder
                     List<Method> methods = findMethodsInAllHierarch(builderClass, camelCaseProperty);
-                    if (methods != null && !methods.isEmpty()) {
+                    if (!methods.isEmpty()) {
                         for (Method setterMethod : methods) {
                             if (setterMethod.getParameterCount() != 1) {
                                 continue;
