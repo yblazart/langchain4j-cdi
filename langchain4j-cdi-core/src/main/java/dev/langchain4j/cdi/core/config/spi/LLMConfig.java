@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -127,68 +128,86 @@ public abstract class LLMConfig {
     public Object getBeanPropertyValue(Instance<Object> lookup, String beanName, String propertyName, Type type) {
         String stringValue = getBeanPropertyValue(beanName, propertyName);
         if (stringValue == null) return null;
-        if (stringValue.startsWith("lookup:")) {
-            String lookupableBean = stringValue.substring("lookup:".length());
-            switch (lookupableBean) {
-                case "@default" -> {
-                    if (type instanceof ParameterizedType parameterizedType) {
-                        return selectByBeanManager(parameterizedType);
-                    }
-                    return lookup.select((Class) type).get();
-                }
-                case "@all" -> {
-                    if (type instanceof ParameterizedType pt) {
-                        Type actualTypeArgument = pt.getActualTypeArguments()[0];
-                        Stream<?> toReturn;
-                        if (actualTypeArgument instanceof ParameterizedType parameterizedType) {
-                            toReturn = selectAllByBeanManager(parameterizedType).stream();
-                        } else {
-                            toReturn = lookup.select((Class<?>) actualTypeArgument).stream();
-                        }
-                        if (List.class.equals(pt.getRawType())) {
-                            return toReturn.toList();
-                        }
-                        if (pt.getRawType().equals(Set.class)) {
-                            return toReturn.collect(Collectors.toSet());
-                        }
-                        throw new IllegalConfigurationException("@all can only be used with List or Set");
-                    }
-                    throw new IllegalConfigurationException("Cannot use @all for non generic types");
-                }
-                default -> {
-                    Class<?> resultType = type instanceof ParameterizedType pt
-                            ? (Class<?>) pt.getActualTypeArguments()[0]
-                            : (Class<?>) type;
-                    List<Object> results = new ArrayList<>();
-                    String[] lookupNames = lookupableBean.split(",");
-                    if (lookupNames != null && lookupNames.length > 0) {
-                        for (String lookupName : lookupNames) {
-                            String name = lookupName.trim();
-                            results.add(getInstance(lookup, resultType, name.substring(name.startsWith("@") ? 1 : 0))
-                                    .get());
-                        }
-                    } else
-                        results.add(
-                                getInstance(lookup, resultType, lookupableBean).get());
 
-                    if (type instanceof ParameterizedType pt) {
-                        Class<?> rawType = (Class<?>) pt.getRawType();
-                        if (Collection.class.isAssignableFrom(rawType)) {
-                            if (Set.class.isAssignableFrom(rawType)) return Set.copyOf(results);
-                            return List.copyOf(results);
-                        }
+        List<Object> results = new ArrayList<>();
+        String[] values = stringValue.split(",");
+        for (String value : values) {
+            String trimmedValue = value.trim();
+            if (trimmedValue.startsWith("lookup:")) {
+                String lookupableBean = trimmedValue.substring("lookup:".length());
+                switch (lookupableBean) {
+                    case "@default" -> {
+                        Object result = null;
+                        if (type instanceof ParameterizedType parameterizedType) {
+                            result = selectByBeanManager(parameterizedType);
+                        } else result = lookup.select((Class) type).get();
+                        if (result != null) results.add(result);
+                        break;
                     }
 
-                    if (results.size() > 1) {
-                        throw new IllegalConfigurationException("We discovered " + results.size()
-                                + " objects for property bean '" + propertyName + "' (class: " + beanName + ").");
+                    case "@all" -> {
+                        if (type instanceof ParameterizedType pt) {
+                            Type actualTypeArgument = pt.getActualTypeArguments()[0];
+                            Stream<?> resultStream;
+                            if (actualTypeArgument instanceof ParameterizedType parameterizedType) {
+                                resultStream = selectAllByBeanManager(parameterizedType).stream();
+                            } else {
+                                resultStream = lookup.select((Class<?>) actualTypeArgument).stream();
+                            }
+                            if (resultStream != null) resultStream.forEachOrdered(results::add);
+                        } else throw new IllegalConfigurationException("Cannot use @all for non generic types");
+                        break;
                     }
 
-                    return results.get(0);
+                    default -> {
+                        Class<?> resultType = type instanceof ParameterizedType pt
+                                ? (Class<?>) pt.getActualTypeArguments()[0]
+                                : (Class<?>) type;
+                        Instance<? extends Object> resultInstance = getInstance(
+                                lookup, resultType, lookupableBean.substring(lookupableBean.startsWith("@") ? 1 : 0));
+                        if (resultInstance != null) results.add(resultInstance.get());
+                        break;
+                    }
                 }
+
+            } else {
+                Optional<Object> optionalValue = lookupObject(lookup, trimmedValue);
+                if (!optionalValue.isEmpty()) results.add(optionalValue.get());
             }
-        } else {
-            return getBeanPropertyValue(beanName, propertyName, type);
+        }
+
+        if (results.isEmpty()) {
+            Object result = getBeanPropertyValue(beanName, propertyName, type);
+            if (result != null) {
+                if (result instanceof Collection collection) results.addAll(collection);
+                else results.add(result);
+            }
+        }
+
+        if (type instanceof ParameterizedType pt) {
+            Class<?> rawType = (Class<?>) pt.getRawType();
+            if (Set.class.isAssignableFrom(rawType)) return Set.copyOf(results);
+            if (Collection.class.isAssignableFrom(rawType)) return List.copyOf(results);
+        }
+
+        if (results.size() > 1) {
+            throw new IllegalConfigurationException("We discovered " + results.size() + " objects for property bean '"
+                    + propertyName + "' (class: " + beanName + ").");
+        }
+
+        return results.isEmpty() ? null : results.get(0);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> Optional<T> lookupObject(Instance<Object> lookup, final String value) {
+        try {
+            Class<?> clazz = Class.forName(value);
+            Instance<Object> object = (Instance<Object>) lookup.select(clazz);
+            if (object != null && object.isResolvable()) return (Optional<T>) Optional.of(object.get());
+            return (Optional<T>) Optional.of(clazz.getDeclaredConstructor().newInstance());
+        } catch (ReflectiveOperationException e) {
+            // TODO Auto-generated catch block
+            return Optional.empty();
         }
     }
 
