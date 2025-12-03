@@ -183,6 +183,7 @@ class CommonLLMPluginCreatorTest {
         List<DummyAll.ToInjectAll> toInjectAllList = new ArrayList<>();
         toInjectAllList.add(new DummyAll.ToInjectAllBeanA());
         toInjectAllList.add(new DummyAll.ToInjectAllBeanB());
+        when(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED.isResolvable()).thenReturn(true);
         when(DUMMYALL_TOINJECTALL_INSTANCE_MOCKED.stream()).thenReturn(toInjectAllList.stream());
 
         BeanManager bm = mock(BeanManager.class);
