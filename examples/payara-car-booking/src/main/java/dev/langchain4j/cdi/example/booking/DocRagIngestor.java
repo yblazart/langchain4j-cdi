@@ -24,18 +24,6 @@ public class DocRagIngestor {
 
     private static final Logger LOGGER = Logger.getLogger(DocRagIngestor.class.getName());
 
-    @Produces
-    public EmbeddingModel embeddingModel() {
-        // Création paresseuse pour éviter le chargement natif pendant le bootstrap CDI.
-        return new AllMiniLmL6V2EmbeddingModel();
-    }
-
-    // Used by ContentRetriever
-    @Produces
-    public InMemoryEmbeddingStore<TextSegment> embeddingStore() {
-        return new InMemoryEmbeddingStore<>();
-    }
-
     @Inject
     EmbeddingModel embeddingModel;
 
