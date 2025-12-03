@@ -149,9 +149,11 @@ public class CommonLLMPluginCreator {
                                 propertySet = true;
                             }
                         }
-                    } catch (ReflectiveOperationException e) {
-                        LOGGER.fine(
-                                "Failed to set property '" + property + "' via field-based setter: " + e.getMessage());
+                    } catch (Exception e) {
+                        throw new ReflectiveOperationException(
+                                "Failed to set property '" + property + "' via field-based setter: "
+                                        + setterMethod.getName(),
+                                e);
                     }
                 } else {
                     // Let's try using methods in the builder

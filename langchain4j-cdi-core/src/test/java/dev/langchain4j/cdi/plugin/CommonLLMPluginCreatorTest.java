@@ -47,6 +47,7 @@ class CommonLLMPluginCreatorTest {
         when(LOOKUP_MOCKED.select(DummyInjected.class, NamedLiteral.of(DummyInjected.class.getName())))
                 .thenReturn(DUMMY_INJECTED_INSTANCE_MOCKED);
         //
+        when(DUMMY_INJECTED_INSTANCE_MOCKED.isResolvable()).thenReturn(true);
         when(DUMMY_INJECTED_INSTANCE_MOCKED.get()).thenReturn(dummyInjectedMocked);
         // Mock BeanManager resolution for ParameterizedType DummyParam<Integer>
         BeanManager bm = mock(BeanManager.class);
