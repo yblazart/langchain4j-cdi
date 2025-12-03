@@ -13,7 +13,6 @@ public class EmbeddingsProducers {
     @Produces
     @ApplicationScoped
     public EmbeddingModel embeddingModel() {
-        // Création paresseuse pour éviter le chargement natif pendant le bootstrap CDI.
         return new AllMiniLmL6V2EmbeddingModel();
     }
 
