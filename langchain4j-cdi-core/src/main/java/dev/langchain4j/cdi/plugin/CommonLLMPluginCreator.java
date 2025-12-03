@@ -1,10 +1,11 @@
 package dev.langchain4j.cdi.plugin;
 
+import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
+
 import dev.langchain4j.cdi.core.config.spi.LLMConfig;
 import dev.langchain4j.cdi.core.config.spi.ProducerFunction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
-
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -20,8 +21,6 @@ import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static dev.langchain4j.cdi.core.config.spi.LLMConfig.PRODUCER;
 
 /**
  * Helper to build LangChain4j beans (models, retrievers, stores, etc.) from an LLMConfig source.
@@ -90,8 +89,7 @@ public class CommonLLMPluginCreator {
             Class<?> builderClass,
             Class<? extends Annotation> scopeClass,
             String beanName,
-            Function<Instance<Object>, Object> callback) {
-    }
+            Function<Instance<Object>, Object> callback) {}
 
     public static Object create(
             Instance<Object> lookup,
@@ -155,12 +153,12 @@ public class CommonLLMPluginCreator {
                     } catch (Exception e) {
                         throw new ReflectiveOperationException(
                                 "Failed to set property '" + property + "' via field-based setter: "
-                                        + setterMethod.getName() + "(" +
-                                        Stream.of(setterMethod.getParameterTypes())
+                                        + setterMethod.getName() + "("
+                                        + Stream.of(setterMethod.getParameterTypes())
                                                 .map(Class::getName)
-                                                .collect(Collectors.joining(",")) +
-                                        ") try to set " + value.getClass().getName()
-                                ,
+                                                .collect(Collectors.joining(","))
+                                        + ") try to set "
+                                        + value.getClass().getName(),
                                 e);
                     }
                 } else {

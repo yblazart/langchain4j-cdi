@@ -141,13 +141,15 @@ public abstract class LLMConfig {
                             result = selectByBeanManager(parameterizedType);
                         } else {
                             Instance instance = lookup.select((Class) type);
-                            if ( instance!=null && instance.isResolvable()) {
-                            result = instance.get();
+                            if (instance != null && instance.isResolvable()) {
+                                result = instance.get();
                             } else {
-                                result=selectByBeanManager(type);
+                                result = selectByBeanManager(type);
                             }
                         }
-                        if (result != null) results.add(result);
+                        if (result != null) {
+                            results.add(result);
+                        }
                     }
                     case "@all" -> {
                         if (type instanceof ParameterizedType pt) {
@@ -156,9 +158,16 @@ public abstract class LLMConfig {
                             if (actualTypeArgument instanceof ParameterizedType parameterizedType) {
                                 resultStream = selectAllByBeanManager(parameterizedType).stream();
                             } else {
-                                resultStream = lookup.select((Class<?>) actualTypeArgument).stream();
+                                Instance<?> instance = lookup.select((Class<?>) actualTypeArgument);
+                                if (instance != null && instance.isResolvable()) {
+                                    resultStream = instance.stream();
+                                } else {
+                                    resultStream = selectAllByBeanManager(actualTypeArgument).stream();
+                                }
                             }
-                            if (resultStream != null) resultStream.forEachOrdered(results::add);
+                            if (resultStream != null) {
+                                resultStream.forEachOrdered(results::add);
+                            }
                         } else throw new IllegalConfigurationException("Cannot use @all for non generic types");
                     }
 
