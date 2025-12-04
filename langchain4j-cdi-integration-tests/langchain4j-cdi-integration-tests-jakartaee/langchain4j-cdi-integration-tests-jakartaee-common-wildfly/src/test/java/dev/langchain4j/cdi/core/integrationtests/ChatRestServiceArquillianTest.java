@@ -30,6 +30,7 @@ import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+@SuppressWarnings({"OptionalGetWithoutIsPresent", "resource"})
 @ExtendWith(ArquillianExtension.class)
 public class ChatRestServiceArquillianTest {
 
@@ -61,6 +62,7 @@ public class ChatRestServiceArquillianTest {
 
         return ShrinkWrap.create(WebArchive.class, "chat-test.war")
                 .addClasses(
+                        ChatRestServiceArquillianTest.class,
                         ChatAiService.class,
                         ChatRestService.class,
                         JaxRsApplication.class,
@@ -80,12 +82,9 @@ public class ChatRestServiceArquillianTest {
         return Files.find(
                         folder,
                         1,
-                        new BiPredicate<Path, BasicFileAttributes>() {
-                            @Override
-                            public boolean test(Path t, BasicFileAttributes u) {
-                                String finleName = t.getFileName().toString();
-                                return finleName.startsWith(prefix) && finleName.endsWith(".jar");
-                            }
+                        (BiPredicate<Path, BasicFileAttributes>) (t, u) -> {
+                            String finleName = t.getFileName().toString();
+                            return finleName.startsWith(prefix) && finleName.endsWith(".jar");
                         },
                         FileVisitOption.FOLLOW_LINKS)
                 .findFirst();
