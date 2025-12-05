@@ -33,7 +33,7 @@
         <jakartaee>10.0.0</jakartaee>
         <version.wildfly.maven.plugin>5.1.5.Final</version.wildfly.maven.plugin>
         <version.wildfly.server>38.0.0.Final</version.wildfly.server>
-        <version.wildfly.ai.feature.pack>0.4.0</version.wildfly.ai.feature.pack>
+        <version.wildfly.ai.feature.pack>0.4.2</version.wildfly.ai.feature.pack>
         <version.compiler.plugin>3.13.0</version.compiler.plugin>
         <version.war.plugin>3.4.0</version.war.plugin>
     </properties>
