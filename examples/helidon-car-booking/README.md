@@ -21,7 +21,7 @@ The project has been developed and tested with:
 
 * Java 21+
 * Helidon 4.3.2
-* LangChain4j 1.9.0
+* LangChain4j 1.9.1
 * Maven 3.9.5
 * Testing against Llama 3.1 using local Ollama instance. 
 
