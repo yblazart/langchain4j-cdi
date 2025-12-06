@@ -15,13 +15,10 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <helidon.version>4.3.2</helidon.version>
         <skipITs>true</skipITs>
-
-        <!-- Maven -->
-        <maven.compiler.target>21</maven.compiler.target>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.testTarget>${maven.compiler.target}</maven.compiler.testTarget>
-        <maven.compiler.testSource>${maven.compiler.source}</maven.compiler.testSource>
-        <maven.compiler.release>21</maven.compiler.release>
+        <!-- We need only javac to use the release parameter. OpenLiberty doesn't depend on maven-compiler-plugin.' -->
+        <maven.compiler.source combine.self="override">21</maven.compiler.source>
+        <maven.compiler.target combine.self="override">21</maven.compiler.target>
+        <maven.compiler.release combine.self="override">21</maven.compiler.release>
     </properties>
 
     <dependencyManagement>
