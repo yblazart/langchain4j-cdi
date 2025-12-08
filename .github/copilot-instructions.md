@@ -143,7 +143,7 @@ These commands must pass before committing changes:
 
 ### Core Modules
 - `langchain4j-cdi-core/` - Core CDI extension functionality
-- `langchain4j-cdi-config/` - Configuration support
+- `langchain4j-cdi-mp-config/` - Configuration support
 - `langchain4j-cdi-portable-ext/` - Portable CDI extension
 - `langchain4j-cdi-build-compatible-ext/` - Build-compatible CDI extension
 - `langchain4j-cdi-fault-tolerance/` - Fault tolerance integration

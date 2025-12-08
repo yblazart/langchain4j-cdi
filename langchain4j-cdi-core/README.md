@@ -62,9 +62,9 @@ Only the components that are resolved are wired into the `AiServices` builder.
 `LLMConfig` is a minimal API used to feed plugin creators from properties. Keys follow the prefix:
 
 ```
-dev.langchain4j.plugin.<bean-name>.class=...               # target class (e.g., dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever)
-dev.langchain4j.plugin.<bean-name>.scope=...               # CDI scope (default: ApplicationScoped)
-dev.langchain4j.plugin.<bean-name>.config.<property>=...   # builder properties (e.g., api-key, endpoint, etc.)
+dev.langchain4j.cdi.plugin.<bean-name>.class=...               # target class (e.g., dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever)
+dev.langchain4j.cdi.plugin.<bean-name>.scope=...               # CDI scope (default: ApplicationScoped)
+dev.langchain4j.cdi.plugin.<bean-name>.config.<property>=...   # builder properties (e.g., api-key, endpoint, etc.)
 ```
 
 Special values are supported:
@@ -79,10 +79,10 @@ Creators (e.g., `CommonLLMPluginCreator`) reflect on the builder pattern used by
 Declare a ContentRetriever from properties:
 
 ```
-dev.langchain4j.plugin.content-retriever.class=dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever
-dev.langchain4j.plugin.content-retriever.scope=jakarta.enterprise.context.ApplicationScoped
-dev.langchain4j.plugin.content-retriever.config.embedding-store=lookup:@default
-dev.langchain4j.plugin.content-retriever.config.embedding-model=lookup:my-model
+dev.langchain4j.cdi.plugin.content-retriever.class=dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever
+dev.langchain4j.cdi.plugin.content-retriever.scope=jakarta.enterprise.context.ApplicationScoped
+dev.langchain4j.cdi.plugin.content-retriever.config.embedding-store=lookup:@default
+dev.langchain4j.cdi.plugin.content-retriever.config.embedding-model=lookup:my-model
 ```
 
 Then inject and reference this bean by name in `@RegisterAIService(contentRetrieverName = "content-retriever")`.

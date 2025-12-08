@@ -67,31 +67,31 @@ class CommonLLMPluginCreatorTest {
         dev.langchain4j.cdi.core.config.spi.LLMConfig.setBeanManagerSupplier(() -> bm);
         //
         llmConfig.reinitForTest("""
-                        dev.langchain4j.plugin.beanA.class=dev.langchain4j.cdi.plugin.DummyModel
-                        dev.langchain4j.plugin.beanA.scope=jakarta.enterprise.context.RequestScoped
-                        dev.langchain4j.plugin.beanA.config.api-key=01
-                        dev.langchain4j.plugin.beanA.config.param1=test
-                        dev.langchain4j.plugin.beanA.config.timeout=30
-                        dev.langchain4j.plugin.beanA.config.dummyEnum=A
-                        dev.langchain4j.plugin.beanA.config.dummyEnumList=C,D
-                        dev.langchain4j.plugin.beanA.config.dummyInjected=lookup:@default
-                        dev.langchain4j.plugin.beanA.config.dummy-param-int=lookup:@default
-                        dev.langchain4j.plugin.beanA.config.dummyWithStringConstructor=ok
+                        dev.langchain4j.cdi.plugin.beanA.class=dev.langchain4j.cdi.plugin.DummyModel
+                        dev.langchain4j.cdi.plugin.beanA.scope=jakarta.enterprise.context.RequestScoped
+                        dev.langchain4j.cdi.plugin.beanA.config.api-key=01
+                        dev.langchain4j.cdi.plugin.beanA.config.param1=test
+                        dev.langchain4j.cdi.plugin.beanA.config.timeout=30
+                        dev.langchain4j.cdi.plugin.beanA.config.dummyEnum=A
+                        dev.langchain4j.cdi.plugin.beanA.config.dummyEnumList=C,D
+                        dev.langchain4j.cdi.plugin.beanA.config.dummyInjected=lookup:@default
+                        dev.langchain4j.cdi.plugin.beanA.config.dummy-param-int=lookup:@default
+                        dev.langchain4j.cdi.plugin.beanA.config.dummyWithStringConstructor=ok
 
                         # No scope defined to get ApplicationScoped by default
-                        dev.langchain4j.plugin.beanB.class=dev.langchain4j.cdi.plugin.DummyModel
-                        dev.langchain4j.plugin.beanB.config.api-key=01
-                        dev.langchain4j.plugin.beanB.config.param1=test
-                        dev.langchain4j.plugin.beanB.config.timeout=30
-                        dev.langchain4j.plugin.beanB.config.dummyEnum=A
-                        dev.langchain4j.plugin.beanB.config.dummyEnumList=C,D
-                        dev.langchain4j.plugin.beanB.config.dummyInjected=lookup:dev.langchain4j.cdi.plugin.DummyInjected
-                        dev.langchain4j.plugin.beanB.config.dummy-param-int=lookup:@default
-                        dev.langchain4j.plugin.beanB.config.dummyWithStringConstructor=ok
+                        dev.langchain4j.cdi.plugin.beanB.class=dev.langchain4j.cdi.plugin.DummyModel
+                        dev.langchain4j.cdi.plugin.beanB.config.api-key=01
+                        dev.langchain4j.cdi.plugin.beanB.config.param1=test
+                        dev.langchain4j.cdi.plugin.beanB.config.timeout=30
+                        dev.langchain4j.cdi.plugin.beanB.config.dummyEnum=A
+                        dev.langchain4j.cdi.plugin.beanB.config.dummyEnumList=C,D
+                        dev.langchain4j.cdi.plugin.beanB.config.dummyInjected=lookup:dev.langchain4j.cdi.plugin.DummyInjected
+                        dev.langchain4j.cdi.plugin.beanB.config.dummy-param-int=lookup:@default
+                        dev.langchain4j.cdi.plugin.beanB.config.dummyWithStringConstructor=ok
 
                         # No scope defined to get ApplicationScoped by default
-                        dev.langchain4j.plugin.beanC.class=dev.langchain4j.cdi.plugin.DummyModel
-                        dev.langchain4j.plugin.beanC.defined_bean_producer=ProducerC
+                        dev.langchain4j.cdi.plugin.beanC.class=dev.langchain4j.cdi.plugin.DummyModel
+                        dev.langchain4j.cdi.plugin.beanC.defined_bean_producer=ProducerC
 
                         """);
 
@@ -161,7 +161,7 @@ class CommonLLMPluginCreatorTest {
     @Test
     void prepareAllLLMBeans_noBuilderClass_leadsToNoBeanData() throws ClassNotFoundException {
         llmConfig.reinitForTest("""
-                        dev.langchain4j.plugin.noBuilder.class=dev.langchain4j.cdi.plugin.NoBuilderModel
+                        dev.langchain4j.cdi.plugin.noBuilder.class=dev.langchain4j.cdi.plugin.NoBuilderModel
                         """);
         List<CommonLLMPluginCreator.BeanData> list = new ArrayList<>();
         CommonLLMPluginCreator.prepareAllLLMBeans(llmConfig, list::add);
@@ -210,9 +210,9 @@ class CommonLLMPluginCreatorTest {
         dev.langchain4j.cdi.core.config.spi.LLMConfig.setBeanManagerSupplier(() -> bm);
 
         llmConfig.reinitForTest("""
-                        dev.langchain4j.plugin.beanAll.class=dev.langchain4j.cdi.plugin.DummyAll
-                        dev.langchain4j.plugin.beanAll.config.toInjectAll=lookup:@all
-                        dev.langchain4j.plugin.beanAll.config.toInjectAllParameterized=lookup:@all
+                        dev.langchain4j.cdi.plugin.beanAll.class=dev.langchain4j.cdi.plugin.DummyAll
+                        dev.langchain4j.cdi.plugin.beanAll.config.toInjectAll=lookup:@all
+                        dev.langchain4j.cdi.plugin.beanAll.config.toInjectAllParameterized=lookup:@all
                         """);
 
         List<CommonLLMPluginCreator.BeanData> beanDataList = new ArrayList<>();
@@ -237,8 +237,8 @@ class CommonLLMPluginCreatorTest {
     @Test
     void create_missingField_throwsRuntimeWrappingReflectiveOperation() throws ClassNotFoundException {
         llmConfig.reinitForTest("""
-                        dev.langchain4j.plugin.bad.class=dev.langchain4j.cdi.plugin.DummyModel
-                        dev.langchain4j.plugin.bad.config.unknown-prop=value
+                        dev.langchain4j.cdi.plugin.bad.class=dev.langchain4j.cdi.plugin.DummyModel
+                        dev.langchain4j.cdi.plugin.bad.config.unknown-prop=value
                         """);
         Class<?> target = CommonLLMPluginCreator.loadClass("dev.langchain4j.cdi.plugin.DummyModel");
         Class<?> builder = target.getDeclaredClasses()[0];

@@ -141,7 +141,7 @@
             </dependency>
             <dependency>
                 <groupId>dev.langchain4j.cdi</groupId>
-                <artifactId>langchain4j-cdi-config</artifactId>
+                <artifactId>langchain4j-cdi-mp-config</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

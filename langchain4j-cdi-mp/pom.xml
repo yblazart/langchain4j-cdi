@@ -12,7 +12,7 @@
     <name>Langchain4J CDI: LangChain4j MP</name>
 
     <modules>
-        <module>langchain4j-cdi-config</module>
+        <module>langchain4j-cdi-mp-config</module>
         <module>langchain4j-cdi-fault-tolerance</module>
         <module>langchain4j-cdi-telemetry</module>
     </modules>
