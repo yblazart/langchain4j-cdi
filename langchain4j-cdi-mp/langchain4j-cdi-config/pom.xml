@@ -8,7 +8,7 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>langchain4j-cdi-mp-config</artifactId>
+    <artifactId>langchain4j-cdi-config</artifactId>
     <name>Langchain4J CDI: LangChain4j Config</name>
 
     <dependencies>
