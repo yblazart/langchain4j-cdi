@@ -1,15 +1,18 @@
 <server description="Sample Liberty server">
     <featureManager>
-    	<!-- Eclipse Microprofile 6.1 -->
-    	<!-- See details here: https://openliberty.io/docs/ref/feature/#microProfile-6.1.html -->
-    	<feature>microProfile-7.1</feature>
-    	
-		<!-- microProfile 7.1 Feature contains the following features below:
-	    	<feature>mpTelemetry-2.1</feature>
-	    	<feature>mpFaultTolerance-4.1</feature>
-	    	<feature>mpMetrics-5.1</feature>
-    	-->
+    	<platform>jakartaee-10.0</platform>
+        <platform>microprofile-7.1</platform>
+        <feature>cdi</feature>
+        <feature>jsonb</feature>
+        <feature>mpConfig</feature>
+        <feature>mpTelemetry</feature>
+        <feature>mpOpenAPI</feature>
+        <feature>mpFaultTolerance</feature>
+        <feature>restfulWS</feature>
+        <feature>websocket</feature>
     </featureManager>
+
+    <applicationManager autoExpand="true"/>
     
     <webApplication location="${project.name}.war" contextRoot="/">
     	<appProperties>
