@@ -79,7 +79,7 @@ or, if you use MicroProfile:
 ```xml
 <dependency>
     <groupId>dev.langchain4j.cdi</groupId>
-    <artifactId>langchain4j-cdi-mp-config</artifactId>
+    <artifactId>langchain4j-cdi-config</artifactId>
     <version>${langchain4j-cdi.version}</version>
 </dependency>
 ```
@@ -111,7 +111,7 @@ or, if you use MicroProfile:
 
 ### 2. Configure the Chat Model 
 
-For langchain4j-cdi-mp-config create `src/main/resources/META-INF/microprofile-config.properties`,
+For langchain4j-cdi-config create `src/main/resources/META-INF/microprofile-config.properties`,
 for Quarkus add properties in application.properties.
 
 ```properties
@@ -203,7 +203,7 @@ public class AssistantResource {
 | `langchain4j-cdi-core` | Core CDI integration classes |
 | `langchain4j-cdi-portable-ext` | Runtime CDI extension |
 | `langchain4j-cdi-build-compatible-ext` | Build-time CDI extension |
-| `langchain4j-cdi-mp-config` | MicroProfile Config integration |
+| `langchain4j-cdi-config` | MicroProfile Config integration |
 | `langchain4j-cdi-fault-tolerance` | MicroProfile Fault Tolerance support |
 | `langchain4j-cdi-telemetry` | OpenTelemetry metrics for AI operations |
 
@@ -227,7 +227,7 @@ public class AssistantResource {
 <!-- To use microprofile configurations -->
 <dependency>
     <groupId>dev.langchain4j.cdi</groupId>
-    <artifactId>langchain4j-cdi-mp-config</artifactId>
+    <artifactId>langchain4j-cdi-config</artifactId>
     <version>${langchain4j-cdi.version}</version>
 </dependency>
 ```
@@ -268,7 +268,7 @@ META-INF/services/dev.langchain4j.cdi.core.config.spi.LLMConfig
 
 #### Default Implementation: MicroProfile Config
 
-The `langchain4j-cdi-mp-config` module provides `LLMConfigMPConfig`, an implementation that uses **MicroProfile Config**:
+The `langchain4j-cdi-config` module provides `LLMConfigMPConfig`, an implementation that uses **MicroProfile Config**:
 
 ```java
 public class LLMConfigMPConfig extends LLMConfig {
@@ -300,7 +300,7 @@ This is registered in the service file:
 dev.langchain4j.cdi.core.mpconfig.LLMConfigMPConfig
 ```
 
-**When you add `langchain4j-cdi-mp-config` to your dependencies, this implementation is automatically used.**
+**When you add `langchain4j-cdi-config` to your dependencies, this implementation is automatically used.**
 
 #### Custom Configuration Provider
 
