@@ -1,15 +1,13 @@
-    #  LangChain4j with Helidon
-
 ## Introduction
 
 This example demonstrates [LangChain4J](https://docs.langchain4j.dev/) with [Helidon](https://helidon.io/docs/v4/about/doc_overview). It aims at studying how to leverage LLMs (impressive) capabilities in Java applications. In particular, it illustrates how to use RAG and Function Calling.
 
-It is derived from my [Quarkus-LangChain4j](https://github.com/jefrajames/car-booking) example used to illustrate my talk at [JChateau 2024](https://www.jchateau.org).
+It is derived from [Quarkus-LangChain4j](https://github.com/jefrajames/car-booking) example used to illustrate Jefra Jame's talk at [JChateau 2024](https://www.jchateau.org).
 
 It is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023 with additional work from [Jean-François James](http://jefrajames.fr/). The original demo is from [Dmytro Liubarskyi](https://www.linkedin.com/in/dmytro-liubarskyi/). The car booking company is called "Miles of Smiles" and the application exposes two AI services:
 
-. a chat service to freely discuss with a customer assistant
-. a fraud service to determine if a customer is a fraudster.
+- a chat service to freely discuss with a customer assistant
+- a fraud service to determine if a customer is a fraudster.
 
 For the sake of simplicity, there is no database interaction, the application is standalone and can be used "as is". Of course thanks to Quarkus, it can  easily be extended according to your needs.
 
@@ -24,25 +22,6 @@ The project has been developed and tested with:
 * LangChain4j 1.9.1
 * Maven 3.9.5
 * Testing against Llama 3.1 using local Ollama instance. 
-
-
-## Differences with Quarkus-LangChain4j
-
-Quarkus provides a deep integration with LangChain4j thanks to a specific [extension](https://docs.quarkiverse.io/quarkus-langchain4j/dev/index.html).
-
-In particular, it provides a powerful @RegisterAiService annotation and network interactions with LLMs are managed with its own RestClient.
-
-This example is based on a standard usage of LangChain4j with Helidon. There is no such deep integration. 
-
-I've added 3 technical classes to manage "the glue" (more or less the equivalent of `@RegisterAiService`):
-
-* ModelFactory: generates an Ollama Chat model
-* ChatAiServiceFactory: generates a Chat assistant
-* FraudAiServiceFactrory: generates a Fraud assistant.
-
-I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize LLM responses does not support Java Record.
-
-In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j using local Ollama.
 
 ## Packaging the application
 
@@ -82,5 +61,3 @@ You can ask fraud for:
 
 * James Bond
 * Emilio Largo
-
-For more information, please see my [Quarkus-LangChain4j](https://github.com/jefrajames/car-booking) example.
