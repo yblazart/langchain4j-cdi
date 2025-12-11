@@ -31,7 +31,7 @@ public abstract class LLMConfig {
     Map<String, ProducerFunction<?>> producers = new ConcurrentHashMap<>();
 
     /** Prefix for all LLM beans properties. */
-    public static final String PREFIX = "dev.langchain4j.plugin";
+    public static final String PREFIX = "dev.langchain4j.cdi.plugin";
 
     /** Called by @see LLMConfigProvider. */
     public static final String PRODUCER = "defined_bean_producer";
@@ -47,7 +47,7 @@ public abstract class LLMConfig {
 
     /**
      * Get all Langchain4j-cdi LLM beans names, prefixed by PREFIX For example:
-     * dev.langchain4j.plugin.content-retriever.class -> content-retriever
+     * dev.langchain4j.cdi.plugin.content-retriever.class -> content-retriever
      *
      * @return a set of property names
      */

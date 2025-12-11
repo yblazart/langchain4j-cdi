@@ -9,8 +9,9 @@ import java.util.stream.Collectors;
 
 /**
  * Test utility LLMConfig implementation that reads configuration from a Java 17 text block (multiline string). Example
- * usage: String cfg = """ dev.langchain4j.plugin.content-retriever.class=dev.example.MyRetriever
- * dev.langchain4j.plugin.content-retriever.config.api-key=xyz """; LLMConfig config = new TestTextBlockLLMConfig(cfg);
+ * usage: String cfg = """ dev.langchain4j.cdi.plugin.content-retriever.class=dev.example.MyRetriever
+ * dev.langchain4j.cdi.plugin.content-retriever.config.api-key=xyz """; LLMConfig config = new
+ * TestTextBlockLLMConfig(cfg);
  */
 public class TextBlockLLMConfig extends LLMConfig {
 
