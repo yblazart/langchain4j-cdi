@@ -1,86 +1,69 @@
-    #  LangChain4j with Helidon
+# Miles of Smiles - Quarkus Example
 
-## Introduction
+A demonstration of an AI-powered car rental assistant using **langchain4j-cdi** on Quarkus.
 
-This example demonstrates [LangChain4J](https://docs.langchain4j.dev/) with [Helidon](https://helidon.io/docs/v4/about/doc_overview). It aims at studying how to leverage LLMs (impressive) capabilities in Java applications. In particular, it illustrates how to use RAG and Function Calling.
+## About
 
-It is derived from my [Quarkus-LangChain4j](https://github.com/jefrajames/car-booking) example used to illustrate my talk at [JChateau 2024](https://www.jchateau.org).
+This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023. The car booking company is called "Miles of Smiles" and the application exposes two AI services:
 
-It is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023 with additional work from [Jean-François James](http://jefrajames.fr/). The original demo is from [Dmytro Liubarskyi](https://www.linkedin.com/in/dmytro-liubarskyi/). The car booking company is called "Miles of Smiles" and the application exposes two AI services:
+- A **chat service** to freely discuss with a customer assistant (with RAG support)
+- A **fraud service** to determine if a customer is a fraudster
 
-. a chat service to freely discuss with a customer assistant
-. a fraud service to determine if a customer is a frauder.
+## Prerequisites
 
-For the sake of simplicity, there is no database interaction, the application is standalone and can be used "as is". Of course thanks to Quarkus, it can  easily be extended according to your needs.
+- Java 21+
+- Maven 3.9+
+- Ollama running locally (or Docker/Podman)
 
-Warning: you must first configure the application to connect to an LLM that supports Function Calling (see Environment Variables below).
+## Running the Demo
 
-## Technical context
+Start the application with:
 
-The project has been developped and tested with:
+```bash
+./runexample.sh
+```
 
-* Java 22 (Temurin OpenJDK distro)
-* Helidon 4.0.7
-* Helidon CLI 3.0.4
-* LangChain4j 0.30.0
-* Maven 3.9.5
-* Testing against Llama 3.1 using local Ollama instance. 
+This script will:
+1. Start Ollama (locally or via Docker/Podman)
+2. Pull the llama3.1 model if needed
+3. Start Quarkus in dev mode
 
-## Differences with Quarkus-LangChain4j
+Stop with `Ctrl+C` when done.
 
-Quarkus provides a deep integration with LangChain4j thanks to a specific [extension](https://docs.quarkiverse.io/quarkus-langchain4j/dev/index.html).
+## Using the Demo
 
-In particular, it provides a powerful `@RegisterAiService` annotation and network interactions with LLMs are managed with its own RestClient.
+### Web Interface
 
-This example is based on a standard usage of LangChain4j with Helidon. There is no such deep integration. 
+Open your browser and navigate to:
 
-I've added 3 technical classes to manage "the glue" (more or less the equivalent of `@RegisterAiService`):
+```
+http://localhost:8080/
+```
 
-* ModelFactory: generates an Ollama Chat model
-* ChatAiServiceFactory: generates a Chat assistant
-* FraudAiServiceFactory: generates a Fraud assistant.
+You will have access to the Quarkus Dev UI and the chat interface.
 
-I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize LLM responses does not support Java Record.
+### REST API
 
-In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j using local Ollama.
+You can also interact with the assistant via the REST API:
 
-## Packaging the application
+```bash
+curl -X GET 'http://localhost:8080/api/car-booking/chat?question=Hello'
+```
 
-To package the application in JVM mode run: `mvn package`.
+## Sample Questions
 
-## Configuration
+Try asking:
 
-All configuration is centralized in `microprofile-config.properties` and can be redefined using environment variables.
+- "Hello, how can you help me?"
+- "What is your cancellation policy?"
+- "What is your list of cars?"
+- "My name is James Bond, please list my bookings"
+- "Is my booking 123-456 cancelable?"
 
-## Running the application
+For fraud detection:
+- James Bond
+- Emilio Largo
 
-Use the script ./runexample.sh to run the application.
-it will start the application in dev mode and ollama
+---
 
-## Playing with the application
-
-The application exposes a REST API documented with OpenAPI. 
-
-To interact with the application go to: [http://localhost:8080 you will have acess to dev UI
-
-
-Typical questions you can ask in the Chat:
-
-* Hello, how can you help me?
-* What is your list of cars?
-* What is your cancellation policy?
-* What is your fleet size? Be short please.
-* How many electric cars do you have?
-* My name is James Bond, please list my bookings
-* Is my booking 123-456 cancelable?
-* Is my booking 234-567 cancelable?
-* Can you check the duration please?
-* I'm James Bond, can I cancel all my booking 345-678?
-* Can you provide the details of all my bookings?
-
-You can ask fraud for:
-
-* James Bond
-* Emilio Largo
-
-For more information, please see my [Quarkus-LangChain4j](https://github.com/jefrajames/car-booking) example.
+Powered by [langchain4j-cdi](https://github.com/langchain4j/langchain4j-cdi)

@@ -1,7 +1,13 @@
-[![License](https://img.shields.io/github/license/smallrye/smallrye-llm.svg)](http://www.apache.org/licenses/LICENSE-2.0)
-[![Maven](https://img.shields.io/maven-central/v/dev.langchain4j.cdi/langchain4j-cdi-parent?color=green)](https://central.sonatype.com/search?q=dev.langchain4j.cdi%3Alangchain4j-cdi-parent)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/langchain4j/langchain4j-cdi/main.yaml?branch=main&style=for-the-badge&label=CI%20BUILD&logo=github)](https://github.com/langchain4j/langchain4j/actions/workflows/main.yaml)
-[![Discord](https://img.shields.io/discord/1156626270772269217?logoColor=violet)](https://discord.gg/JzTFvyjG6R)
+<p align="center">
+  <img src="langchain4j-cdi-logo.png" alt="LangChain4j CDI Logo" width="200"/>
+</p>
+
+<p align="center">
+  <a href="http://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/github/license/smallrye/smallrye-llm.svg" alt="License"/></a>
+  <a href="https://central.sonatype.com/search?q=dev.langchain4j.cdi%3Alangchain4j-cdi-parent"><img src="https://img.shields.io/maven-central/v/dev.langchain4j.cdi/langchain4j-cdi-parent?color=green" alt="Maven"/></a>
+  <a href="https://github.com/langchain4j/langchain4j/actions/workflows/main.yaml"><img src="https://img.shields.io/github/actions/workflow/status/langchain4j/langchain4j-cdi/main.yaml?branch=main&style=for-the-badge&label=CI%20BUILD&logo=github" alt="Build Status"/></a>
+  <a href="https://discord.gg/JzTFvyjG6R"><img src="https://img.shields.io/discord/1156626270772269217?logoColor=violet" alt="Discord"/></a>
+</p>
 
 # LangChain4j CDI Integration
 

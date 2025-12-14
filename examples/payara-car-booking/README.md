@@ -1,79 +1,73 @@
-This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023 with additional work from [Jean-François James](http://jefrajames.fr/). The original demo is from [Dmytro Liubarskyi](https://www.linkedin.com/in/dmytro-liubarskyi/).
+# Miles of Smiles - Payara Micro Example
 
-To test please do
+A demonstration of an AI-powered car rental assistant using **langchain4j-cdi** on Payara Micro.
 
-use ./run.sh 
+## About
 
-then
-the webpage should appearr
-http://127.0.0.1:8080/ to send your questions
+This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023. The car booking company is called "Miles of Smiles" and the application exposes two AI services:
 
-# ATTENTION
+- A **chat service** to freely discuss with a customer assistant (with RAG support)
+- A **fraud service** to determine if a customer is a fraudster
 
-due to some DLL reload problems on payara, [DocRagIngestor.java](src/main/java/dev/langchain4j/cdi/example/booking/DocRagIngestor.java)  has bean changed
-to use @Producer method and then @Inject to get the bean.
+## Prerequisites
 
+- Java 21+
+- Maven 3.9+
+- Ollama running locally (or Docker/Podman)
 
-```java
-@ApplicationScoped
-public class DocRagIngestor {
-	
-	private static final Logger LOGGER = Logger.getLogger(DocRagIngestor.class.getName());
+## Running the Demo
 
-// ... existing code ...
-    // Used by ContentRetriever
-    @Produces
-    public EmbeddingModel embeddingModel() {
-        // Création paresseuse pour éviter le chargement natif pendant le bootstrap CDI.
-        return new AllMiniLmL6V2EmbeddingModel();
-    }
+Start the application with:
 
-    // Used by ContentRetriever
-    @Produces
-    public InMemoryEmbeddingStore<TextSegment> embeddingStore() {
-        return new InMemoryEmbeddingStore<>();
-    }
+```bash
+./run.sh
+```
 
-    @Inject
-    EmbeddingModel embeddingModel;
+This script will:
+1. Start Ollama (locally or via Docker/Podman)
+2. Pull the llama3.1 model if needed
+3. Start Payara Micro with the application
 
-    @Inject
-    InMemoryEmbeddingStore<TextSegment> embeddingStore;
-// ... existing code ...
+Stop with `Ctrl+C` when done.
 
-    private File docsDir = new File(".","docs-for-rag");
+## Using the Demo
 
-    private List<Document> loadDocs() {
-        return loadDocuments(docsDir.getPath(), new TextDocumentParser());
-    }
+### Web Interface
 
-    public void ingest(@Observes @Initialized(ApplicationScoped.class) Object pointless) {
-
-        long start = System.currentTimeMillis();
-
-        EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
-                .documentSplitter(DocumentSplitters.recursive(300, 30))
-                .embeddingModel(embeddingModel)
-                .embeddingStore(embeddingStore)
-                .build();
-
-        if (!docsDir.exists()) {
-            LOGGER.warn(String.format("DEMO dossier inexistant, ingestion ignorée: %s", docsDir.getAbsolutePath()));
-            return;
-        }
-
-        List<Document> docs = loadDocs();
-        ingestor.ingest(docs);
-
-        LOGGER.info(String.format("DEMO %d documents ingérés en %d ms depuis %s", docs.size(),
-                System.currentTimeMillis() - start,docsDir.getAbsolutePath()));
-    }
-
-    public static void main(String[] args) {
-
-        System.out.println(InMemoryEmbeddingStore.class.getInterfaces()[0]);
-    }
-}
-
+Open your browser and navigate to:
 
 ```
+http://localhost:8080/
+```
+
+You will see the **Miles of Smiles** chat interface where you can interact with the AI assistant.
+
+### REST API
+
+You can also interact with the assistant via the REST API:
+
+```bash
+curl -X GET 'http://localhost:8080/api/car-booking/chat?question=Hello'
+```
+
+## Sample Questions
+
+Try asking:
+
+- "Hello, how can you help me?"
+- "What is your cancellation policy?"
+- "What is your list of cars?"
+- "My name is James Bond, please list my bookings"
+- "Is my booking 123-456 cancelable?"
+
+For fraud detection:
+- James Bond
+- Emilio Largo
+
+## Technical Notes
+
+Due to some DLL reload problems on Payara, the `DocRagIngestor` uses `@Produces` methods and `@Inject` to get beans instead of direct instantiation.
+
+---
+
+Powered by [langchain4j-cdi](https://github.com/langchain4j/langchain4j-cdi)

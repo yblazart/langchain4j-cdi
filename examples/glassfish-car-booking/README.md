@@ -1,9 +1,69 @@
-# 
-To run the glassfish server with app, on one terminal run ./run.sh
+# Miles of Smiles - GlassFish Example
 
-and then
+A demonstration of an AI-powered car rental assistant using **langchain4j-cdi** on GlassFish server.
 
-curl -X 'GET' 'http://127.0.0.1:8080/glassfish-car-booking/api/car-booking/chat?question=I%20want%20to%20book%20a%20car%20how%20can%20you%20help%20me%3F' -H 'accept: text/plain'
+## About
 
+This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023. The car booking company is called "Miles of Smiles" and the application exposes two AI services:
 
-you can stop with ctrl+c
+- A **chat service** to freely discuss with a customer assistant (with RAG support)
+- A **fraud service** to determine if a customer is a fraudster
+
+## Prerequisites
+
+- Java 21+
+- Maven 3.9+
+- Ollama running locally (or Docker/Podman)
+
+## Running the Demo
+
+Start the application with:
+
+```bash
+./run.sh
+```
+
+This script will:
+1. Start Ollama (locally or via Docker/Podman)
+2. Pull the llama3.1 model if needed
+3. Start GlassFish with the application
+
+Stop with `Ctrl+C` when done.
+
+## Using the Demo
+
+### Web Interface
+
+Open your browser and navigate to:
+
+```
+http://localhost:8080/glassfish-car-booking/
+```
+
+You will see the **Miles of Smiles** chat interface where you can interact with the AI assistant.
+
+### REST API
+
+You can also interact with the assistant via the REST API:
+
+```bash
+curl -X GET 'http://localhost:8080/glassfish-car-booking/api/car-booking/chat?question=Hello'
+```
+
+## Sample Questions
+
+Try asking:
+
+- "Hello, how can you help me?"
+- "What is your cancellation policy?"
+- "What is your list of cars?"
+- "My name is James Bond, please list my bookings"
+- "Is my booking 123-456 cancelable?"
+
+For fraud detection:
+- James Bond
+- Emilio Largo
+
+---
+
+Powered by [langchain4j-cdi](https://github.com/langchain4j/langchain4j-cdi)

@@ -1,62 +1,83 @@
-## Introduction
+# Miles of Smiles - Helidon Example (Portable Extension)
 
-This example demonstrates [LangChain4J](https://docs.langchain4j.dev/) with [Helidon](https://helidon.io/docs/v4/about/doc_overview). It aims at studying how to leverage LLMs (impressive) capabilities in Java applications. In particular, it illustrates how to use RAG and Function Calling.
+A demonstration of an AI-powered car rental assistant using **langchain4j-cdi** on Helidon 4 with the portable CDI extension.
 
-It is derived from [Quarkus-LangChain4j](https://github.com/jefrajames/car-booking) example used to illustrate Jefra Jame's talk at [JChateau 2024](https://www.jchateau.org).
+## About
 
-It is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023 with additional work from [Jean-François James](http://jefrajames.fr/). The original demo is from [Dmytro Liubarskyi](https://www.linkedin.com/in/dmytro-liubarskyi/). The car booking company is called "Miles of Smiles" and the application exposes two AI services:
+This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023. The car booking company is called "Miles of Smiles" and the application exposes two AI services:
 
-- a chat service to freely discuss with a customer assistant
-- a fraud service to determine if a customer is a frauder.
+- A **chat service** to freely discuss with a customer assistant (with RAG support)
+- A **fraud service** to determine if a customer is a fraudster
 
-For the sake of simplicity, there is no database interaction, the application is standalone and can be used "as is". Of course thanks to Quarkus, it can  easily be extended according to your needs.
+## Prerequisites
 
-Warning: you must first configure the application to connect to an LLM that supports Function Calling (see Environment Variables below).
+- Java 21+
+- Maven 3.9+
+- Ollama running locally (or Docker/Podman)
 
-## Technical context
+## Running the Demo
 
-The project has been developped and tested with:
+Start the application with:
 
-* Java 21+
-* Helidon 4.3.2
-* LangChain4j 1.9.1
-* Maven 3.9.5
-* Testing against Llama 3.1 using local Ollama instance.
+```bash
+./run.sh
+```
 
-## Packaging the application
+This script will:
+1. Start Ollama (locally or via Docker/Podman)
+2. Pull the llama3.1 model if needed
+3. Build and start the Helidon application
 
-To package the application in JVM mode run: _mvn package_.
+Stop with `Ctrl+C` when done.
+
+## Using the Demo
+
+### OpenAPI UI
+
+Open your browser and navigate to:
+
+```
+http://localhost:8080/openapi/ui
+```
+
+You can interact with the REST API through the OpenAPI UI.
+
+### REST API
+
+```bash
+# Chat service
+curl -X GET 'http://localhost:8080/api/car-booking/chat?question=Hello'
+
+# Fraud detection
+curl -X GET 'http://localhost:8080/api/car-booking/fraud?name=James%20Bond'
+```
+
+## Sample Questions
+
+Try asking:
+
+- "Hello, how can you help me?"
+- "What is your cancellation policy?"
+- "What is your list of cars?"
+- "My name is James Bond, please list my bookings"
+- "Is my booking 123-456 cancelable?"
+
+For fraud detection:
+- James Bond
+- Emilio Largo
 
 ## Configuration
 
-All configuration is centralized in microprofile-config.properties and can be redefined using environment variables.
+All configuration is centralized in `microprofile-config.properties` and can be redefined using environment variables.
 
-## Running the application
+## Packaging
 
-There is a script ./run.sh that run ollama, locally or with podman/docker, and then pull the llama 3.1 image, and then start the server
+To package the application:
 
-## Playing with the application
+```bash
+mvn package
+```
 
-The application exposes a REST API documented with OpenAPI. 
+---
 
-To interract with the application go to: http://localhost:8080/openapi/ui.
-
-
-Typical questions you can ask in the Chat:
-
-* Hello, how can you help me?
-* What is your list of cars?
-* What is your cancelation policy?
-* What is your fleet size? Be short please.
-* How many electric cars do you have?
-* My name is James Bond, please list my bookings
-* Is my booking 123-456 cancelable?
-* Is my booking 234-567 cancelable?
-* Can you check the duration please?
-* I'm James Bond, can I cancel all my booking 345-678?
-* Can you provide the details of all my bookings?
-
-You can ask fraud for:
-
-* James Bond
-* Emilio Largo
+Powered by [langchain4j-cdi](https://github.com/langchain4j/langchain4j-cdi)

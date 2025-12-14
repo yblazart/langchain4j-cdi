@@ -25,4 +25,4 @@ if [[ ! -d $GLASSFISH_DIR ]];then
     mvn cargo:install
 fi
 
-mvn cargo:run
+mvn install cargo:run
