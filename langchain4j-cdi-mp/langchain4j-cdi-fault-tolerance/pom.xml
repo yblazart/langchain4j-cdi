@@ -24,7 +24,6 @@
         <dependency>
             <groupId>dev.langchain4j.cdi</groupId>
             <artifactId>langchain4j-cdi-portable-ext</artifactId>
-            <version>${project.version}</version>
         </dependency>
     </dependencies>
 </project>
