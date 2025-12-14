@@ -139,19 +139,15 @@
                 <artifactId>langchain4j-cdi-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>dev.langchain4j.cdi-mp</groupId>
-                <artifactId>langchain4j-cdi-config</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.langchain4j.cdi</groupId>
-                <artifactId>langchain4j-cdi-portable-ext</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+            <!-- MP -->
             <dependency>
                 <groupId>dev.langchain4j.cdi-mp</groupId>
                 <artifactId>langchain4j-cdi-telemetry</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j.cdi-mp</groupId>
+                <artifactId>langchain4j-cdi-config</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
