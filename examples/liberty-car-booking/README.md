@@ -1,82 +1,77 @@
-This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023 with additional work from [Jean-François James](http://jefrajames.fr/). The original demo is from [Dmytro Liubarskyi](https://www.linkedin.com/in/dmytro-liubarskyi/).
+# Miles of Smiles - Open Liberty Example
 
-# Car Booking (Open Liberty)
+A demonstration of an AI-powered car rental assistant using **langchain4j-cdi** on Open Liberty.
 
-These are the steps to run this service.
+## About
 
-1. Go to the root `langchain4j-cdi` directory, then build it using the command:
- 	> `mvn clean install -e`
-2. Once the project is built, move to directory `cd examples/liberty-car-booking` and run the following command to install the bundle as a user liberty feature:
- 	> `mvn liberty:dev -e`
- 	
-## Application requirements:
-- JDK 17 and higher
-- Maven 3.9.9 and higher
-- LangChain4j 0.33.0 or higher.
-- Testing against Llama 3.1 using local Ollama instance. 
+This example is based on a simplified car booking application inspired from the [Java meets AI](https://www.youtube.com/watch?v=BD1MSLbs9KE) talk from [Lize Raes](https://www.linkedin.com/in/lize-raes-a8a34110/) at Devoxx Belgium 2023. The car booking company is called "Miles of Smiles" and the application exposes two AI services:
 
-Then you can access the application through the browser of your choice.
+- A **chat service** to freely discuss with a customer assistant (with RAG support)
+- A **fraud service** to determine if a customer is a fraudster
 
-## Differences with Quarkus-LangChain4j
+## Prerequisites
 
-Quarkus provides a deep integration with LangChain4j thanks to a specific [extension](https://docs.quarkiverse.io/quarkus-langchain4j/dev/index.html).
+- Java 17+
+- Maven 3.9+
+- Ollama running locally (or Docker/Podman)
 
-In particular, it provides a powerful `@RegisterAiService` annotation and network interactions with LLMs are managed with its own RestClient.
+## Running the Demo
 
-This example is based on a standard usage of LangChain4j with Helidon. There is no such deep integration. 
+### Option 1: Dev Mode
 
-I've added 3 technical classes to manage "the glue" (more or less the equivalent of `@RegisterAiService`):
+```bash
+mvn liberty:dev
+```
 
-* ModelFactory: generates an Ollama Chat model
-* ChatAiServiceFactory: generates a Chat assistant
-* FraudAiServiceFactory: generates a Fraud assistant.
+### Option 2: Production Mode
 
-I've been obliged to turn FraudResponse in a POJO. It seems that Google GSON, used to deserialize LLM responses does not support Java Record.
+```bash
+mvn package
+mvn liberty:start
+```
 
-In contrast with Quarkus, network interactions with LLMs are based on standard LangChain4j using local Ollama.
+To stop: `mvn liberty:stop`
 
-## Packaging the application
+## Using the Demo
 
-To package the application in JVM mode run: `mvn package`.
+### OpenAPI UI
+
+Open your browser and navigate to:
+
+```
+http://localhost:9080/openapi/ui
+```
+
+You can interact with the REST API through the OpenAPI UI.
+
+### REST API
+
+```bash
+# Chat service
+curl -X GET 'http://localhost:9080/api/car-booking/chat?question=Hello'
+
+# Fraud detection
+curl -X GET 'http://localhost:9080/api/car-booking/fraud?name=James%20Bond'
+```
+
+## Sample Questions
+
+Try asking:
+
+- "Hello, how can you help me?"
+- "What is your cancellation policy?"
+- "What is your list of cars?"
+- "My name is James Bond, please list my bookings"
+- "Is my booking 123-456 cancelable?"
+
+For fraud detection:
+- James Bond
+- Emilio Largo
 
 ## Configuration
 
-All configuration is centralized in `microprofile-config.properties` (found is `resources\META-INF` folder) and can be redefined using environment variables.
+All configuration is centralized in `microprofile-config.properties` (found in `resources/META-INF` folder) and can be redefined using environment variables.
 
-## Running the application
+---
 
-To run in dev mode with OpenLiberty: Run the following command in the CLI: `mvn liberty:dev`.
-
-To run in JVM mode (after packaging): `mvn liberty:start`. To stop the running server: `mvn liberty:stop`.
-
-
-## Playing with the application
-
-There are 2 applications that are provided here:
-
-* The Chat Room application, based from the LangChain4J [Jakarta MicroProfile Example provided by OpenLiberty](https://openliberty.io/blog/2024/04/01/open-liberty-with-langchain4j-example.html).
-* The Car Booking Example, which is discussed below.
-
-The application exposes a REST API documented with OpenAPI. 
-
-To interact with the application go to: [http://localhost:9080/openapi/ui](http://localhost:9080/openapi/ui).
-
-
-Typical questions you can ask in the Chat:
-
-* Hello, how can you help me?
-* What is your list of cars?
-* What is your cancellation policy?
-* What is your fleet size? Be short please.
-* How many electric cars do you have?
-* My name is James Bond, please list my bookings
-* Is my booking 123-456 cancelable?
-* Is my booking 234-567 cancelable?
-* Can you check the duration please?
-* I'm James Bond, can I cancel all my booking 345-678?
-* Can you provide the details of all my bookings?
-
-You can ask fraud for:
-
-* James Bond
-* Emilio Largo
+Powered by [langchain4j-cdi](https://github.com/langchain4j/langchain4j-cdi)
