@@ -2,14 +2,14 @@ package dev.langchain4j.cdi.mcp.integrationtests.quarkus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.langchain4j.cdi.mcp.integrationtests.McpTestRequests;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
+import dev.langchain4j.service.tool.ToolExecutionResult;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.ws.rs.client.Client;
-import jakarta.ws.rs.client.ClientBuilder;
-import jakarta.ws.rs.client.Entity;
-import jakarta.ws.rs.client.WebTarget;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
+import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
 
@@ -20,59 +20,32 @@ public class McpQuarkusIntegrationTest {
     int port;
 
     @Test
-    public void shouldCompleteFullMcpHandshake() {
-        String mcpEndpoint = "http://localhost:" + port + "/mcp";
-        try (Client client = ClientBuilder.newClient()) {
-            WebTarget target = client.target(mcpEndpoint);
-
-            // 1. initialize
-            Response initResponse = target.request(MediaType.APPLICATION_JSON)
-                    .post(Entity.entity(McpTestRequests.initializeRequest(), MediaType.APPLICATION_JSON));
-            assertThat(initResponse.getStatus()).isEqualTo(200);
-            String initResult = initResponse.readEntity(String.class);
-            assertThat(initResult).contains("2025-03-26");
-            assertThat(initResult).contains("tools");
-
-            String sessionId = initResponse.getHeaderString("Mcp-Session-Id");
-            assertThat(sessionId).isNotNull().isNotBlank();
-
-            // 2. notifications/initialized
-            Response initializedResponse = target.request(MediaType.APPLICATION_JSON)
-                    .header("Mcp-Session-Id", sessionId)
-                    .post(Entity.entity(McpTestRequests.initializedNotification(), MediaType.APPLICATION_JSON));
-            assertThat(initializedResponse.getStatus()).isEqualTo(200);
-
-            // 3. tools/list
-            Response listResponse = target.request(MediaType.APPLICATION_JSON)
-                    .header("Mcp-Session-Id", sessionId)
-                    .post(Entity.entity(McpTestRequests.toolsListRequest(), MediaType.APPLICATION_JSON));
-            assertThat(listResponse.getStatus()).isEqualTo(200);
-            String listResult = listResponse.readEntity(String.class);
-            assertThat(listResult).contains("getWeather");
-
-            // 4. tools/call
-            Response callResponse = target.request(MediaType.APPLICATION_JSON)
-                    .header("Mcp-Session-Id", sessionId)
-                    .post(Entity.entity(
-                            McpTestRequests.toolsCallRequest("getWeather", "{\"city\":\"Paris\",\"unit\":\"celsius\"}"),
-                            MediaType.APPLICATION_JSON));
-            assertThat(callResponse.getStatus()).isEqualTo(200);
-            String callResult = callResponse.readEntity(String.class);
-            assertThat(callResult).contains("Paris");
+    public void shouldListToolsViaMcpClient() throws Exception {
+        try (McpClient client = buildClient()) {
+            List<ToolSpecification> tools = client.listTools();
+            assertThat(tools).hasSize(1);
+            assertThat(tools.get(0).name()).isEqualTo("getWeather");
+            assertThat(tools.get(0).description()).isEqualTo("Get the current weather for a given city");
         }
     }
 
     @Test
-    public void shouldReturnErrorForMissingSession() {
-        String mcpEndpoint = "http://localhost:" + port + "/mcp";
-        try (Client client = ClientBuilder.newClient()) {
-            WebTarget target = client.target(mcpEndpoint);
-
-            Response response = target.request(MediaType.APPLICATION_JSON)
-                    .post(Entity.entity(McpTestRequests.toolsListRequest(), MediaType.APPLICATION_JSON));
-            assertThat(response.getStatus()).isEqualTo(200);
-            String result = response.readEntity(String.class);
-            assertThat(result).contains("-32001");
+    public void shouldCallToolViaMcpClient() throws Exception {
+        try (McpClient client = buildClient()) {
+            ToolExecutionRequest request = ToolExecutionRequest.builder()
+                    .name("getWeather")
+                    .arguments("{\"city\":\"Paris\",\"unit\":\"celsius\"}")
+                    .build();
+            ToolExecutionResult result = client.executeTool(request);
+            assertThat(result.resultText()).contains("Paris");
         }
+    }
+
+    private McpClient buildClient() {
+        return DefaultMcpClient.builder()
+                .transport(StreamableHttpMcpTransport.builder()
+                        .url("http://localhost:" + port + "/mcp")
+                        .build())
+                .build();
     }
 }

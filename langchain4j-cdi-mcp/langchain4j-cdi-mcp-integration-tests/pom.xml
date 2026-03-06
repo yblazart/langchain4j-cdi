@@ -52,6 +52,12 @@
                 <version>5.1.0.Final</version>
                 <scope>test</scope>
             </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-mcp</artifactId>
+                <version>${dev.langchain4j.version}-beta19</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

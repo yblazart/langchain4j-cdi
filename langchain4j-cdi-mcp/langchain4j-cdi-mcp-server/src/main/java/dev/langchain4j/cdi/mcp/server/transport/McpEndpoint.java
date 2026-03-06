@@ -3,7 +3,13 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpToolNotFoundException;
-import dev.langchain4j.cdi.mcp.server.protocol.*;
+import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
+import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcResponse;
+import dev.langchain4j.cdi.mcp.server.protocol.McpImplementation;
+import dev.langchain4j.cdi.mcp.server.protocol.McpInitializeResult;
+import dev.langchain4j.cdi.mcp.server.protocol.McpServerCapabilities;
+import dev.langchain4j.cdi.mcp.server.protocol.McpToolCallResult;
+import dev.langchain4j.cdi.mcp.server.protocol.McpToolsListResult;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolInvoker;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
@@ -15,12 +21,18 @@ import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
 import jakarta.json.JsonString;
+import jakarta.json.JsonValue;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.StreamingOutput;
+
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -163,11 +175,22 @@ public class McpEndpoint {
     private JsonRpcRequest parseRequest(String body) {
         try (JsonReader reader = Json.createReader(new StringReader(body))) {
             JsonObject json = reader.readObject();
-            String id = json.containsKey("id") ? json.getString("id") : null;
+            String id = extractId(json);
             String method = json.containsKey("method") ? json.getString("method") : null;
             JsonObject params = json.containsKey("params") ? json.getJsonObject("params") : null;
             return new JsonRpcRequest(id, method, params);
         }
+    }
+
+    private String extractId(JsonObject json) {
+        if (!json.containsKey("id")) {
+            return null;
+        }
+        JsonValue idValue = json.get("id");
+        if (idValue instanceof JsonString value) {
+            return value.getString();
+        }
+        return idValue.toString();
     }
 
     private String serializeToJson(Object obj) {

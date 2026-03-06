@@ -12,7 +12,14 @@
       "Bash(jar tf:*)",
       "Bash(mvn clean:*)",
       "Bash(mvn spotless:check:*)",
-      "Bash(mvn spotless:apply:*)"
+      "Bash(mvn spotless:apply:*)",
+      "Bash(mvn dependency:tree:*)",
+      "Bash(mvn dependency:resolve:*)",
+      "WebFetch(domain:mvnrepository.com)",
+      "Bash(mvn dependency:get:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(javap:*)"
     ],
     "deny": [],
     "ask": []

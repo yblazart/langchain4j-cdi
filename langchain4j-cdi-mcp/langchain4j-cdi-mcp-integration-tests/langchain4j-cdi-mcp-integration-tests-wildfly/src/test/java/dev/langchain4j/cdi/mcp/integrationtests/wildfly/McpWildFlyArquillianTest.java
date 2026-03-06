@@ -2,14 +2,13 @@ package dev.langchain4j.cdi.mcp.integrationtests.wildfly;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.langchain4j.cdi.mcp.integrationtests.McpTestRequests;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.cdi.mcp.integrationtests.WeatherTool;
-import jakarta.ws.rs.client.Client;
-import jakarta.ws.rs.client.ClientBuilder;
-import jakarta.ws.rs.client.Entity;
-import jakarta.ws.rs.client.WebTarget;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
+import dev.langchain4j.service.tool.ToolExecutionResult;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -17,6 +16,7 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
@@ -50,7 +50,10 @@ public class McpWildFlyArquillianTest {
         File[] deps = Maven.resolver()
                 .loadPomFromFile("pom.xml")
                 .importRuntimeDependencies()
-                .resolve("dev.langchain4j.cdi.mcp:langchain4j-cdi-mcp-portable-ext", "org.assertj:assertj-core")
+                .resolve(
+                        "dev.langchain4j.cdi.mcp:langchain4j-cdi-mcp-portable-ext",
+                        "dev.langchain4j:langchain4j-mcp",
+                        "org.assertj:assertj-core")
                 .withTransitivity()
                 .asFile();
 
@@ -60,11 +63,7 @@ public class McpWildFlyArquillianTest {
                 .toArray(File[]::new);
 
         return ShrinkWrap.create(WebArchive.class, "mcp-test.war")
-                .addClasses(
-                        McpWildFlyArquillianTest.class,
-                        WeatherTool.class,
-                        McpTestRequests.class,
-                        JaxRsApplication.class)
+                .addClasses(McpWildFlyArquillianTest.class, WeatherTool.class, JaxRsApplication.class)
                 .addAsLibraries(fixedDeps)
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
                 .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml")
@@ -88,39 +87,32 @@ public class McpWildFlyArquillianTest {
     private URL baseURL;
 
     @Test
-    public void shouldCompleteFullMcpHandshake() {
-        String mcpEndpoint = baseURL + "mcp";
-        try (Client client = ClientBuilder.newClient()) {
-            WebTarget target = client.target(mcpEndpoint);
-
-            // 1. initialize
-            Response initResponse = target.request(MediaType.APPLICATION_JSON)
-                    .post(Entity.entity(McpTestRequests.initializeRequest(), MediaType.APPLICATION_JSON));
-            assertThat(initResponse.getStatus()).isEqualTo(200);
-            String initResult = initResponse.readEntity(String.class);
-            assertThat(initResult).contains("2025-03-26");
-
-            String sessionId = initResponse.getHeaderString("Mcp-Session-Id");
-            assertThat(sessionId).isNotNull().isNotBlank();
-
-            // 2. tools/list
-            Response listResponse = target.request(MediaType.APPLICATION_JSON)
-                    .header("Mcp-Session-Id", sessionId)
-                    .post(Entity.entity(McpTestRequests.toolsListRequest(), MediaType.APPLICATION_JSON));
-            assertThat(listResponse.getStatus()).isEqualTo(200);
-            String listResult = listResponse.readEntity(String.class);
-            assertThat(listResult).contains("getWeather");
-
-            // 3. tools/call
-            Response callResponse = target.request(MediaType.APPLICATION_JSON)
-                    .header("Mcp-Session-Id", sessionId)
-                    .post(Entity.entity(
-                            McpTestRequests.toolsCallRequest(
-                                    "getWeather", "{\"city\":\"London\",\"unit\":\"celsius\"}"),
-                            MediaType.APPLICATION_JSON));
-            assertThat(callResponse.getStatus()).isEqualTo(200);
-            String callResult = callResponse.readEntity(String.class);
-            assertThat(callResult).contains("London");
+    public void shouldListToolsViaMcpClient() throws Exception {
+        try (McpClient client = buildClient()) {
+            List<ToolSpecification> tools = client.listTools();
+            assertThat(tools).hasSize(1);
+            assertThat(tools.get(0).name()).isEqualTo("getWeather");
+            assertThat(tools.get(0).description()).isEqualTo("Get the current weather for a given city");
         }
+    }
+
+    @Test
+    public void shouldCallToolViaMcpClient() throws Exception {
+        try (McpClient client = buildClient()) {
+            ToolExecutionRequest request = ToolExecutionRequest.builder()
+                    .name("getWeather")
+                    .arguments("{\"city\":\"London\",\"unit\":\"celsius\"}")
+                    .build();
+            ToolExecutionResult result = client.executeTool(request);
+            assertThat(result.resultText()).contains("London");
+        }
+    }
+
+    private McpClient buildClient() {
+        return DefaultMcpClient.builder()
+                .transport(StreamableHttpMcpTransport.builder()
+                        .url(baseURL + "mcp")
+                        .build())
+                .build();
     }
 }
