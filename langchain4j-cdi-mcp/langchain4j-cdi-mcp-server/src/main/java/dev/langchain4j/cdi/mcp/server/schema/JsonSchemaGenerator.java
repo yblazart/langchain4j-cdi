@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.schema;
 
-import dev.langchain4j.agent.tool.P;
+import dev.langchain4j.cdi.mcp.server.McpToolArg;
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
@@ -21,8 +21,8 @@ public class JsonSchemaGenerator {
 
         for (Parameter param : method.getParameters()) {
             String paramName = resolveParamName(param);
-            String description = param.isAnnotationPresent(P.class)
-                    ? param.getAnnotation(P.class).value()
+            String description = param.isAnnotationPresent(McpToolArg.class)
+                    ? param.getAnnotation(McpToolArg.class).value()
                     : "";
 
             properties.add(paramName, buildPropertySchema(param.getType(), description));
@@ -33,10 +33,8 @@ public class JsonSchemaGenerator {
     }
 
     private static String resolveParamName(Parameter param) {
-        if (param.isAnnotationPresent(P.class)) {
-            P annotation = param.getAnnotation(P.class);
-            // @P value is the description, the param name comes from reflection
-            // LangChain4j uses the parameter name from reflection
+        if (param.isAnnotationPresent(McpToolArg.class)) {
+            // @McpToolArg value is the description, the param name comes from reflection
         }
         return param.getName();
     }

@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.portableextension;
 
-import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.cdi.mcp.server.McpTool;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
 import jakarta.enterprise.event.Observes;
@@ -21,18 +21,18 @@ public class McpServerPortableExtension implements Extension {
     <T> void onProcessManagedBean(@Observes ProcessManagedBean<T> pmb) {
         Class<?> beanClass = pmb.getAnnotatedBeanClass().getJavaClass();
         List<Method> toolMethods = Arrays.stream(beanClass.getMethods())
-                .filter(m -> m.isAnnotationPresent(Tool.class))
+                .filter(m -> m.isAnnotationPresent(McpTool.class))
                 .toList();
 
         if (!toolMethods.isEmpty()) {
-            LOGGER.info("MCP: Detected @Tool methods in " + beanClass.getName());
+            LOGGER.info("MCP: Detected @McpTool methods in " + beanClass.getName());
             candidates.add(new McpToolCandidate(beanClass, toolMethods));
         }
     }
 
     void onAfterDeployment(@Observes AfterDeploymentValidation adv) {
         if (candidates.isEmpty()) {
-            LOGGER.info("MCP: No @Tool beans detected, MCP server will have no tools");
+            LOGGER.info("MCP: No @McpTool beans detected, MCP server will have no tools");
             return;
         }
 

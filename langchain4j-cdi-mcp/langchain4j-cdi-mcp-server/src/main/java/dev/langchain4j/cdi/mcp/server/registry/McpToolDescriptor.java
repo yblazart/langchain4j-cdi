@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
-import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.cdi.mcp.server.McpTool;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolWireFormat;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
 import jakarta.json.JsonObject;
@@ -24,10 +24,9 @@ public class McpToolDescriptor {
     }
 
     public static McpToolDescriptor fromMethod(Class<?> beanClass, Method method) {
-        Tool tool = method.getAnnotation(Tool.class);
-        String[] toolValue = tool.value();
+        McpTool tool = method.getAnnotation(McpTool.class);
         String toolName = tool.name().isEmpty() ? method.getName() : tool.name();
-        String toolDescription = toolValue.length > 0 ? String.join(" ", toolValue) : "";
+        String toolDescription = tool.value();
         return new McpToolDescriptor(
                 toolName, toolDescription, JsonSchemaGenerator.fromMethod(method), beanClass, method);
     }

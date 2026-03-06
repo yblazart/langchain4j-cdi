@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.buildcompatible;
 
-import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.cdi.mcp.server.McpTool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
@@ -24,9 +24,10 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
             Class<?> clazz = Thread.currentThread()
                     .getContextClassLoader()
                     .loadClass(classConfig.info().name());
-            boolean hasToolMethods = Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(Tool.class));
+            boolean hasToolMethods =
+                    Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpTool.class));
             if (hasToolMethods) {
-                LOGGER.info("MCP: Detected @Tool bean: " + clazz.getName());
+                LOGGER.info("MCP: Detected @McpTool bean: " + clazz.getName());
                 detectedToolBeanClassNames.add(clazz.getName());
             }
         } catch (ClassNotFoundException e) {
@@ -38,7 +39,7 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
     @Synthesis
     public void registerMcpBeans(SyntheticComponents syntheticComponents) {
         if (detectedToolBeanClassNames.isEmpty()) {
-            LOGGER.info("MCP: No @Tool beans detected during build");
+            LOGGER.info("MCP: No @McpTool beans detected during build");
             return;
         }
 

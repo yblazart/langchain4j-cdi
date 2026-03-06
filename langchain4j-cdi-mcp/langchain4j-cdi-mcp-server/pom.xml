@@ -12,12 +12,6 @@
     <name>Langchain4J CDI: MCP Server Core</name>
 
     <dependencies>
-        <!-- LangChain4j : @Tool, @P -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j</artifactId>
-        </dependency>
-
         <!-- Jakarta EE APIs - provided -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>

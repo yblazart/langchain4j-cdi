@@ -1,17 +1,17 @@
 package dev.langchain4j.cdi.mcp.server.fixtures;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.cdi.mcp.server.McpTool;
+import dev.langchain4j.cdi.mcp.server.McpToolArg;
 
 public class CalculatorTool {
 
-    @Tool("Add two numbers together")
-    public int add(@P("First number") int a, @P("Second number") int b) {
+    @McpTool("Add two numbers together")
+    public int add(@McpToolArg("First number") int a, @McpToolArg("Second number") int b) {
         return a + b;
     }
 
-    @Tool("Multiply two numbers")
-    public double multiply(@P("First number") double a, @P("Second number") double b) {
+    @McpTool("Multiply two numbers")
+    public double multiply(@McpToolArg("First number") double a, @McpToolArg("Second number") double b) {
         return a * b;
     }
 }

@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.buildcompatible;
 
-import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.cdi.mcp.server.McpTool;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
 import jakarta.enterprise.inject.build.compatible.spi.Parameters;
@@ -23,7 +23,7 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
                 Class<?> beanClass =
                         Thread.currentThread().getContextClassLoader().loadClass(className);
                 Arrays.stream(beanClass.getMethods())
-                        .filter(m -> m.isAnnotationPresent(Tool.class))
+                        .filter(m -> m.isAnnotationPresent(McpTool.class))
                         .forEach(method -> {
                             McpToolDescriptor descriptor = McpToolDescriptor.fromMethod(beanClass, method);
                             registry.register(descriptor);
@@ -31,7 +31,7 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
                                     + beanClass.getSimpleName());
                         });
             } catch (ClassNotFoundException e) {
-                LOGGER.warning("MCP: Could not load @Tool bean class: " + className);
+                LOGGER.warning("MCP: Could not load @McpTool bean class: " + className);
             }
         }
         LOGGER.info("MCP: Registered " + registry.size() + " tool(s) total via build-compatible extension");

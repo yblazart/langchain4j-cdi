@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
-import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.cdi.mcp.server.McpTool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.event.Observes;
@@ -43,7 +43,7 @@ public class McpToolDiscovery {
                 continue;
             }
             Arrays.stream(beanClass.getMethods())
-                    .filter(m -> m.isAnnotationPresent(Tool.class))
+                    .filter(m -> m.isAnnotationPresent(McpTool.class))
                     .forEach(method -> {
                         McpToolDescriptor descriptor = McpToolDescriptor.fromMethod(beanClass, method);
                         registry.register(descriptor);
