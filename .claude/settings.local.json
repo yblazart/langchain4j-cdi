@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.langchain4j.dev)",
+      "WebFetch(domain:jakarta.ee)",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(mvn clean compile:*)",
+      "Bash(./mvnw:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
