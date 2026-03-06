@@ -11,7 +11,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
 import jakarta.json.JsonString;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
@@ -19,6 +21,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.StreamingOutput;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -43,9 +46,9 @@ public class McpEndpoint {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces({MediaType.APPLICATION_JSON, MediaType.SERVER_SENT_EVENTS})
     public Response handlePost(
-            JsonRpcRequest request,
-            @HeaderParam("Mcp-Session-Id") String sessionId,
-            @HeaderParam("Accept") String accept) {
+            String body, @HeaderParam("Mcp-Session-Id") String sessionId, @HeaderParam("Accept") String accept) {
+
+        JsonRpcRequest request = parseRequest(body);
 
         if (request.getMethod() == null) {
             throw new McpException(request.getId(), McpErrorCode.INVALID_REQUEST, "Missing method");
@@ -155,6 +158,16 @@ public class McpEndpoint {
             return configInstance.get();
         }
         return new McpServerConfig();
+    }
+
+    private JsonRpcRequest parseRequest(String body) {
+        try (JsonReader reader = Json.createReader(new StringReader(body))) {
+            JsonObject json = reader.readObject();
+            String id = json.containsKey("id") ? json.getString("id") : null;
+            String method = json.containsKey("method") ? json.getString("method") : null;
+            JsonObject params = json.containsKey("params") ? json.getJsonObject("params") : null;
+            return new JsonRpcRequest(id, method, params);
+        }
     }
 
     private String serializeToJson(Object obj) {

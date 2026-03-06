@@ -8,7 +8,11 @@
       "Bash(cp:*)",
       "Bash(mvn clean compile:*)",
       "Bash(./mvnw:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(jar tf:*)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn spotless:check:*)",
+      "Bash(mvn spotless:apply:*)"
     ],
     "deny": [],
     "ask": []

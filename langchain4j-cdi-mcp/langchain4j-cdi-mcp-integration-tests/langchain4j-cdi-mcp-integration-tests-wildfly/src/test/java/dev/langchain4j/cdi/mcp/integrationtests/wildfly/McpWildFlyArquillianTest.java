@@ -65,7 +65,6 @@ public class McpWildFlyArquillianTest {
                         WeatherTool.class,
                         McpTestRequests.class,
                         JaxRsApplication.class)
-                .addPackages(true, "dev.langchain4j.cdi.mcp.server")
                 .addAsLibraries(fixedDeps)
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
                 .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml")
