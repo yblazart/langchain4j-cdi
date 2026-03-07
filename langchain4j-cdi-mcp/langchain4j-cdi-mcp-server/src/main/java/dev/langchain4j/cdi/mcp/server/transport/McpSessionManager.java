@@ -17,7 +17,7 @@ public class McpSessionManager {
         return id;
     }
 
-    public McpSession requireSession(String requestId, String sessionId) {
+    public McpSession requireSession(Object requestId, String sessionId) {
         if (sessionId == null || !sessions.containsKey(sessionId)) {
             throw new McpSessionException(requestId, "Invalid or missing Mcp-Session-Id");
         }

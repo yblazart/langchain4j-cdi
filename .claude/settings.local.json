@@ -19,7 +19,9 @@
       "Bash(mvn dependency:get:*)",
       "Bash(curl:*)",
       "WebFetch(domain:github.com)",
-      "Bash(javap:*)"
+      "Bash(javap:*)",
+      "WebFetch(domain:download.eclipse.org)",
+      "Bash(chmod +x:*)"
     ],
     "deny": [],
     "ask": []

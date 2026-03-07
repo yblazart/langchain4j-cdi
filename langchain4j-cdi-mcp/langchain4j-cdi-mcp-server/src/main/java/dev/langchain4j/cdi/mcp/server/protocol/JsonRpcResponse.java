@@ -3,20 +3,20 @@ package dev.langchain4j.cdi.mcp.server.protocol;
 public class JsonRpcResponse {
 
     private String jsonrpc = "2.0";
-    private String id;
+    private Object id;
     private Object result;
     private JsonRpcError error;
 
     public JsonRpcResponse() {}
 
-    public static JsonRpcResponse success(String id, Object result) {
+    public static JsonRpcResponse success(Object id, Object result) {
         JsonRpcResponse response = new JsonRpcResponse();
         response.id = id;
         response.result = result;
         return response;
     }
 
-    public static JsonRpcResponse error(String id, JsonRpcError error) {
+    public static JsonRpcResponse error(Object id, JsonRpcError error) {
         JsonRpcResponse response = new JsonRpcResponse();
         response.id = id;
         response.error = error;
@@ -31,11 +31,11 @@ public class JsonRpcResponse {
         this.jsonrpc = jsonrpc;
     }
 
-    public String getId() {
+    public Object getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Object id) {
         this.id = id;
     }
 

@@ -25,6 +25,8 @@ import jakarta.json.JsonValue;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -68,7 +70,7 @@ public class McpEndpoint {
         boolean wantsSse = accept != null && accept.contains("text/event-stream");
 
         return switch (request.getMethod()) {
-            case "initialize" -> handleInitialize(request);
+            case "initialize" -> handleInitialize(request, wantsSse);
             case "notifications/initialized" -> handleInitialized(request, sessionId);
             case "tools/list" -> handleToolsList(request, sessionId, wantsSse);
             case "tools/call" -> handleToolsCall(request, sessionId, wantsSse);
@@ -79,7 +81,40 @@ public class McpEndpoint {
         };
     }
 
-    private Response handleInitialize(JsonRpcRequest request) {
+    @GET
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    public Response handleGet(@HeaderParam("Mcp-Session-Id") String sessionId) {
+        if (sessionId == null) {
+            return Response.status(Response.Status.BAD_REQUEST).build();
+        }
+        sessionManager.requireSession(null, sessionId);
+        // Keep-alive SSE stream for server-initiated notifications (not used yet)
+        StreamingOutput stream = out -> {
+            // Send an initial comment to keep the connection open
+            out.write(": stream opened\n\n".getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            // Block until the client disconnects
+            try {
+                Thread.currentThread().join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        };
+        return Response.ok(stream, MediaType.SERVER_SENT_EVENTS)
+                .header("Cache-Control", "no-cache")
+                .header("Mcp-Session-Id", sessionId)
+                .build();
+    }
+
+    @DELETE
+    public Response handleDelete(@HeaderParam("Mcp-Session-Id") String sessionId) {
+        if (sessionId != null) {
+            sessionManager.terminateSession(sessionId);
+        }
+        return Response.ok().build();
+    }
+
+    private Response handleInitialize(JsonRpcRequest request, boolean wantsSse) {
         String newSessionId = sessionManager.createSession(request.getParams());
         McpServerConfig config = resolveConfig();
 
@@ -87,6 +122,19 @@ public class McpEndpoint {
                 "2025-03-26",
                 McpServerCapabilities.withTools(),
                 new McpImplementation(config.getServerName(), config.getServerVersion()));
+
+        if (wantsSse) {
+            String json = serializeToJson(JsonRpcResponse.success(request.getId(), result));
+            String payload = "event: message\ndata: " + json + "\n\n";
+            StreamingOutput stream = out -> {
+                out.write(payload.getBytes(StandardCharsets.UTF_8));
+                out.flush();
+            };
+            return Response.ok(stream, MediaType.SERVER_SENT_EVENTS)
+                    .header("Cache-Control", "no-cache")
+                    .header("Mcp-Session-Id", newSessionId)
+                    .build();
+        }
 
         return Response.ok(JsonRpcResponse.success(request.getId(), result))
                 .type(MediaType.APPLICATION_JSON)
@@ -147,7 +195,7 @@ public class McpEndpoint {
                 .build();
     }
 
-    private Response respond(String id, Object result, boolean sse) {
+    private Response respond(Object id, Object result, boolean sse) {
         JsonRpcResponse rpcResponse = JsonRpcResponse.success(id, result);
         if (!sse) {
             return Response.ok(rpcResponse).type(MediaType.APPLICATION_JSON).build();
@@ -174,20 +222,23 @@ public class McpEndpoint {
     private JsonRpcRequest parseRequest(String body) {
         try (JsonReader reader = Json.createReader(new StringReader(body))) {
             JsonObject json = reader.readObject();
-            String id = extractId(json);
+            Object id = extractId(json);
             String method = json.containsKey("method") ? json.getString("method") : null;
             JsonObject params = json.containsKey("params") ? json.getJsonObject("params") : null;
             return new JsonRpcRequest(id, method, params);
         }
     }
 
-    private String extractId(JsonObject json) {
+    private Object extractId(JsonObject json) {
         if (!json.containsKey("id")) {
             return null;
         }
         JsonValue idValue = json.get("id");
         if (idValue instanceof JsonString value) {
             return value.getString();
+        }
+        if (idValue.getValueType() == JsonValue.ValueType.NUMBER) {
+            return json.getJsonNumber("id").longValue();
         }
         return idValue.toString();
     }

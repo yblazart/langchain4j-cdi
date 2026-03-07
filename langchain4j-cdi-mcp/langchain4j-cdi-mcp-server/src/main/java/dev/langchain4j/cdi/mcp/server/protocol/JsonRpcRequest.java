@@ -5,13 +5,13 @@ import jakarta.json.JsonObject;
 public class JsonRpcRequest {
 
     private String jsonrpc = "2.0";
-    private String id;
+    private Object id;
     private String method;
     private JsonObject params;
 
     public JsonRpcRequest() {}
 
-    public JsonRpcRequest(String id, String method, JsonObject params) {
+    public JsonRpcRequest(Object id, String method, JsonObject params) {
         this.id = id;
         this.method = method;
         this.params = params;
@@ -25,11 +25,11 @@ public class JsonRpcRequest {
         this.jsonrpc = jsonrpc;
     }
 
-    public String getId() {
+    public Object getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Object id) {
         this.id = id;
     }
 
