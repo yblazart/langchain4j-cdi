@@ -8,6 +8,7 @@ public class JsonRpcRequest {
     private Object id;
     private String method;
     private JsonObject params;
+    private Object progressToken;
 
     public JsonRpcRequest() {}
 
@@ -47,5 +48,13 @@ public class JsonRpcRequest {
 
     public void setParams(JsonObject params) {
         this.params = params;
+    }
+
+    public Object getProgressToken() {
+        return progressToken;
+    }
+
+    public void setProgressToken(Object progressToken) {
+        this.progressToken = progressToken;
     }
 }

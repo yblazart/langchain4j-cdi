@@ -29,4 +29,12 @@ class JsonRpcRequestTest {
 
         assertThat(request.getId()).isNull();
     }
+
+    @Test
+    void shouldStoreProgressToken() {
+        JsonRpcRequest request = new JsonRpcRequest(1L, "tools/call", null);
+        request.setProgressToken("progress-token-1");
+
+        assertThat(request.getProgressToken()).isEqualTo("progress-token-1");
+    }
 }

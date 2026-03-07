@@ -526,8 +526,28 @@ public class McpEndpoint {
             Object id = extractId(json);
             String method = json.containsKey("method") ? json.getString("method") : null;
             JsonObject params = json.containsKey("params") ? json.getJsonObject("params") : null;
-            return new JsonRpcRequest(id, method, params);
+            JsonRpcRequest request = new JsonRpcRequest(id, method, params);
+            request.setProgressToken(extractProgressToken(params));
+            return request;
         }
+    }
+
+    private Object extractProgressToken(JsonObject params) {
+        if (params == null || !params.containsKey("_meta")) {
+            return null;
+        }
+        JsonObject meta = params.getJsonObject("_meta");
+        if (meta == null || !meta.containsKey("progressToken")) {
+            return null;
+        }
+        JsonValue tokenValue = meta.get("progressToken");
+        if (tokenValue instanceof JsonString value) {
+            return value.getString();
+        }
+        if (tokenValue.getValueType() == JsonValue.ValueType.NUMBER) {
+            return meta.getJsonNumber("progressToken").longValue();
+        }
+        return tokenValue.toString();
     }
 
     private Object extractId(JsonObject json) {

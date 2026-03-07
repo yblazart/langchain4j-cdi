@@ -31,6 +31,18 @@ public class JsonRpcNotification {
         return new JsonRpcNotification("notifications/prompts/list_changed");
     }
 
+    public static JsonRpcNotification progress(Object progressToken, double progress, double total) {
+        JsonRpcNotification notification = new JsonRpcNotification("notifications/progress");
+        java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+        params.put("progressToken", progressToken);
+        params.put("progress", progress);
+        if (total > 0) {
+            params.put("total", total);
+        }
+        notification.params = params;
+        return notification;
+    }
+
     public String getJsonrpc() {
         return jsonrpc;
     }

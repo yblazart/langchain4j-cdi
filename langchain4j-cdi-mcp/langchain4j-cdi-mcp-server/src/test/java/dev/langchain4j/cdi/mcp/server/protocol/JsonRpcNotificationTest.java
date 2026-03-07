@@ -37,4 +37,26 @@ class JsonRpcNotificationTest {
 
         assertThat(notification.getMethod()).isEqualTo("notifications/prompts/list_changed");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldCreateProgressNotification() {
+        JsonRpcNotification notification = JsonRpcNotification.progress("token-42", 50.0, 100.0);
+
+        assertThat(notification.getMethod()).isEqualTo("notifications/progress");
+        assertThat(notification.getParams()).isNotNull();
+        java.util.Map<String, Object> params = (java.util.Map<String, Object>) notification.getParams();
+        assertThat(params.get("progressToken")).isEqualTo("token-42");
+        assertThat(params.get("progress")).isEqualTo(50.0);
+        assertThat(params.get("total")).isEqualTo(100.0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldOmitTotalWhenZero() {
+        JsonRpcNotification notification = JsonRpcNotification.progress("t", 5.0, 0);
+
+        java.util.Map<String, Object> params = (java.util.Map<String, Object>) notification.getParams();
+        assertThat(params).doesNotContainKey("total");
+    }
 }

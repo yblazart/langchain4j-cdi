@@ -44,6 +44,22 @@ public class McpNotificationBroadcaster {
         });
     }
 
+    public void sendToSession(String sessionId, Object notification) {
+        OutputStream out = sseStreams.get(sessionId);
+        if (out == null) {
+            return;
+        }
+        String json = serializeToJson(notification);
+        String payload = "event: message\ndata: " + json + "\n\n";
+        try {
+            out.write(payload.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (IOException e) {
+            LOGGER.log(Level.FINE, "MCP: Removing disconnected SSE stream: " + sessionId, e);
+            sseStreams.remove(sessionId);
+        }
+    }
+
     public int connectedStreamCount() {
         return sseStreams.size();
     }
