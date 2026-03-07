@@ -15,11 +15,23 @@ public class McpToolCallResult {
     }
 
     public static McpToolCallResult text(String text) {
-        return new McpToolCallResult(List.of(new McpContent("text", text)), false);
+        return new McpToolCallResult(List.of(McpContent.text(text)), false);
+    }
+
+    public static McpToolCallResult image(String base64Data, String mimeType) {
+        return new McpToolCallResult(List.of(McpContent.image(base64Data, mimeType)), false);
+    }
+
+    public static McpToolCallResult resource(String uri, String mimeType, String text) {
+        return new McpToolCallResult(List.of(McpContent.resource(uri, mimeType, text)), false);
+    }
+
+    public static McpToolCallResult of(List<McpContent> content) {
+        return new McpToolCallResult(content, false);
     }
 
     public static McpToolCallResult error(String message) {
-        return new McpToolCallResult(List.of(new McpContent("text", message)), true);
+        return new McpToolCallResult(List.of(McpContent.text(message)), true);
     }
 
     public static McpToolCallResult empty() {

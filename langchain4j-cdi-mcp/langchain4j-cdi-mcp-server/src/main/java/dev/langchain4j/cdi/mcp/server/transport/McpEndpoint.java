@@ -24,6 +24,7 @@ import jakarta.json.JsonString;
 import jakarta.json.JsonValue;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
+import jakarta.json.bind.JsonbConfig;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -50,6 +51,9 @@ public class McpEndpoint {
 
     @Inject
     McpToolInvoker invoker;
+
+    @Inject
+    McpNotificationBroadcaster broadcaster;
 
     @Inject
     @Named("mcp-server")
@@ -88,16 +92,17 @@ public class McpEndpoint {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
         sessionManager.requireSession(null, sessionId);
-        // Keep-alive SSE stream for server-initiated notifications (not used yet)
         StreamingOutput stream = out -> {
-            // Send an initial comment to keep the connection open
-            out.write(": stream opened\n\n".getBytes(StandardCharsets.UTF_8));
-            out.flush();
-            // Block until the client disconnects
+            broadcaster.registerStream(sessionId, out);
             try {
+                out.write(": stream opened\n\n".getBytes(StandardCharsets.UTF_8));
+                out.flush();
+                // Block until the client disconnects
                 Thread.currentThread().join();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            } finally {
+                broadcaster.unregisterStream(sessionId);
             }
         };
         return Response.ok(stream, MediaType.SERVER_SENT_EVENTS)
@@ -136,7 +141,7 @@ public class McpEndpoint {
                     .build();
         }
 
-        return Response.ok(JsonRpcResponse.success(request.getId(), result))
+        return Response.ok(serializeToJson(JsonRpcResponse.success(request.getId(), result)))
                 .type(MediaType.APPLICATION_JSON)
                 .header("Mcp-Session-Id", newSessionId)
                 .build();
@@ -190,18 +195,18 @@ public class McpEndpoint {
     }
 
     private Response handlePing(JsonRpcRequest request) {
-        return Response.ok(JsonRpcResponse.success(request.getId(), Map.of()))
+        return Response.ok(serializeToJson(JsonRpcResponse.success(request.getId(), Map.of())))
                 .type(MediaType.APPLICATION_JSON)
                 .build();
     }
 
     private Response respond(Object id, Object result, boolean sse) {
         JsonRpcResponse rpcResponse = JsonRpcResponse.success(id, result);
+        String json = serializeToJson(rpcResponse);
         if (!sse) {
-            return Response.ok(rpcResponse).type(MediaType.APPLICATION_JSON).build();
+            return Response.ok(json).type(MediaType.APPLICATION_JSON).build();
         }
         // SSE one-shot response
-        String json = serializeToJson(rpcResponse);
         String payload = "event: message\ndata: " + json + "\n\n";
         StreamingOutput stream = out -> {
             out.write(payload.getBytes(StandardCharsets.UTF_8));
@@ -244,7 +249,8 @@ public class McpEndpoint {
     }
 
     private String serializeToJson(Object obj) {
-        try (Jsonb jsonb = JsonbBuilder.create()) {
+        JsonbConfig config = new JsonbConfig().withNullValues(false);
+        try (Jsonb jsonb = JsonbBuilder.create(config)) {
             return jsonb.toJson(obj);
         } catch (Exception e) {
             throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "JSON serialization failed");

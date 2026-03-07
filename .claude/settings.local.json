@@ -21,7 +21,10 @@
       "WebFetch(domain:github.com)",
       "Bash(javap:*)",
       "WebFetch(domain:download.eclipse.org)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "Bash(javac:*)",
+      "Read(//private/tmp/**)",
+      "Bash(jar xf /Users/yblazart/.m2/repository/dev/langchain4j/langchain4j-mcp/1.8.0-beta15/langchain4j-mcp-1.8.0-beta15-sources.jar dev/langchain4j/mcp/client/ToolExecutionHelper.java)"
     ],
     "deny": [],
     "ask": []

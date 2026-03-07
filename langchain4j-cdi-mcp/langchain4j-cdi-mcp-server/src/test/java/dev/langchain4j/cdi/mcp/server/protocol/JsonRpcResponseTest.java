@@ -28,4 +28,19 @@ class JsonRpcResponseTest {
         assertThat(response.getError().getCode()).isEqualTo(-32601);
         assertThat(response.getError().getMessage()).isEqualTo("Method not found");
     }
+
+    @Test
+    void shouldPreserveNumericId() {
+        JsonRpcResponse response = JsonRpcResponse.success(42L, "result");
+
+        assertThat(response.getId()).isEqualTo(42L);
+        assertThat(response.getId()).isInstanceOf(Long.class);
+    }
+
+    @Test
+    void shouldPreserveNullId() {
+        JsonRpcResponse response = JsonRpcResponse.success(null, "result");
+
+        assertThat(response.getId()).isNull();
+    }
 }

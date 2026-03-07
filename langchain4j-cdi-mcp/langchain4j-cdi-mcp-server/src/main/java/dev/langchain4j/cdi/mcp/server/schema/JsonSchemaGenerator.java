@@ -21,12 +21,14 @@ public class JsonSchemaGenerator {
 
         for (Parameter param : method.getParameters()) {
             String paramName = resolveParamName(param);
-            String description = param.isAnnotationPresent(McpToolArg.class)
-                    ? param.getAnnotation(McpToolArg.class).value()
-                    : "";
+            McpToolArg annotation = param.getAnnotation(McpToolArg.class);
+            String description = annotation != null ? annotation.value() : "";
+            boolean isRequired = annotation == null || annotation.required();
 
             properties.add(paramName, buildPropertySchema(param.getType(), description));
-            required.add(paramName);
+            if (isRequired) {
+                required.add(paramName);
+            }
         }
 
         return schema.add("properties", properties).add("required", required).build();

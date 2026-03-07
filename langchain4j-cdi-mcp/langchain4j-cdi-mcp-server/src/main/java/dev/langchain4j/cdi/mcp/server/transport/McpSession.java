@@ -9,10 +9,12 @@ public class McpSession {
     private final Instant createdAt;
     private final JsonObject clientCapabilities;
     private volatile boolean initialized;
+    private volatile Instant lastAccessedAt;
 
     public McpSession(String id, JsonObject clientCapabilities) {
         this.id = id;
         this.createdAt = Instant.now();
+        this.lastAccessedAt = this.createdAt;
         this.clientCapabilities = clientCapabilities;
         this.initialized = false;
     }
@@ -25,6 +27,10 @@ public class McpSession {
         return createdAt;
     }
 
+    public Instant getLastAccessedAt() {
+        return lastAccessedAt;
+    }
+
     public JsonObject getClientCapabilities() {
         return clientCapabilities;
     }
@@ -35,5 +41,10 @@ public class McpSession {
 
     public void markInitialized() {
         this.initialized = true;
+        touch();
+    }
+
+    public void touch() {
+        this.lastAccessedAt = Instant.now();
     }
 }

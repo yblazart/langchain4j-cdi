@@ -10,7 +10,7 @@ public class McpServerCapabilities {
 
     public static McpServerCapabilities withTools() {
         McpServerCapabilities capabilities = new McpServerCapabilities();
-        capabilities.tools = Map.of("listChanged", false);
+        capabilities.tools = Map.of("listChanged", true);
         return capabilities;
     }
 
