@@ -11,8 +11,24 @@ public class JsonRpcNotification {
         this.method = method;
     }
 
+    private Object params;
+
     public static JsonRpcNotification toolsListChanged() {
         return new JsonRpcNotification("notifications/tools/list_changed");
+    }
+
+    public static JsonRpcNotification resourcesListChanged() {
+        return new JsonRpcNotification("notifications/resources/list_changed");
+    }
+
+    public static JsonRpcNotification resourceUpdated(String uri) {
+        JsonRpcNotification notification = new JsonRpcNotification("notifications/resources/updated");
+        notification.params = java.util.Map.of("uri", uri);
+        return notification;
+    }
+
+    public static JsonRpcNotification promptsListChanged() {
+        return new JsonRpcNotification("notifications/prompts/list_changed");
     }
 
     public String getJsonrpc() {
@@ -29,5 +45,13 @@ public class JsonRpcNotification {
 
     public void setMethod(String method) {
         this.method = method;
+    }
+
+    public Object getParams() {
+        return params;
+    }
+
+    public void setParams(Object params) {
+        this.params = params;
     }
 }

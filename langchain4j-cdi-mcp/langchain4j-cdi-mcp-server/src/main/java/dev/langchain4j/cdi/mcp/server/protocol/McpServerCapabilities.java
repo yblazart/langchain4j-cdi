@@ -14,7 +14,7 @@ public class McpServerCapabilities {
     public static McpServerCapabilities full() {
         McpServerCapabilities capabilities = new McpServerCapabilities();
         capabilities.tools = Map.of("listChanged", true);
-        capabilities.resources = Map.of();
+        capabilities.resources = Map.of("subscribe", true, "listChanged", true);
         capabilities.prompts = Map.of("listChanged", true);
         capabilities.logging = Map.of();
         return capabilities;

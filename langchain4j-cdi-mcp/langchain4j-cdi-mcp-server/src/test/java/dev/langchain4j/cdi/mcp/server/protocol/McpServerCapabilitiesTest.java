@@ -13,6 +13,8 @@ class McpServerCapabilitiesTest {
         assertThat(caps.getTools()).isNotNull();
         assertThat(caps.getTools()).containsEntry("listChanged", true);
         assertThat(caps.getResources()).isNotNull();
+        assertThat(caps.getResources()).containsEntry("subscribe", true);
+        assertThat(caps.getResources()).containsEntry("listChanged", true);
         assertThat(caps.getPrompts()).isNotNull();
         assertThat(caps.getPrompts()).containsEntry("listChanged", true);
         assertThat(caps.getLogging()).isNotNull();

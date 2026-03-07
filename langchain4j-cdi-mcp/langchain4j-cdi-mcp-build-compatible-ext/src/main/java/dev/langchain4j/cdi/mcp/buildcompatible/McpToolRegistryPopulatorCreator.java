@@ -2,11 +2,13 @@ package dev.langchain4j.cdi.mcp.buildcompatible;
 
 import dev.langchain4j.cdi.mcp.server.McpPrompt;
 import dev.langchain4j.cdi.mcp.server.McpResource;
+import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
 import dev.langchain4j.cdi.mcp.server.McpTool;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptRegistry;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceRegistry;
+import dev.langchain4j.cdi.mcp.server.registry.McpResourceTemplateDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
 import jakarta.enterprise.inject.build.compatible.spi.Parameters;
@@ -19,6 +21,7 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
     private static final Logger LOGGER = Logger.getLogger(McpToolRegistryPopulatorCreator.class.getName());
     public static final String PARAM_TOOL_BEAN_CLASSES = "toolBeanClasses";
     public static final String PARAM_RESOURCE_BEAN_CLASSES = "resourceBeanClasses";
+    public static final String PARAM_RESOURCE_TEMPLATE_BEAN_CLASSES = "resourceTemplateBeanClasses";
     public static final String PARAM_PROMPT_BEAN_CLASSES = "promptBeanClasses";
 
     @Override
@@ -39,6 +42,13 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
             McpResourceDescriptor descriptor = McpResourceDescriptor.fromMethod(beanClass, method);
             resourceRegistry.register(descriptor);
             LOGGER.info("MCP: Registered resource '" + descriptor.getUri() + "' from " + beanClass.getSimpleName());
+        });
+
+        registerBeans(params, PARAM_RESOURCE_TEMPLATE_BEAN_CLASSES, McpResourceTemplate.class, (beanClass, method) -> {
+            McpResourceTemplateDescriptor descriptor = McpResourceTemplateDescriptor.fromMethod(beanClass, method);
+            resourceRegistry.registerTemplate(descriptor);
+            LOGGER.info("MCP: Registered resource template '" + descriptor.getUriTemplate() + "' from "
+                    + beanClass.getSimpleName());
         });
 
         registerBeans(params, PARAM_PROMPT_BEAN_CLASSES, McpPrompt.class, (beanClass, method) -> {

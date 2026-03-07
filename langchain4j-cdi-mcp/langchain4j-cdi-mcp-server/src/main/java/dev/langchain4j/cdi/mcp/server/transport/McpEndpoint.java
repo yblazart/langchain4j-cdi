@@ -7,13 +7,17 @@ import dev.langchain4j.cdi.mcp.server.logging.McpLogLevel;
 import dev.langchain4j.cdi.mcp.server.logging.McpLogger;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcResponse;
+import dev.langchain4j.cdi.mcp.server.protocol.McpCompletionResult;
 import dev.langchain4j.cdi.mcp.server.protocol.McpImplementation;
 import dev.langchain4j.cdi.mcp.server.protocol.McpInitializeResult;
+import dev.langchain4j.cdi.mcp.server.protocol.McpPagination;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptGetResult;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptMessage;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptWireFormat;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptsListResult;
 import dev.langchain4j.cdi.mcp.server.protocol.McpResourceReadResult;
+import dev.langchain4j.cdi.mcp.server.protocol.McpResourceTemplateWireFormat;
+import dev.langchain4j.cdi.mcp.server.protocol.McpResourceTemplatesListResult;
 import dev.langchain4j.cdi.mcp.server.protocol.McpResourceWireFormat;
 import dev.langchain4j.cdi.mcp.server.protocol.McpResourcesListResult;
 import dev.langchain4j.cdi.mcp.server.protocol.McpServerCapabilities;
@@ -24,6 +28,7 @@ import dev.langchain4j.cdi.mcp.server.registry.McpPromptDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptRegistry;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceRegistry;
+import dev.langchain4j.cdi.mcp.server.registry.McpResourceTemplateDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolInvoker;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
@@ -83,6 +88,9 @@ public class McpEndpoint {
     McpLogger mcpLogger;
 
     @Inject
+    McpResourceSubscriptionManager subscriptionManager;
+
+    @Inject
     @Named("mcp-server")
     Instance<McpServerConfig> configInstance;
 
@@ -107,10 +115,15 @@ public class McpEndpoint {
             case "tools/call" -> handleToolsCall(request, sessionId, wantsSse);
             case "resources/list" -> handleResourcesList(request, sessionId, wantsSse);
             case "resources/read" -> handleResourcesRead(request, sessionId, wantsSse);
+            case "resources/subscribe" -> handleResourcesSubscribe(request, sessionId);
+            case "resources/unsubscribe" -> handleResourcesUnsubscribe(request, sessionId);
+            case "resources/templates/list" -> handleResourcesTemplatesList(request, sessionId, wantsSse);
             case "prompts/list" -> handlePromptsList(request, sessionId, wantsSse);
             case "prompts/get" -> handlePromptsGet(request, sessionId, wantsSse);
+            case "completion/complete" -> handleCompletionComplete(request, sessionId, wantsSse);
             case "logging/setLevel" -> handleLoggingSetLevel(request, sessionId);
             case "ping" -> handlePing(request);
+            case "notifications/cancelled" -> handleNotificationsCancelled(request);
             default ->
                 throw new McpException(
                         request.getId(), McpErrorCode.METHOD_NOT_FOUND, "Unknown method: " + request.getMethod());
@@ -189,9 +202,12 @@ public class McpEndpoint {
     private Response handleToolsList(JsonRpcRequest request, String sessionId, boolean sse) {
         sessionManager.requireSession(request.getId(), sessionId);
 
-        McpToolsListResult result = new McpToolsListResult(toolRegistry.listTools().stream()
-                .map(McpToolDescriptor::toWireFormat)
-                .toList());
+        String cursor = extractCursor(request.getParams());
+        List<McpToolDescriptor> allTools = new java.util.ArrayList<>(toolRegistry.listTools());
+        McpPagination.Page<McpToolDescriptor> page = McpPagination.paginate(allTools, cursor);
+
+        McpToolsListResult result = new McpToolsListResult(
+                page.items().stream().map(McpToolDescriptor::toWireFormat).toList(), page.nextCursor());
 
         return respond(request.getId(), result, sse);
     }
@@ -232,9 +248,16 @@ public class McpEndpoint {
     private Response handleResourcesList(JsonRpcRequest request, String sessionId, boolean sse) {
         sessionManager.requireSession(request.getId(), sessionId);
 
-        McpResourcesListResult result = new McpResourcesListResult(resourceRegistry.listResources().stream()
-                .map(r -> new McpResourceWireFormat(r.getUri(), r.getName(), r.getDescription(), r.getMimeType()))
-                .toList());
+        String cursor = extractCursor(request.getParams());
+        List<McpResourceDescriptor> allResources = new java.util.ArrayList<>(resourceRegistry.listResources());
+        McpPagination.Page<McpResourceDescriptor> page = McpPagination.paginate(allResources, cursor);
+
+        McpResourcesListResult result = new McpResourcesListResult(
+                page.items().stream()
+                        .map(r ->
+                                new McpResourceWireFormat(r.getUri(), r.getName(), r.getDescription(), r.getMimeType()))
+                        .toList(),
+                page.nextCursor());
 
         return respond(request.getId(), result, sse);
     }
@@ -269,15 +292,21 @@ public class McpEndpoint {
     private Response handlePromptsList(JsonRpcRequest request, String sessionId, boolean sse) {
         sessionManager.requireSession(request.getId(), sessionId);
 
-        McpPromptsListResult result = new McpPromptsListResult(promptRegistry.listPrompts().stream()
-                .map(p -> new McpPromptWireFormat(
-                        p.getName(),
-                        p.getDescription(),
-                        p.getArguments().stream()
-                                .map(a -> new McpPromptWireFormat.McpPromptArgWireFormat(
-                                        a.name(), a.description(), a.required()))
-                                .toList()))
-                .toList());
+        String cursor = extractCursor(request.getParams());
+        List<McpPromptDescriptor> allPrompts = new java.util.ArrayList<>(promptRegistry.listPrompts());
+        McpPagination.Page<McpPromptDescriptor> page = McpPagination.paginate(allPrompts, cursor);
+
+        McpPromptsListResult result = new McpPromptsListResult(
+                page.items().stream()
+                        .map(p -> new McpPromptWireFormat(
+                                p.getName(),
+                                p.getDescription(),
+                                p.getArguments().stream()
+                                        .map(a -> new McpPromptWireFormat.McpPromptArgWireFormat(
+                                                a.name(), a.description(), a.required()))
+                                        .toList()))
+                        .toList(),
+                page.nextCursor());
 
         return respond(request.getId(), result, sse);
     }
@@ -315,6 +344,117 @@ public class McpEndpoint {
         } catch (McpException e) {
             throw new McpException(request.getId(), e.getErrorCode(), e.getMessage());
         }
+    }
+
+    // --- Resource Subscriptions ---
+
+    private Response handleResourcesSubscribe(JsonRpcRequest request, String sessionId) {
+        sessionManager.requireSession(request.getId(), sessionId);
+
+        JsonObject params = request.getParams();
+        String uri = params != null && params.containsKey("uri") ? params.getString("uri") : null;
+
+        if (uri == null) {
+            throw new McpException(request.getId(), McpErrorCode.INVALID_PARAMS, "Missing resource URI");
+        }
+
+        subscriptionManager.subscribe(sessionId, uri);
+
+        return Response.ok(serializeToJson(JsonRpcResponse.success(request.getId(), Map.of())))
+                .type(MediaType.APPLICATION_JSON)
+                .build();
+    }
+
+    private Response handleResourcesUnsubscribe(JsonRpcRequest request, String sessionId) {
+        sessionManager.requireSession(request.getId(), sessionId);
+
+        JsonObject params = request.getParams();
+        String uri = params != null && params.containsKey("uri") ? params.getString("uri") : null;
+
+        if (uri == null) {
+            throw new McpException(request.getId(), McpErrorCode.INVALID_PARAMS, "Missing resource URI");
+        }
+
+        subscriptionManager.unsubscribe(sessionId, uri);
+
+        return Response.ok(serializeToJson(JsonRpcResponse.success(request.getId(), Map.of())))
+                .type(MediaType.APPLICATION_JSON)
+                .build();
+    }
+
+    // --- Resource Templates ---
+
+    private Response handleResourcesTemplatesList(JsonRpcRequest request, String sessionId, boolean sse) {
+        sessionManager.requireSession(request.getId(), sessionId);
+
+        String cursor = extractCursor(request.getParams());
+        List<McpResourceTemplateDescriptor> allTemplates = new java.util.ArrayList<>(resourceRegistry.listTemplates());
+        McpPagination.Page<McpResourceTemplateDescriptor> page = McpPagination.paginate(allTemplates, cursor);
+
+        McpResourceTemplatesListResult result = new McpResourceTemplatesListResult(page.items().stream()
+                .map(t -> new McpResourceTemplateWireFormat(
+                        t.getUriTemplate(), t.getName(), t.getDescription(), t.getMimeType()))
+                .toList());
+        result.setNextCursor(page.nextCursor());
+
+        return respond(request.getId(), result, sse);
+    }
+
+    // --- Completion ---
+
+    private Response handleCompletionComplete(JsonRpcRequest request, String sessionId, boolean sse) {
+        sessionManager.requireSession(request.getId(), sessionId);
+
+        JsonObject params = request.getParams();
+        JsonObject ref = params != null && params.containsKey("ref") ? params.getJsonObject("ref") : null;
+
+        if (ref == null || !ref.containsKey("type")) {
+            throw new McpException(request.getId(), McpErrorCode.INVALID_PARAMS, "Missing completion ref");
+        }
+
+        String refType = ref.getString("type");
+        String refName = ref.containsKey("name") ? ref.getString("name") : null;
+        JsonObject argument = params.containsKey("argument") ? params.getJsonObject("argument") : null;
+        String argName = argument != null && argument.containsKey("name") ? argument.getString("name") : null;
+        String argValue = argument != null && argument.containsKey("value") ? argument.getString("value") : "";
+
+        McpCompletionResult result;
+        if ("ref/prompt".equals(refType) && refName != null && argName != null) {
+            result = completePromptArgument(refName, argName, argValue);
+        } else if ("ref/resource".equals(refType) && refName != null) {
+            result = completeResourceUri(refName, argValue);
+        } else {
+            result = McpCompletionResult.empty();
+        }
+
+        return respond(request.getId(), result, sse);
+    }
+
+    private McpCompletionResult completePromptArgument(String promptName, String argName, String prefix) {
+        return promptRegistry
+                .findPrompt(promptName)
+                .map(prompt -> {
+                    List<String> matchingArgs = prompt.getArguments().stream()
+                            .map(McpPromptDescriptor.PromptArgument::name)
+                            .filter(name -> name.startsWith(prefix))
+                            .toList();
+                    return McpCompletionResult.of(matchingArgs);
+                })
+                .orElse(McpCompletionResult.empty());
+    }
+
+    private McpCompletionResult completeResourceUri(String uriTemplatePrefix, String prefix) {
+        List<String> matchingUris = resourceRegistry.listResources().stream()
+                .map(McpResourceDescriptor::getUri)
+                .filter(uri -> uri.startsWith(prefix))
+                .toList();
+        return McpCompletionResult.of(matchingUris);
+    }
+
+    // --- Notifications ---
+
+    private Response handleNotificationsCancelled(JsonRpcRequest request) {
+        return Response.ok().build();
     }
 
     // --- Logging ---
@@ -364,6 +504,13 @@ public class McpEndpoint {
         return Response.ok(stream, MediaType.SERVER_SENT_EVENTS)
                 .header("Cache-Control", "no-cache")
                 .build();
+    }
+
+    private String extractCursor(JsonObject params) {
+        if (params != null && params.containsKey("cursor")) {
+            return params.getString("cursor");
+        }
+        return null;
     }
 
     private McpServerConfig resolveConfig() {

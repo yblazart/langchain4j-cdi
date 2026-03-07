@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.buildcompatible;
 
 import dev.langchain4j.cdi.mcp.server.McpPrompt;
 import dev.langchain4j.cdi.mcp.server.McpResource;
+import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
 import dev.langchain4j.cdi.mcp.server.McpTool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
@@ -19,6 +20,7 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
     private static final Logger LOGGER = Logger.getLogger(McpServerBuildCompatibleExtension.class.getName());
     private static final Set<String> detectedToolBeanClassNames = new HashSet<>();
     private static final Set<String> detectedResourceBeanClassNames = new HashSet<>();
+    private static final Set<String> detectedResourceTemplateBeanClassNames = new HashSet<>();
     private static final Set<String> detectedPromptBeanClassNames = new HashSet<>();
 
     @SuppressWarnings("unused")
@@ -37,6 +39,10 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
                 LOGGER.info("MCP: Detected @McpResource bean: " + clazz.getName());
                 detectedResourceBeanClassNames.add(clazz.getName());
             }
+            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpResourceTemplate.class))) {
+                LOGGER.info("MCP: Detected @McpResourceTemplate bean: " + clazz.getName());
+                detectedResourceTemplateBeanClassNames.add(clazz.getName());
+            }
             if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpPrompt.class))) {
                 LOGGER.info("MCP: Detected @McpPrompt bean: " + clazz.getName());
                 detectedPromptBeanClassNames.add(clazz.getName());
@@ -51,6 +57,7 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
     public void registerMcpBeans(SyntheticComponents syntheticComponents) {
         if (detectedToolBeanClassNames.isEmpty()
                 && detectedResourceBeanClassNames.isEmpty()
+                && detectedResourceTemplateBeanClassNames.isEmpty()
                 && detectedPromptBeanClassNames.isEmpty()) {
             LOGGER.info("MCP: No MCP beans detected during build");
             return;
@@ -71,6 +78,9 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
                 .withParam(
                         McpToolRegistryPopulatorCreator.PARAM_RESOURCE_BEAN_CLASSES,
                         detectedResourceBeanClassNames.toArray(new String[0]))
+                .withParam(
+                        McpToolRegistryPopulatorCreator.PARAM_RESOURCE_TEMPLATE_BEAN_CLASSES,
+                        detectedResourceTemplateBeanClassNames.toArray(new String[0]))
                 .withParam(
                         McpToolRegistryPopulatorCreator.PARAM_PROMPT_BEAN_CLASSES,
                         detectedPromptBeanClassNames.toArray(new String[0]));

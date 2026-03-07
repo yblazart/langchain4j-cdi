@@ -328,6 +328,107 @@ public class McpHelidonIntegrationTest {
         assertThat(body).contains("Invalid log level");
     }
 
+    // --- Resource Subscriptions ---
+
+    @Test
+    public void shouldSubscribeToResource() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":60,\"method\":\"resources/subscribe\",\"params\":{\"uri\":\"config://app\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("\"result\"");
+    }
+
+    @Test
+    public void shouldUnsubscribeFromResource() {
+        String sessionId = initializeSession();
+
+        // Subscribe first
+        injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":61,\"method\":\"resources/subscribe\",\"params\":{\"uri\":\"config://app\"}}"));
+
+        // Unsubscribe
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":62,\"method\":\"resources/unsubscribe\",\"params\":{\"uri\":\"config://app\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("\"result\"");
+    }
+
+    // --- Resource Templates ---
+
+    @Test
+    public void shouldListResourceTemplatesViaRawHttp() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(Entity.json(
+                        "{\"jsonrpc\":\"2.0\",\"id\":63,\"method\":\"resources/templates/list\",\"params\":{}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("resourceTemplates");
+    }
+
+    // --- Completion ---
+
+    @Test
+    public void shouldReturnEmptyCompletionForUnknownRef() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":64,\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"nonexistent\"},\"argument\":{\"name\":\"text\",\"value\":\"\"}}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("completion");
+        assertThat(body).contains("values");
+    }
+
+    // --- Notifications/cancelled ---
+
+    @Test
+    public void shouldAcknowledgeCancellation() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"abc\",\"reason\":\"timeout\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
     // --- Capabilities ---
 
     @Test
@@ -345,6 +446,7 @@ public class McpHelidonIntegrationTest {
         String body = response.readEntity(String.class);
         assertThat(body).contains("\"tools\"");
         assertThat(body).contains("\"resources\"");
+        assertThat(body).contains("\"subscribe\"");
         assertThat(body).contains("\"prompts\"");
         assertThat(body).contains("\"logging\"");
     }

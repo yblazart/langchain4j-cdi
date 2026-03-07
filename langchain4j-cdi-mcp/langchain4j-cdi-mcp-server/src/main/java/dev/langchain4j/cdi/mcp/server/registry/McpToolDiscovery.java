@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.McpPrompt;
 import dev.langchain4j.cdi.mcp.server.McpResource;
+import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
 import dev.langchain4j.cdi.mcp.server.McpTool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
@@ -62,6 +63,13 @@ public class McpToolDiscovery {
                     resourceRegistry.register(descriptor);
                     LOGGER.info(
                             "MCP: Registered resource '" + descriptor.getUri() + "' from " + beanClass.getSimpleName());
+                }
+                if (method.isAnnotationPresent(McpResourceTemplate.class)) {
+                    McpResourceTemplateDescriptor descriptor =
+                            McpResourceTemplateDescriptor.fromMethod(beanClass, method);
+                    resourceRegistry.registerTemplate(descriptor);
+                    LOGGER.info("MCP: Registered resource template '" + descriptor.getUriTemplate() + "' from "
+                            + beanClass.getSimpleName());
                 }
                 if (method.isAnnotationPresent(McpPrompt.class)) {
                     McpPromptDescriptor descriptor = McpPromptDescriptor.fromMethod(beanClass, method);

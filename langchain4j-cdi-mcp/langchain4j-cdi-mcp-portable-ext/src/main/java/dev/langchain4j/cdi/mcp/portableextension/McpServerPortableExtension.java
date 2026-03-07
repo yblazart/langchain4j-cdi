@@ -2,11 +2,13 @@ package dev.langchain4j.cdi.mcp.portableextension;
 
 import dev.langchain4j.cdi.mcp.server.McpPrompt;
 import dev.langchain4j.cdi.mcp.server.McpResource;
+import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
 import dev.langchain4j.cdi.mcp.server.McpTool;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptRegistry;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceRegistry;
+import dev.langchain4j.cdi.mcp.server.registry.McpResourceTemplateDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
 import jakarta.enterprise.event.Observes;
@@ -34,13 +36,20 @@ public class McpServerPortableExtension implements Extension {
         List<Method> resourceMethods = Arrays.stream(beanClass.getMethods())
                 .filter(m -> m.isAnnotationPresent(McpResource.class))
                 .toList();
+        List<Method> resourceTemplateMethods = Arrays.stream(beanClass.getMethods())
+                .filter(m -> m.isAnnotationPresent(McpResourceTemplate.class))
+                .toList();
         List<Method> promptMethods = Arrays.stream(beanClass.getMethods())
                 .filter(m -> m.isAnnotationPresent(McpPrompt.class))
                 .toList();
 
-        if (!toolMethods.isEmpty() || !resourceMethods.isEmpty() || !promptMethods.isEmpty()) {
+        if (!toolMethods.isEmpty()
+                || !resourceMethods.isEmpty()
+                || !resourceTemplateMethods.isEmpty()
+                || !promptMethods.isEmpty()) {
             LOGGER.info("MCP: Detected MCP annotations in " + beanClass.getName());
-            candidates.add(new McpToolCandidate(beanClass, toolMethods, resourceMethods, promptMethods));
+            candidates.add(new McpToolCandidate(
+                    beanClass, toolMethods, resourceMethods, resourceTemplateMethods, promptMethods));
         }
     }
 
@@ -68,6 +77,13 @@ public class McpServerPortableExtension implements Extension {
                 McpResourceDescriptor descriptor = McpResourceDescriptor.fromMethod(candidate.beanClass(), method);
                 resourceRegistry.register(descriptor);
                 LOGGER.info("MCP: Registered resource '" + descriptor.getUri() + "' from "
+                        + candidate.beanClass().getSimpleName());
+            }
+            for (Method method : candidate.resourceTemplateMethods()) {
+                McpResourceTemplateDescriptor descriptor =
+                        McpResourceTemplateDescriptor.fromMethod(candidate.beanClass(), method);
+                resourceRegistry.registerTemplate(descriptor);
+                LOGGER.info("MCP: Registered resource template '" + descriptor.getUriTemplate() + "' from "
                         + candidate.beanClass().getSimpleName());
             }
             for (Method method : candidate.promptMethods()) {
