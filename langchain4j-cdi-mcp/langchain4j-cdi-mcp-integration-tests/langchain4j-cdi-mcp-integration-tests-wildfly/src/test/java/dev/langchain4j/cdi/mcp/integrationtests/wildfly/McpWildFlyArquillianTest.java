@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.cdi.mcp.integrationtests.ConfigResource;
+import dev.langchain4j.cdi.mcp.integrationtests.GreetingTool;
+import dev.langchain4j.cdi.mcp.integrationtests.SummarizePrompt;
 import dev.langchain4j.cdi.mcp.integrationtests.WeatherTool;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
@@ -63,7 +66,13 @@ public class McpWildFlyArquillianTest {
                 .toArray(File[]::new);
 
         return ShrinkWrap.create(WebArchive.class, "mcp-test.war")
-                .addClasses(McpWildFlyArquillianTest.class, WeatherTool.class, JaxRsApplication.class)
+                .addClasses(
+                        McpWildFlyArquillianTest.class,
+                        WeatherTool.class,
+                        GreetingTool.class,
+                        ConfigResource.class,
+                        SummarizePrompt.class,
+                        JaxRsApplication.class)
                 .addAsLibraries(fixedDeps)
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
                 .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml")
@@ -90,9 +99,9 @@ public class McpWildFlyArquillianTest {
     public void shouldListToolsViaMcpClient() throws Exception {
         try (McpClient client = buildClient()) {
             List<ToolSpecification> tools = client.listTools();
-            assertThat(tools).hasSize(1);
-            assertThat(tools.get(0).name()).isEqualTo("getWeather");
-            assertThat(tools.get(0).description()).isEqualTo("Get the current weather for a given city");
+            assertThat(tools).hasSizeGreaterThanOrEqualTo(2);
+            List<String> toolNames = tools.stream().map(ToolSpecification::name).toList();
+            assertThat(toolNames).contains("getWeather", "greet");
         }
     }
 

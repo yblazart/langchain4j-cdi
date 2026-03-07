@@ -2,6 +2,11 @@ package dev.langchain4j.cdi.mcp.server.protocol;
 
 import jakarta.json.bind.annotation.JsonbTransient;
 
+/**
+ * Represents content in MCP protocol responses. Supports text, image (base64), and embedded resource types. Use the
+ * static factory methods {@link #text(String)}, {@link #image(String, String)}, and {@link #resource(String, String,
+ * String)} to create instances.
+ */
 public class McpContent {
 
     private String type;
