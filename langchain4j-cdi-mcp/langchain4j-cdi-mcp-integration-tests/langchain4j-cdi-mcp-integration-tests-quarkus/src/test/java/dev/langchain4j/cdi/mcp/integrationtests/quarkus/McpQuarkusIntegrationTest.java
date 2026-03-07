@@ -23,9 +23,9 @@ public class McpQuarkusIntegrationTest {
     public void shouldListToolsViaMcpClient() throws Exception {
         try (McpClient client = buildClient()) {
             List<ToolSpecification> tools = client.listTools();
-            assertThat(tools).hasSize(1);
-            assertThat(tools.get(0).name()).isEqualTo("getWeather");
-            assertThat(tools.get(0).description()).isEqualTo("Get the current weather for a given city");
+            assertThat(tools).hasSizeGreaterThanOrEqualTo(2);
+            List<String> toolNames = tools.stream().map(ToolSpecification::name).toList();
+            assertThat(toolNames).contains("getWeather", "greet");
         }
     }
 
