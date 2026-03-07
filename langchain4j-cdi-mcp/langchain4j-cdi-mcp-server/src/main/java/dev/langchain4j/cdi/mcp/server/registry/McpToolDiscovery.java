@@ -1,5 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
+import dev.langchain4j.cdi.mcp.server.McpPrompt;
+import dev.langchain4j.cdi.mcp.server.McpResource;
 import dev.langchain4j.cdi.mcp.server.McpTool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
@@ -19,20 +21,26 @@ public class McpToolDiscovery {
     private static final Logger LOGGER = Logger.getLogger(McpToolDiscovery.class.getName());
 
     @Inject
-    McpToolRegistry registry;
+    McpToolRegistry toolRegistry;
+
+    @Inject
+    McpResourceRegistry resourceRegistry;
+
+    @Inject
+    McpPromptRegistry promptRegistry;
 
     @Inject
     BeanManager beanManager;
 
     void onStartup(@Observes @Initialized(ApplicationScoped.class) Object event) {
-        if (registry.size() > 0) {
-            LOGGER.info("MCP: Tool registry already populated (" + registry.size() + " tools), skipping discovery");
+        if (toolRegistry.size() > 0) {
+            LOGGER.info("MCP: Tool registry already populated (" + toolRegistry.size() + " tools), skipping discovery");
             return;
         }
-        discoverToolsFromBeanManager();
+        discoverFromBeanManager();
     }
 
-    private void discoverToolsFromBeanManager() {
+    private void discoverFromBeanManager() {
         Set<Bean<?>> allBeans = new HashSet<>();
         allBeans.addAll(beanManager.getBeans(Object.class, Any.Literal.INSTANCE));
         allBeans.addAll(beanManager.getBeans(Object.class));
@@ -42,18 +50,32 @@ public class McpToolDiscovery {
             if (beanClass == null) {
                 continue;
             }
-            Arrays.stream(beanClass.getMethods())
-                    .filter(m -> m.isAnnotationPresent(McpTool.class))
-                    .forEach(method -> {
-                        McpToolDescriptor descriptor = McpToolDescriptor.fromMethod(beanClass, method);
-                        registry.register(descriptor);
-                        LOGGER.info("MCP: Registered tool '" + descriptor.getName() + "' from "
-                                + beanClass.getSimpleName());
-                    });
+            Arrays.stream(beanClass.getMethods()).forEach(method -> {
+                if (method.isAnnotationPresent(McpTool.class)) {
+                    McpToolDescriptor descriptor = McpToolDescriptor.fromMethod(beanClass, method);
+                    toolRegistry.register(descriptor);
+                    LOGGER.info(
+                            "MCP: Registered tool '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
+                }
+                if (method.isAnnotationPresent(McpResource.class)) {
+                    McpResourceDescriptor descriptor = McpResourceDescriptor.fromMethod(beanClass, method);
+                    resourceRegistry.register(descriptor);
+                    LOGGER.info(
+                            "MCP: Registered resource '" + descriptor.getUri() + "' from " + beanClass.getSimpleName());
+                }
+                if (method.isAnnotationPresent(McpPrompt.class)) {
+                    McpPromptDescriptor descriptor = McpPromptDescriptor.fromMethod(beanClass, method);
+                    promptRegistry.register(descriptor);
+                    LOGGER.info(
+                            "MCP: Registered prompt '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
+                }
+            });
         }
 
-        if (registry.size() > 0) {
-            LOGGER.info("MCP: Discovered " + registry.size() + " tool(s) via BeanManager scan");
+        int total = toolRegistry.size() + resourceRegistry.size() + promptRegistry.size();
+        if (total > 0) {
+            LOGGER.info("MCP: Discovered " + toolRegistry.size() + " tool(s), " + resourceRegistry.size()
+                    + " resource(s), " + promptRegistry.size() + " prompt(s) via BeanManager scan");
         }
     }
 }

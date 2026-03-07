@@ -182,6 +182,173 @@ public class McpHelidonIntegrationTest {
         assertThat(body).contains("Unknown method");
     }
 
+    // --- Resources ---
+
+    @Test
+    public void shouldListResourcesViaRawHttp() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(Entity.json("{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"resources/list\",\"params\":{}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("config://app");
+        assertThat(body).contains("data://status");
+        assertThat(body).contains("Application Config");
+    }
+
+    @Test
+    public void shouldReadResourceViaRawHttp() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"resources/read\",\"params\":{\"uri\":\"config://app\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("version");
+        assertThat(body).contains("config://app");
+    }
+
+    @Test
+    public void shouldReturnErrorForUnknownResource() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":22,\"method\":\"resources/read\",\"params\":{\"uri\":\"unknown://x\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("error");
+        assertThat(body).contains("Resource not found");
+    }
+
+    // --- Prompts ---
+
+    @Test
+    public void shouldListPromptsViaRawHttp() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(Entity.json("{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"prompts/list\",\"params\":{}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("summarize");
+        assertThat(body).contains("Summarize the given text");
+    }
+
+    @Test
+    public void shouldGetPromptViaRawHttp() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"prompts/get\",\"params\":{\"name\":\"summarize\",\"arguments\":{\"text\":\"Hello world\"}}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("Hello world");
+        assertThat(body).contains("messages");
+    }
+
+    @Test
+    public void shouldReturnErrorForUnknownPrompt() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"prompts/get\",\"params\":{\"name\":\"nonexistent\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("error");
+        assertThat(body).contains("Prompt not found");
+    }
+
+    // --- Logging ---
+
+    @Test
+    public void shouldSetLogLevel() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"warning\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("\"result\"");
+    }
+
+    @Test
+    public void shouldReturnErrorForInvalidLogLevel() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"logging/setLevel\",\"params\":{\"level\":\"banana\"}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("error");
+        assertThat(body).contains("Invalid log level");
+    }
+
+    // --- Capabilities ---
+
+    @Test
+    public void shouldDeclareAllCapabilities() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .post(
+                        Entity.json(
+                                "{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        String body = response.readEntity(String.class);
+        assertThat(body).contains("\"tools\"");
+        assertThat(body).contains("\"resources\"");
+        assertThat(body).contains("\"prompts\"");
+        assertThat(body).contains("\"logging\"");
+    }
+
     private String initializeSession() {
         Response initResponse = injectedTarget
                 .path("/mcp")
