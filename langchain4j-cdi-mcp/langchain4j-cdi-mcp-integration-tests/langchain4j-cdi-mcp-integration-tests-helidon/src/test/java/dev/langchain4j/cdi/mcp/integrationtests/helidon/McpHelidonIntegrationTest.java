@@ -429,6 +429,37 @@ public class McpHelidonIntegrationTest {
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
+    // --- Roots ---
+
+    @Test
+    public void shouldAcceptRootsListChangedNotification() {
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(Entity.json(
+                        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    public void shouldAcceptClientJsonRpcResponse() {
+        // Server should accept a JSON-RPC response (no method, has result)
+        // even though there is no pending request, it should not error
+        String sessionId = initializeSession();
+
+        Response response = injectedTarget
+                .path("/mcp")
+                .request(MediaType.APPLICATION_JSON)
+                .header("Mcp-Session-Id", sessionId)
+                .post(Entity.json("{\"jsonrpc\":\"2.0\",\"id\":\"server-999\",\"result\":{\"roots\":[]}}"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
     // --- Capabilities ---
 
     @Test

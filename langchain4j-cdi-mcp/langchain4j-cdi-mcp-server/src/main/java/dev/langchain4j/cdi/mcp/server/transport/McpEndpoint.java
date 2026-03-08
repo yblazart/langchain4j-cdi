@@ -91,6 +91,12 @@ public class McpEndpoint {
     McpResourceSubscriptionManager subscriptionManager;
 
     @Inject
+    McpServerRequestManager serverRequestManager;
+
+    @Inject
+    McpRootsManager rootsManager;
+
+    @Inject
     @Named("mcp-server")
     Instance<McpServerConfig> configInstance;
 
@@ -99,6 +105,11 @@ public class McpEndpoint {
     @Produces({MediaType.APPLICATION_JSON, MediaType.SERVER_SENT_EVENTS})
     public Response handlePost(
             String body, @HeaderParam("Mcp-Session-Id") String sessionId, @HeaderParam("Accept") String accept) {
+
+        // Check if this is a JSON-RPC response (from client, in reply to a server-initiated request)
+        if (isJsonRpcResponse(body)) {
+            return handleClientResponse(body);
+        }
 
         JsonRpcRequest request = parseRequest(body);
 
@@ -124,6 +135,7 @@ public class McpEndpoint {
             case "logging/setLevel" -> handleLoggingSetLevel(request, sessionId);
             case "ping" -> handlePing(request);
             case "notifications/cancelled" -> handleNotificationsCancelled(request);
+            case "notifications/roots/list_changed" -> handleRootsListChanged(request, sessionId);
             default ->
                 throw new McpException(
                         request.getId(), McpErrorCode.METHOD_NOT_FOUND, "Unknown method: " + request.getMethod());
@@ -457,6 +469,13 @@ public class McpEndpoint {
         return Response.ok().build();
     }
 
+    private Response handleRootsListChanged(JsonRpcRequest request, String sessionId) {
+        if (sessionId != null) {
+            rootsManager.onRootsChanged(sessionId);
+        }
+        return Response.ok().build();
+    }
+
     // --- Logging ---
 
     private Response handleLoggingSetLevel(JsonRpcRequest request, String sessionId) {
@@ -504,6 +523,31 @@ public class McpEndpoint {
         return Response.ok(stream, MediaType.SERVER_SENT_EVENTS)
                 .header("Cache-Control", "no-cache")
                 .build();
+    }
+
+    private boolean isJsonRpcResponse(String body) {
+        try (JsonReader reader = Json.createReader(new StringReader(body))) {
+            JsonObject json = reader.readObject();
+            return !json.containsKey("method") && (json.containsKey("result") || json.containsKey("error"));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private Response handleClientResponse(String body) {
+        try (JsonReader reader = Json.createReader(new StringReader(body))) {
+            JsonObject json = reader.readObject();
+            Object id = extractId(json);
+            if (json.containsKey("result")) {
+                JsonObject result = json.getJsonObject("result");
+                serverRequestManager.handleResponse(id, result);
+            } else if (json.containsKey("error")) {
+                JsonObject error = json.getJsonObject("error");
+                String message = error.containsKey("message") ? error.getString("message") : "Unknown error";
+                serverRequestManager.handleErrorResponse(id, message);
+            }
+        }
+        return Response.ok().build();
     }
 
     private String extractCursor(JsonObject params) {
