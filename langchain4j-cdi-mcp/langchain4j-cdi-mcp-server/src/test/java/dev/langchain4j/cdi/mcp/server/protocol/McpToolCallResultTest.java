@@ -13,7 +13,7 @@ class McpToolCallResultTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getType()).isEqualTo("text");
         assertThat(result.getContent().get(0).getText()).isEqualTo("Hello");
-        assertThat(result.isIsError()).isFalse();
+        assertThat(result.isError()).isFalse();
     }
 
     @Test
@@ -22,7 +22,7 @@ class McpToolCallResultTest {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getText()).isEqualTo("Something went wrong");
-        assertThat(result.isIsError()).isTrue();
+        assertThat(result.isError()).isTrue();
     }
 
     @Test
@@ -30,6 +30,6 @@ class McpToolCallResultTest {
         McpToolCallResult result = McpToolCallResult.empty();
 
         assertThat(result.getContent()).isEmpty();
-        assertThat(result.isIsError()).isFalse();
+        assertThat(result.isError()).isFalse();
     }
 }

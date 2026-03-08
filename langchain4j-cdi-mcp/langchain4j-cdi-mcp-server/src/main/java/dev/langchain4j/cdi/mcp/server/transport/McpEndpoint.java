@@ -242,7 +242,7 @@ public class McpEndpoint {
                 .orElseThrow(() -> new McpToolNotFoundException(request.getId(), toolName));
 
         try {
-            Object callResult = toolInvoker.invoke(tool, arguments);
+            Object callResult = toolInvoker.invoke(request.getId(), tool, arguments);
             McpToolCallResult result;
             if (callResult == null) {
                 result = McpToolCallResult.empty();
@@ -290,7 +290,7 @@ public class McpEndpoint {
                         new McpException(request.getId(), McpErrorCode.INVALID_PARAMS, "Resource not found: " + uri));
 
         try {
-            Object content = beanInvoker.invoke(resource.getBeanType(), resource.getMethod(), null);
+            Object content = beanInvoker.invoke(request.getId(), resource.getBeanType(), resource.getMethod(), null);
             String text = content != null ? content.toString() : "";
             McpResourceReadResult result = McpResourceReadResult.text(uri, resource.getMimeType(), text);
             return respond(request.getId(), result, sse);
@@ -342,7 +342,8 @@ public class McpEndpoint {
                         request.getId(), McpErrorCode.INVALID_PARAMS, "Prompt not found: " + promptName));
 
         try {
-            Object callResult = beanInvoker.invoke(prompt.getBeanType(), prompt.getMethod(), arguments);
+            Object callResult =
+                    beanInvoker.invoke(request.getId(), prompt.getBeanType(), prompt.getMethod(), arguments);
             McpPromptGetResult result;
             if (callResult instanceof List<?> messages) {
                 @SuppressWarnings("unchecked")

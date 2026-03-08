@@ -1,5 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.protocol;
 
+import jakarta.json.bind.annotation.JsonbProperty;
 import java.util.List;
 
 public class McpCompletionResult {
@@ -31,7 +32,10 @@ public class McpCompletionResult {
     public static class Completion {
 
         private List<String> values;
+
+        @JsonbProperty("hasMore")
         private boolean hasMore;
+
         private int total;
 
         public Completion() {}

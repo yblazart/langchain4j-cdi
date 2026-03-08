@@ -4,14 +4,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.langchain4j.cdi.mcp.server.error.McpSessionException;
+import java.lang.reflect.Field;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class McpSessionManagerEnhancedTest {
 
+    private static McpSessionManager createManager(Duration timeout) throws Exception {
+        McpSessionManager manager = new McpSessionManager(timeout);
+        setField(manager, "subscriptionManager", new McpResourceSubscriptionManager());
+        setField(manager, "rootsManager", new McpRootsManager());
+        return manager;
+    }
+
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        Field f = target.getClass().getDeclaredField(fieldName);
+        f.setAccessible(true);
+        f.set(target, value);
+    }
+
     @Test
-    void shouldExpireSessionAfterTimeout() throws InterruptedException {
-        McpSessionManager manager = new McpSessionManager(Duration.ofMillis(50));
+    void shouldExpireSessionAfterTimeout() throws Exception {
+        McpSessionManager manager = createManager(Duration.ofMillis(50));
         try {
             String sessionId = manager.createSession(null);
             assertThat(manager.activeSessionCount()).isEqualTo(1);
@@ -27,8 +41,8 @@ class McpSessionManagerEnhancedTest {
     }
 
     @Test
-    void shouldNotExpireActiveSession() throws InterruptedException {
-        McpSessionManager manager = new McpSessionManager(Duration.ofMillis(200));
+    void shouldNotExpireActiveSession() throws Exception {
+        McpSessionManager manager = createManager(Duration.ofMillis(200));
         try {
             String sessionId = manager.createSession(null);
 
@@ -45,8 +59,8 @@ class McpSessionManagerEnhancedTest {
     }
 
     @Test
-    void shouldCleanupMultipleExpiredSessions() throws InterruptedException {
-        McpSessionManager manager = new McpSessionManager(Duration.ofMillis(50));
+    void shouldCleanupMultipleExpiredSessions() throws Exception {
+        McpSessionManager manager = createManager(Duration.ofMillis(50));
         try {
             manager.createSession(null);
             manager.createSession(null);
@@ -62,8 +76,8 @@ class McpSessionManagerEnhancedTest {
     }
 
     @Test
-    void shouldUpdateLastAccessOnTouch() {
-        McpSessionManager manager = new McpSessionManager(Duration.ofMinutes(30));
+    void shouldUpdateLastAccessOnTouch() throws Exception {
+        McpSessionManager manager = createManager(Duration.ofMinutes(30));
         try {
             String sessionId = manager.createSession(null);
             McpSession session = manager.requireSession("req", sessionId);

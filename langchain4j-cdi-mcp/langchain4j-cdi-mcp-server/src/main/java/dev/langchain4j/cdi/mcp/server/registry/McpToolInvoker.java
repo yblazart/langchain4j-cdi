@@ -10,7 +10,7 @@ public class McpToolInvoker {
     @Inject
     McpBeanInvoker beanInvoker;
 
-    public Object invoke(McpToolDescriptor descriptor, JsonObject arguments) {
-        return beanInvoker.invoke(descriptor.getBeanType(), descriptor.getMethod(), arguments);
+    public Object invoke(Object requestId, McpToolDescriptor descriptor, JsonObject arguments) {
+        return beanInvoker.invoke(requestId, descriptor.getBeanType(), descriptor.getMethod(), arguments);
     }
 }

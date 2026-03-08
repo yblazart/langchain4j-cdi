@@ -1,17 +1,20 @@
 package dev.langchain4j.cdi.mcp.server.protocol;
 
+import jakarta.json.bind.annotation.JsonbProperty;
 import java.util.List;
 
 public class McpToolCallResult {
 
     private List<McpContent> content;
-    private boolean isError;
+
+    @JsonbProperty("isError")
+    private boolean error;
 
     public McpToolCallResult() {}
 
-    public McpToolCallResult(List<McpContent> content, boolean isError) {
+    public McpToolCallResult(List<McpContent> content, boolean error) {
         this.content = content;
-        this.isError = isError;
+        this.error = error;
     }
 
     public static McpToolCallResult text(String text) {
@@ -46,11 +49,11 @@ public class McpToolCallResult {
         this.content = content;
     }
 
-    public boolean isIsError() {
-        return isError;
+    public boolean isError() {
+        return error;
     }
 
-    public void setIsError(boolean isError) {
-        this.isError = isError;
+    public void setError(boolean error) {
+        this.error = error;
     }
 }

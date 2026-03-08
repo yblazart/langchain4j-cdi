@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.langchain4j.cdi.mcp.server.error.McpSessionException;
+import java.lang.reflect.Field;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -12,8 +13,16 @@ class McpSessionManagerTest {
     McpSessionManager manager;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         manager = new McpSessionManager();
+        setField(manager, "subscriptionManager", new McpResourceSubscriptionManager());
+        setField(manager, "rootsManager", new McpRootsManager());
+    }
+
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        Field f = target.getClass().getDeclaredField(fieldName);
+        f.setAccessible(true);
+        f.set(target, value);
     }
 
     @Test

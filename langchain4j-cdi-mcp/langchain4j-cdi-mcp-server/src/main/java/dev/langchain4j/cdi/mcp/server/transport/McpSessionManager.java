@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import dev.langchain4j.cdi.mcp.server.error.McpSessionException;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.json.JsonObject;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +24,12 @@ public class McpSessionManager {
     private final ConcurrentHashMap<String, McpSession> sessions = new ConcurrentHashMap<>();
     private final Duration sessionTimeout;
     private final ScheduledExecutorService cleanupExecutor;
+
+    @Inject
+    McpResourceSubscriptionManager subscriptionManager;
+
+    @Inject
+    McpRootsManager rootsManager;
 
     public McpSessionManager() {
         this(DEFAULT_SESSION_TIMEOUT);
@@ -62,6 +69,8 @@ public class McpSessionManager {
     public void terminateSession(String sessionId) {
         McpSession removed = sessions.remove(sessionId);
         if (removed != null) {
+            subscriptionManager.removeSession(sessionId);
+            rootsManager.removeSession(sessionId);
             LOGGER.fine("MCP: Session terminated: " + sessionId);
         }
     }
@@ -74,7 +83,10 @@ public class McpSessionManager {
         Instant cutoff = Instant.now().minus(sessionTimeout);
         sessions.entrySet().removeIf(entry -> {
             if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
-                LOGGER.info("MCP: Session expired: " + entry.getKey());
+                String sessionId = entry.getKey();
+                subscriptionManager.removeSession(sessionId);
+                rootsManager.removeSession(sessionId);
+                LOGGER.info("MCP: Session expired: " + sessionId);
                 return true;
             }
             return false;
