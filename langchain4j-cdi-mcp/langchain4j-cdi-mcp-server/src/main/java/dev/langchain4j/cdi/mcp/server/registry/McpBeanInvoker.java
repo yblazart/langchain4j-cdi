@@ -23,10 +23,11 @@ public class McpBeanInvoker {
     BeanManager beanManager;
 
     public Object invoke(Object requestId, Class<?> beanType, Method method, JsonObject arguments) {
-        Object instance = resolveCdiBean(requestId, beanType);
-        Object[] args = resolveArguments(method, arguments);
-
+        Bean<?> bean = resolveBean(requestId, beanType);
+        CreationalContext<?> ctx = beanManager.createCreationalContext(bean);
         try {
+            Object instance = beanManager.getReference(bean, beanType, ctx);
+            Object[] args = resolveArguments(method, arguments);
             return method.invoke(instance, args);
         } catch (InvocationTargetException e) {
             throw new McpException(
@@ -36,18 +37,18 @@ public class McpBeanInvoker {
                             + e.getCause().getMessage());
         } catch (IllegalAccessException e) {
             throw new McpException(requestId, McpErrorCode.INTERNAL_ERROR, "Invocation failed: " + method.getName());
+        } finally {
+            ctx.release();
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Object resolveCdiBean(Object requestId, Class<?> beanType) {
+    private Bean<?> resolveBean(Object requestId, Class<?> beanType) {
         Bean<?> bean = beanManager.resolve(beanManager.getBeans(beanType));
         if (bean == null) {
             throw new McpException(
                     requestId, McpErrorCode.INTERNAL_ERROR, "CDI bean not found for: " + beanType.getName());
         }
-        CreationalContext<?> ctx = beanManager.createCreationalContext(bean);
-        return beanManager.getReference(bean, beanType, ctx);
+        return bean;
     }
 
     private Object[] resolveArguments(Method method, JsonObject arguments) {
