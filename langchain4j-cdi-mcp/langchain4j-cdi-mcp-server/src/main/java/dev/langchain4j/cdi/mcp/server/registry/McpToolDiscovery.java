@@ -41,8 +41,8 @@ public class McpToolDiscovery {
 
     void onStartup(@Observes @Initialized(ApplicationScoped.class) Object event) {
         if (toolRegistry.size() > 0) {
-            LOGGER.info(() -> "MCP: Tool registry already populated (" + toolRegistry.size()
-                    + " tools), skipping discovery");
+            LOGGER.info(() ->
+                    "MCP: Tool registry already populated (" + toolRegistry.size() + " tools), skipping discovery");
             return;
         }
         discoverFromBeanManager();
@@ -73,18 +73,16 @@ public class McpToolDiscovery {
         if (method.isAnnotationPresent(Tool.class)) {
             McpToolDescriptor descriptor = McpToolDescriptor.fromMethod(beanClass, method);
             toolRegistry.register(descriptor);
-            LOGGER.info(() -> "MCP: Registered tool '" + descriptor.getName() + "' from "
-                    + beanClass.getSimpleName());
+            LOGGER.info(() -> "MCP: Registered tool '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
         }
         if (method.isAnnotationPresent(Resource.class)) {
             McpResourceDescriptor descriptor = McpResourceDescriptor.fromMethod(beanClass, method);
             resourceRegistry.register(descriptor);
-            LOGGER.info(() -> "MCP: Registered resource '" + descriptor.getUri() + "' from "
-                    + beanClass.getSimpleName());
+            LOGGER.info(
+                    () -> "MCP: Registered resource '" + descriptor.getUri() + "' from " + beanClass.getSimpleName());
         }
         if (method.isAnnotationPresent(ResourceTemplate.class)) {
-            McpResourceTemplateDescriptor descriptor =
-                    McpResourceTemplateDescriptor.fromMethod(beanClass, method);
+            McpResourceTemplateDescriptor descriptor = McpResourceTemplateDescriptor.fromMethod(beanClass, method);
             resourceRegistry.registerTemplate(descriptor);
             LOGGER.info(() -> "MCP: Registered resource template '" + descriptor.getUriTemplate() + "' from "
                     + beanClass.getSimpleName());
@@ -92,8 +90,8 @@ public class McpToolDiscovery {
         if (method.isAnnotationPresent(Prompt.class)) {
             McpPromptDescriptor descriptor = McpPromptDescriptor.fromMethod(beanClass, method);
             promptRegistry.register(descriptor);
-            LOGGER.info(() -> "MCP: Registered prompt '" + descriptor.getName() + "' from "
-                    + beanClass.getSimpleName());
+            LOGGER.info(
+                    () -> "MCP: Registered prompt '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
         }
     }
 }

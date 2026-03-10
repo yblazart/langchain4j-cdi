@@ -25,7 +25,8 @@
       "Bash(javac:*)",
       "Read(//private/tmp/**)",
       "Bash(jar xf /Users/yblazart/.m2/repository/dev/langchain4j/langchain4j-mcp/1.8.0-beta15/langchain4j-mcp-1.8.0-beta15-sources.jar dev/langchain4j/mcp/client/ToolExecutionHelper.java)",
-      "Bash(grep -l \"interface\\\\|abstract class\" /Users/yblazart/projects/perso/java-mcp-annotations/mcp-server-api/src/main/java/org/mcp_java/server/*.java)"
+      "Bash(grep -l \"interface\\\\|abstract class\" /Users/yblazart/projects/perso/java-mcp-annotations/mcp-server-api/src/main/java/org/mcp_java/server/*.java)",
+      "Bash(ls langchain4j-cdi-mcp/langchain4j-cdi-mcp-integration-tests/langchain4j-cdi-mcp-integration-tests-wildfly/target/surefire-reports/*.txt 2>/dev/null | head -5)"
     ],
     "deny": [],
     "ask": []

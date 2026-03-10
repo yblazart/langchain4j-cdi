@@ -11,8 +11,8 @@ class McpPromptMessageTest {
         McpPromptMessage msg = McpPromptMessage.user("Hello");
 
         assertThat(msg.getRole()).isEqualTo("user");
-        assertThat(msg.getContent().getType()).isEqualTo("text");
-        assertThat(msg.getContent().getText()).isEqualTo("Hello");
+        assertThat(msg.getContent().type()).isEqualTo("text");
+        assertThat(msg.getContent().text()).isEqualTo("Hello");
     }
 
     @Test
@@ -20,6 +20,6 @@ class McpPromptMessageTest {
         McpPromptMessage msg = McpPromptMessage.assistant("Hi there");
 
         assertThat(msg.getRole()).isEqualTo("assistant");
-        assertThat(msg.getContent().getText()).isEqualTo("Hi there");
+        assertThat(msg.getContent().text()).isEqualTo("Hi there");
     }
 }

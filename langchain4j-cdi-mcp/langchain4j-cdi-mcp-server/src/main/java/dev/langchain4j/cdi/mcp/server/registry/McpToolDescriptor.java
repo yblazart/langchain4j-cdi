@@ -1,6 +1,5 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
-import dev.langchain4j.cdi.mcp.server.protocol.McpToolWireFormat;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
 import jakarta.json.JsonObject;
 import java.lang.reflect.Method;
@@ -33,8 +32,8 @@ public class McpToolDescriptor {
                 toolName, toolDescription, JsonSchemaGenerator.fromMethod(method), beanClass, method);
     }
 
-    public McpToolWireFormat toWireFormat() {
-        return new McpToolWireFormat(name, description, inputSchema);
+    public org.mcp_java.model.tool.Tool toWireFormat() {
+        return new org.mcp_java.model.tool.Tool(name, null, description, inputSchema, null, null, null);
     }
 
     public String getName() {

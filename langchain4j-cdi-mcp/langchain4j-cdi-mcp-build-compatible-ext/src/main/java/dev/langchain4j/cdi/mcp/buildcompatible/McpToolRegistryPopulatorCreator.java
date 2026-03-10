@@ -42,8 +42,8 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
         registerBeans(params, PARAM_RESOURCE_BEAN_CLASSES, Resource.class, (beanClass, method) -> {
             McpResourceDescriptor descriptor = McpResourceDescriptor.fromMethod(beanClass, method);
             resourceRegistry.register(descriptor);
-            LOGGER.info(() -> "MCP: Registered resource '" + descriptor.getUri() + "' from "
-                    + beanClass.getSimpleName());
+            LOGGER.info(
+                    () -> "MCP: Registered resource '" + descriptor.getUri() + "' from " + beanClass.getSimpleName());
         });
 
         registerBeans(params, PARAM_RESOURCE_TEMPLATE_BEAN_CLASSES, ResourceTemplate.class, (beanClass, method) -> {

@@ -22,3 +22,6 @@ buildNumber.properties
 nb-configuration.xml
 
 /.vscode/*
+
+.settings/
+.claude/
