@@ -2,14 +2,14 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
 import org.junit.jupiter.api.Test;
+import org.mcp_java.annotations.resources.ResourceTemplate;
 
 class McpResourceTemplateDescriptorTest {
 
     @SuppressWarnings("unused")
     static class TestBean {
-        @McpResourceTemplate(
+        @ResourceTemplate(
                 uriTemplate = "user://{userId}/profile",
                 name = "User Profile",
                 description = "Get user profile",
@@ -18,7 +18,7 @@ class McpResourceTemplateDescriptorTest {
             return "{}";
         }
 
-        @McpResourceTemplate(uriTemplate = "file:///{path}")
+        @ResourceTemplate(uriTemplate = "file:///{path}")
         public String getFile(String path) {
             return "";
         }

@@ -1,13 +1,15 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
-import dev.langchain4j.cdi.mcp.server.McpPrompt;
-import dev.langchain4j.cdi.mcp.server.McpPromptArg;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
+import org.mcp_java.annotations.prompts.Prompt;
+import org.mcp_java.annotations.prompts.PromptArg;
 
 public class McpPromptDescriptor {
+
+    private static final String DEFAULT_NAME = "<<element name>>";
 
     private final String name;
     private final String description;
@@ -25,18 +27,18 @@ public class McpPromptDescriptor {
     }
 
     public static McpPromptDescriptor fromMethod(Class<?> beanClass, Method method) {
-        McpPrompt annotation = method.getAnnotation(McpPrompt.class);
-        String name = annotation.name().isEmpty() ? method.getName() : annotation.name();
+        Prompt annotation = method.getAnnotation(Prompt.class);
+        String name = DEFAULT_NAME.equals(annotation.name()) ? method.getName() : annotation.name();
 
         List<PromptArgument> args = new ArrayList<>();
         for (Parameter param : method.getParameters()) {
-            McpPromptArg argAnnotation = param.getAnnotation(McpPromptArg.class);
-            String argDescription = argAnnotation != null ? argAnnotation.value() : "";
+            PromptArg argAnnotation = param.getAnnotation(PromptArg.class);
+            String argDescription = argAnnotation != null ? argAnnotation.description() : "";
             boolean required = argAnnotation == null || argAnnotation.required();
             args.add(new PromptArgument(param.getName(), argDescription, required));
         }
 
-        return new McpPromptDescriptor(name, annotation.value(), args, beanClass, method);
+        return new McpPromptDescriptor(name, annotation.description(), args, beanClass, method);
     }
 
     public String getName() {

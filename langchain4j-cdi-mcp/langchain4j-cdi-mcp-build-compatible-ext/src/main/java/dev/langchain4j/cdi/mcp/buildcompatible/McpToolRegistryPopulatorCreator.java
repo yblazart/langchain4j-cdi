@@ -1,9 +1,5 @@
 package dev.langchain4j.cdi.mcp.buildcompatible;
 
-import dev.langchain4j.cdi.mcp.server.McpPrompt;
-import dev.langchain4j.cdi.mcp.server.McpResource;
-import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
-import dev.langchain4j.cdi.mcp.server.McpTool;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptDescriptor;
 import dev.langchain4j.cdi.mcp.server.registry.McpPromptRegistry;
 import dev.langchain4j.cdi.mcp.server.registry.McpResourceDescriptor;
@@ -15,6 +11,10 @@ import jakarta.enterprise.inject.build.compatible.spi.Parameters;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import java.util.Arrays;
 import java.util.logging.Logger;
+import org.mcp_java.annotations.prompts.Prompt;
+import org.mcp_java.annotations.resources.Resource;
+import org.mcp_java.annotations.resources.ResourceTemplate;
+import org.mcp_java.annotations.tools.Tool;
 
 public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<McpToolRegistryPopulator> {
 
@@ -25,6 +25,7 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
     public static final String PARAM_PROMPT_BEAN_CLASSES = "promptBeanClasses";
 
     @Override
+    @SuppressWarnings("java:S1192")
     public McpToolRegistryPopulator create(jakarta.enterprise.inject.Instance<Object> lookup, Parameters params) {
         McpToolRegistry toolRegistry = lookup.select(McpToolRegistry.class).get();
         McpResourceRegistry resourceRegistry =
@@ -32,33 +33,35 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
         McpPromptRegistry promptRegistry =
                 lookup.select(McpPromptRegistry.class).get();
 
-        registerBeans(params, PARAM_TOOL_BEAN_CLASSES, McpTool.class, (beanClass, method) -> {
+        registerBeans(params, PARAM_TOOL_BEAN_CLASSES, Tool.class, (beanClass, method) -> {
             McpToolDescriptor descriptor = McpToolDescriptor.fromMethod(beanClass, method);
             toolRegistry.register(descriptor);
-            LOGGER.info("MCP: Registered tool '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
+            LOGGER.info(() -> "MCP: Registered tool '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
         });
 
-        registerBeans(params, PARAM_RESOURCE_BEAN_CLASSES, McpResource.class, (beanClass, method) -> {
+        registerBeans(params, PARAM_RESOURCE_BEAN_CLASSES, Resource.class, (beanClass, method) -> {
             McpResourceDescriptor descriptor = McpResourceDescriptor.fromMethod(beanClass, method);
             resourceRegistry.register(descriptor);
-            LOGGER.info("MCP: Registered resource '" + descriptor.getUri() + "' from " + beanClass.getSimpleName());
-        });
-
-        registerBeans(params, PARAM_RESOURCE_TEMPLATE_BEAN_CLASSES, McpResourceTemplate.class, (beanClass, method) -> {
-            McpResourceTemplateDescriptor descriptor = McpResourceTemplateDescriptor.fromMethod(beanClass, method);
-            resourceRegistry.registerTemplate(descriptor);
-            LOGGER.info("MCP: Registered resource template '" + descriptor.getUriTemplate() + "' from "
+            LOGGER.info(() -> "MCP: Registered resource '" + descriptor.getUri() + "' from "
                     + beanClass.getSimpleName());
         });
 
-        registerBeans(params, PARAM_PROMPT_BEAN_CLASSES, McpPrompt.class, (beanClass, method) -> {
-            McpPromptDescriptor descriptor = McpPromptDescriptor.fromMethod(beanClass, method);
-            promptRegistry.register(descriptor);
-            LOGGER.info("MCP: Registered prompt '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
+        registerBeans(params, PARAM_RESOURCE_TEMPLATE_BEAN_CLASSES, ResourceTemplate.class, (beanClass, method) -> {
+            McpResourceTemplateDescriptor descriptor = McpResourceTemplateDescriptor.fromMethod(beanClass, method);
+            resourceRegistry.registerTemplate(descriptor);
+            LOGGER.info(() -> "MCP: Registered resource template '" + descriptor.getUriTemplate() + "' from "
+                    + beanClass.getSimpleName());
         });
 
-        LOGGER.info("MCP: Registered " + toolRegistry.size() + " tool(s), " + resourceRegistry.size() + " resource(s), "
-                + promptRegistry.size() + " prompt(s) via build-compatible extension");
+        registerBeans(params, PARAM_PROMPT_BEAN_CLASSES, Prompt.class, (beanClass, method) -> {
+            McpPromptDescriptor descriptor = McpPromptDescriptor.fromMethod(beanClass, method);
+            promptRegistry.register(descriptor);
+            LOGGER.info(
+                    () -> "MCP: Registered prompt '" + descriptor.getName() + "' from " + beanClass.getSimpleName());
+        });
+
+        LOGGER.info(() -> "MCP: Registered " + toolRegistry.size() + " tool(s), " + resourceRegistry.size()
+                + " resource(s), " + promptRegistry.size() + " prompt(s) via build-compatible extension");
 
         return new McpToolRegistryPopulator();
     }
@@ -80,7 +83,7 @@ public class McpToolRegistryPopulatorCreator implements SyntheticBeanCreator<Mcp
                         .filter(m -> m.isAnnotationPresent(annotation))
                         .forEach(method -> registrar.register(beanClass, method));
             } catch (ClassNotFoundException e) {
-                LOGGER.warning("MCP: Could not load bean class: " + className);
+                LOGGER.warning(() -> "MCP: Could not load bean class: " + className);
             }
         }
     }

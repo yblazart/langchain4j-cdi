@@ -1,6 +1,5 @@
 package dev.langchain4j.cdi.mcp.server.schema;
 
-import dev.langchain4j.cdi.mcp.server.McpToolArg;
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
@@ -9,8 +8,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.Set;
+import org.mcp_java.annotations.tools.ToolArg;
 
 public class JsonSchemaGenerator {
+
+    private static final String DEFAULT_NAME = "<<element name>>";
 
     private JsonSchemaGenerator() {}
 
@@ -21,8 +23,8 @@ public class JsonSchemaGenerator {
 
         for (Parameter param : method.getParameters()) {
             String paramName = resolveParamName(param);
-            McpToolArg annotation = param.getAnnotation(McpToolArg.class);
-            String description = annotation != null ? annotation.value() : "";
+            ToolArg annotation = param.getAnnotation(ToolArg.class);
+            String description = annotation != null ? annotation.description() : "";
             boolean isRequired = annotation == null || annotation.required();
 
             properties.add(paramName, buildPropertySchema(param.getType(), description));
@@ -35,8 +37,9 @@ public class JsonSchemaGenerator {
     }
 
     private static String resolveParamName(Parameter param) {
-        if (param.isAnnotationPresent(McpToolArg.class)) {
-            // @McpToolArg value is the description, the param name comes from reflection
+        ToolArg annotation = param.getAnnotation(ToolArg.class);
+        if (annotation != null && !DEFAULT_NAME.equals(annotation.name())) {
+            return annotation.name();
         }
         return param.getName();
     }

@@ -1,9 +1,5 @@
 package dev.langchain4j.cdi.mcp.buildcompatible;
 
-import dev.langchain4j.cdi.mcp.server.McpPrompt;
-import dev.langchain4j.cdi.mcp.server.McpResource;
-import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
-import dev.langchain4j.cdi.mcp.server.McpTool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
@@ -14,6 +10,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Logger;
+import org.mcp_java.annotations.prompts.Prompt;
+import org.mcp_java.annotations.resources.Resource;
+import org.mcp_java.annotations.resources.ResourceTemplate;
+import org.mcp_java.annotations.tools.Tool;
 
 public class McpServerBuildCompatibleExtension implements BuildCompatibleExtension {
 
@@ -31,20 +31,20 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
                     .getContextClassLoader()
                     .loadClass(classConfig.info().name());
 
-            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpTool.class))) {
-                LOGGER.info("MCP: Detected @McpTool bean: " + clazz.getName());
+            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(Tool.class))) {
+                LOGGER.info(() -> "MCP: Detected @Tool bean: " + clazz.getName());
                 detectedToolBeanClassNames.add(clazz.getName());
             }
-            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpResource.class))) {
-                LOGGER.info("MCP: Detected @McpResource bean: " + clazz.getName());
+            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(Resource.class))) {
+                LOGGER.info(() -> "MCP: Detected @Resource bean: " + clazz.getName());
                 detectedResourceBeanClassNames.add(clazz.getName());
             }
-            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpResourceTemplate.class))) {
-                LOGGER.info("MCP: Detected @McpResourceTemplate bean: " + clazz.getName());
+            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(ResourceTemplate.class))) {
+                LOGGER.info(() -> "MCP: Detected @ResourceTemplate bean: " + clazz.getName());
                 detectedResourceTemplateBeanClassNames.add(clazz.getName());
             }
-            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(McpPrompt.class))) {
-                LOGGER.info("MCP: Detected @McpPrompt bean: " + clazz.getName());
+            if (Arrays.stream(clazz.getMethods()).anyMatch(m -> m.isAnnotationPresent(Prompt.class))) {
+                LOGGER.info(() -> "MCP: Detected @Prompt bean: " + clazz.getName());
                 detectedPromptBeanClassNames.add(clazz.getName());
             }
         } catch (ClassNotFoundException e) {
@@ -59,11 +59,11 @@ public class McpServerBuildCompatibleExtension implements BuildCompatibleExtensi
                 && detectedResourceBeanClassNames.isEmpty()
                 && detectedResourceTemplateBeanClassNames.isEmpty()
                 && detectedPromptBeanClassNames.isEmpty()) {
-            LOGGER.info("MCP: No MCP beans detected during build");
+            LOGGER.info(() -> "MCP: No MCP beans detected during build");
             return;
         }
 
-        LOGGER.info("MCP: Synthesizing McpRegistryPopulator with " + detectedToolBeanClassNames.size()
+        LOGGER.info(() -> "MCP: Synthesizing McpRegistryPopulator with " + detectedToolBeanClassNames.size()
                 + " tool(s), " + detectedResourceBeanClassNames.size() + " resource(s), "
                 + detectedPromptBeanClassNames.size() + " prompt(s)");
 

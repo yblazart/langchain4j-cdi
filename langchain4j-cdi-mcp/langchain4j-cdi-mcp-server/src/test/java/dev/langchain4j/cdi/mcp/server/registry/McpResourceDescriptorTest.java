@@ -2,17 +2,17 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.langchain4j.cdi.mcp.server.McpResource;
 import org.junit.jupiter.api.Test;
+import org.mcp_java.annotations.resources.Resource;
 
 class McpResourceDescriptorTest {
 
-    @McpResource(uri = "data://config", name = "Config", description = "App config", mimeType = "application/json")
+    @Resource(uri = "data://config", name = "Config", description = "App config", mimeType = "application/json")
     public String getConfig() {
         return "{}";
     }
 
-    @McpResource(uri = "data://status")
+    @Resource(uri = "data://status")
     public String getStatus() {
         return "ok";
     }

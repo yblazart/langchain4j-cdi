@@ -1,9 +1,11 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
-import dev.langchain4j.cdi.mcp.server.McpResourceTemplate;
 import java.lang.reflect.Method;
+import org.mcp_java.annotations.resources.ResourceTemplate;
 
 public class McpResourceTemplateDescriptor {
+
+    private static final String DEFAULT_NAME = "<<element name>>";
 
     private final String uriTemplate;
     private final String name;
@@ -23,10 +25,11 @@ public class McpResourceTemplateDescriptor {
     }
 
     public static McpResourceTemplateDescriptor fromMethod(Class<?> beanClass, Method method) {
-        McpResourceTemplate annotation = method.getAnnotation(McpResourceTemplate.class);
-        String name = annotation.name().isEmpty() ? method.getName() : annotation.name();
+        ResourceTemplate annotation = method.getAnnotation(ResourceTemplate.class);
+        String name = DEFAULT_NAME.equals(annotation.name()) ? method.getName() : annotation.name();
+        String mimeType = annotation.mimeType().isEmpty() ? "text/plain" : annotation.mimeType();
         return new McpResourceTemplateDescriptor(
-                annotation.uriTemplate(), name, annotation.description(), annotation.mimeType(), beanClass, method);
+                annotation.uriTemplate(), name, annotation.description(), mimeType, beanClass, method);
     }
 
     public String getUriTemplate() {

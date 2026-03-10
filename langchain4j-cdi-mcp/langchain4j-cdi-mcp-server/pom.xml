@@ -12,6 +12,13 @@
     <name>Langchain4J CDI: MCP Server Core</name>
 
     <dependencies>
+        <!-- MCP Common Annotations -->
+        <dependency>
+            <groupId>org.mcp-java</groupId>
+            <artifactId>mcp-annotations</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Jakarta EE APIs - provided -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>

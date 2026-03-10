@@ -1,12 +1,12 @@
 package dev.langchain4j.cdi.mcp.integrationtests;
 
-import dev.langchain4j.cdi.mcp.server.McpResource;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.mcp_java.annotations.resources.Resource;
 
 @ApplicationScoped
 public class ConfigResource {
 
-    @McpResource(
+    @Resource(
             uri = "config://app",
             name = "Application Config",
             description = "Current application configuration",
@@ -15,7 +15,7 @@ public class ConfigResource {
         return "{\"version\":\"1.0\",\"env\":\"test\"}";
     }
 
-    @McpResource(uri = "data://status", name = "Status", description = "Server status")
+    @Resource(uri = "data://status", name = "Status", description = "Server status")
     public String getStatus() {
         return "running";
     }

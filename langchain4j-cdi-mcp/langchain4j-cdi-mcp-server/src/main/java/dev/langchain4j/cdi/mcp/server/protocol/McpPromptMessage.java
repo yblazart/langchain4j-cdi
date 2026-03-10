@@ -2,7 +2,7 @@ package dev.langchain4j.cdi.mcp.server.protocol;
 
 /**
  * A message within an MCP prompt response. Each message has a role ("user" or "assistant") and content. Can be returned
- * from {@link dev.langchain4j.cdi.mcp.server.McpPrompt @McpPrompt} methods as {@code List<McpPromptMessage>}.
+ * from {@link org.mcp_java.annotations.prompts.Prompt @Prompt} methods as {@code List<McpPromptMessage>}.
  */
 public class McpPromptMessage {
 

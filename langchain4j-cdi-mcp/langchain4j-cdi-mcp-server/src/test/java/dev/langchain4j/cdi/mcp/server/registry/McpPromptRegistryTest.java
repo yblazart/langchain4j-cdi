@@ -2,21 +2,21 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.langchain4j.cdi.mcp.server.McpPrompt;
-import dev.langchain4j.cdi.mcp.server.McpPromptArg;
 import org.junit.jupiter.api.Test;
+import org.mcp_java.annotations.prompts.Prompt;
+import org.mcp_java.annotations.prompts.PromptArg;
 
 class McpPromptRegistryTest {
 
-    @McpPrompt("Summarize text")
-    public String summarize(@McpPromptArg("The text to summarize") String text) {
+    @Prompt(description = "Summarize text")
+    public String summarize(@PromptArg(description = "The text to summarize") String text) {
         return "Summary of: " + text;
     }
 
-    @McpPrompt("Translate text")
+    @Prompt(description = "Translate text")
     public String translate(
-            @McpPromptArg("The text to translate") String text,
-            @McpPromptArg(value = "Target language", required = false) String language) {
+            @PromptArg(description = "The text to translate") String text,
+            @PromptArg(description = "Target language", required = false) String language) {
         return "Translated: " + text;
     }
 

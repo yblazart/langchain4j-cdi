@@ -1,14 +1,14 @@
 package dev.langchain4j.cdi.mcp.integrationtests;
 
-import dev.langchain4j.cdi.mcp.server.McpPrompt;
-import dev.langchain4j.cdi.mcp.server.McpPromptArg;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.mcp_java.annotations.prompts.Prompt;
+import org.mcp_java.annotations.prompts.PromptArg;
 
 @ApplicationScoped
 public class SummarizePrompt {
 
-    @McpPrompt("Summarize the given text")
-    public String summarize(@McpPromptArg("The text to summarize") String text) {
+    @Prompt(description = "Summarize the given text")
+    public String summarize(@PromptArg(description = "The text to summarize") String text) {
         return "Please summarize the following text:\n\n" + text;
     }
 }

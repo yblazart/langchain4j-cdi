@@ -1,9 +1,11 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
-import dev.langchain4j.cdi.mcp.server.McpResource;
 import java.lang.reflect.Method;
+import org.mcp_java.annotations.resources.Resource;
 
 public class McpResourceDescriptor {
+
+    private static final String DEFAULT_NAME = "<<element name>>";
 
     private final String uri;
     private final String name;
@@ -23,10 +25,10 @@ public class McpResourceDescriptor {
     }
 
     public static McpResourceDescriptor fromMethod(Class<?> beanClass, Method method) {
-        McpResource annotation = method.getAnnotation(McpResource.class);
-        String name = annotation.name().isEmpty() ? method.getName() : annotation.name();
-        return new McpResourceDescriptor(
-                annotation.uri(), name, annotation.description(), annotation.mimeType(), beanClass, method);
+        Resource annotation = method.getAnnotation(Resource.class);
+        String name = DEFAULT_NAME.equals(annotation.name()) ? method.getName() : annotation.name();
+        String mimeType = annotation.mimeType().isEmpty() ? "text/plain" : annotation.mimeType();
+        return new McpResourceDescriptor(annotation.uri(), name, annotation.description(), mimeType, beanClass, method);
     }
 
     public String getUri() {
