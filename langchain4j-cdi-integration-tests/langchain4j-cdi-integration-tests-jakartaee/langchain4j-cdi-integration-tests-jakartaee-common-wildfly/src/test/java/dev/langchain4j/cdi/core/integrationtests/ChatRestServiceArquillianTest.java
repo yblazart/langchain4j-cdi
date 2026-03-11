@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.langchain4j.cdi.integrationtests.ChatAiService;
 import dev.langchain4j.cdi.integrationtests.ChatRestService;
+import dev.langchain4j.cdi.integrationtests.GuardrailChatAiService;
+import dev.langchain4j.cdi.integrationtests.GuardrailChatRestService;
+import dev.langchain4j.cdi.integrationtests.NoEmptyMessageInputGuardrail;
+import dev.langchain4j.cdi.integrationtests.PassThroughOutputGuardrail;
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
 import jakarta.ws.rs.client.Entity;
@@ -65,6 +69,10 @@ public class ChatRestServiceArquillianTest {
                         ChatRestServiceArquillianTest.class,
                         ChatAiService.class,
                         ChatRestService.class,
+                        GuardrailChatAiService.class,
+                        GuardrailChatRestService.class,
+                        NoEmptyMessageInputGuardrail.class,
+                        PassThroughOutputGuardrail.class,
                         JaxRsApplication.class,
                         DummyLLConfig.class,
                         ChatModelMock.class,
@@ -112,6 +120,36 @@ public class ChatRestServiceArquillianTest {
             assertThat(response.getStatus()).isEqualTo(200);
             String result = response.readEntity(String.class);
             assertThat(result).isNotNull().isEqualTo("ok EmbeddingStoreTextSegment{}");
+        }
+    }
+
+    @Test
+    public void testGuardrailChatWithValidMessage() {
+        String chatEndpoint = baseURL + "guarded-chat";
+        try (Client client = ClientBuilder.newClient()) {
+            WebTarget target = client.target(chatEndpoint);
+
+            String question = "What is the meaning of life?";
+            Response response = target.request(MediaType.APPLICATION_JSON)
+                    .post(Entity.entity(question, MediaType.APPLICATION_JSON));
+
+            assertThat(response.getStatus()).isEqualTo(200);
+            String result = response.readEntity(String.class);
+            // Jakarta EE ChatModelMock includes embeddingStore in response (configured via llm-config.properties)
+            assertThat(result).isNotNull().isEqualTo("ok EmbeddingStoreTextSegment{}");
+        }
+    }
+
+    @Test
+    public void testGuardrailChatWithEmptyMessage() {
+        String chatEndpoint = baseURL + "guarded-chat";
+        try (Client client = ClientBuilder.newClient()) {
+            WebTarget target = client.target(chatEndpoint);
+
+            Response response =
+                    target.request(MediaType.APPLICATION_JSON).post(Entity.entity("", MediaType.APPLICATION_JSON));
+
+            assertThat(response.getStatus()).isEqualTo(400);
         }
     }
 }

@@ -1,6 +1,8 @@
 package dev.langchain4j.cdi.aiservice;
 
 import dev.langchain4j.cdi.spi.RegisterAIService;
+import dev.langchain4j.guardrail.InputGuardrail;
+import dev.langchain4j.guardrail.OutputGuardrail;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.ChatModel;
@@ -23,7 +25,8 @@ import java.util.logging.Logger;
  * <p>The method create() inspects the provided service interface for @RegisterAIService and tries to resolve optional
  * collaborating beans from the CDI container (by name or default): - ChatModel or StreamingChatModel - ContentRetriever
  * or RetrievalAugmentor (RetrievalAugmentor has priority) - ToolProvider, or if missing, instantiate tools classes
- * declared in the annotation via no-arg constructors - ChatMemory or ChatMemoryProvider - ModerationModel
+ * declared in the annotation via no-arg constructors - ChatMemory or ChatMemoryProvider - ModerationModel -
+ * InputGuardrails and OutputGuardrails (by class or named CDI beans)
  *
  * <p>Only the components that are resolvable are wired into the AiServices builder.
  */
@@ -92,7 +95,8 @@ public class CommonAIServiceCreator {
                 } catch (ReflectiveOperationException | IllegalArgumentException ex) {
                     LOGGER.log(
                             Level.SEVERE,
-                            "Can't add toolClass " + toolClass + " for " + interfaceClass + " : " + ex.getMessage(),
+                            "Failed to create tool " + toolClass + " for " + interfaceClass + ", skipping: "
+                                    + ex.getMessage(),
                             ex);
                 }
             }
@@ -118,7 +122,39 @@ public class CommonAIServiceCreator {
             LOGGER.fine("ModerationModel " + moderationModelInstance.get());
             builder.moderationModel(moderationModelInstance.get());
         }
-
+        List<InputGuardrail> inputGuardrails = new ArrayList<>();
+        if (annotation.inputGuardrails().length > 0 && annotation.inputGuardrailNames().length > 0) {
+            LOGGER.log(
+                    Level.WARNING,
+                    "Both inputGuardrails and inputGuardrailNames specified for {0}. Using inputGuardrails classes and ignoring inputGuardrailNames.",
+                    interfaceClass.getName());
+        }
+        if (annotation.inputGuardrails().length > 0) {
+            inputGuardrails.addAll(resolveGuardrails(lookup, annotation.inputGuardrails()));
+        } else if (annotation.inputGuardrailNames().length > 0) {
+            inputGuardrails.addAll(resolveGuardrails(lookup, InputGuardrail.class, annotation.inputGuardrailNames()));
+        }
+        if (!inputGuardrails.isEmpty()) {
+            LOGGER.fine("InputGuardrails " + inputGuardrails);
+            builder.inputGuardrails(inputGuardrails);
+        }
+        List<OutputGuardrail> outputGuardrails = new ArrayList<>();
+        if (annotation.outputGuardrails().length > 0 && annotation.outputGuardrailNames().length > 0) {
+            LOGGER.log(
+                    Level.WARNING,
+                    "Both outputGuardrails and outputGuardrailNames specified for {0}. Using outputGuardrails classes and ignoring outputGuardrailNames.",
+                    interfaceClass.getName());
+        }
+        if (annotation.outputGuardrails().length > 0) {
+            outputGuardrails.addAll(resolveGuardrails(lookup, annotation.outputGuardrails()));
+        } else if (annotation.outputGuardrailNames().length > 0) {
+            outputGuardrails.addAll(
+                    resolveGuardrails(lookup, OutputGuardrail.class, annotation.outputGuardrailNames()));
+        }
+        if (!outputGuardrails.isEmpty()) {
+            LOGGER.fine("OutputGuardrails " + outputGuardrails);
+            builder.outputGuardrails(outputGuardrails);
+        }
         return builder.build();
     }
 
@@ -138,6 +174,67 @@ public class CommonAIServiceCreator {
         }
 
         return chatModelInstance;
+    }
+
+    /**
+     * Resolve guardrail instances by class. For each class, first attempts CDI lookup; if the bean is not resolvable,
+     * falls back to instantiation via the no-arg constructor. Classes that fail both resolution paths are skipped with
+     * a WARNING log.
+     *
+     * @param lookup CDI Instance used for bean resolution.
+     * @param guardrailClasses the guardrail classes to resolve.
+     * @param <G> the guardrail type (InputGuardrail or OutputGuardrail).
+     * @return a list of resolved guardrail instances, in declaration order.
+     */
+    private static <G> List<G> resolveGuardrails(Instance<Object> lookup, Class<? extends G>[] guardrailClasses) {
+        List<G> guardrails = new ArrayList<>(guardrailClasses.length);
+        for (Class<? extends G> guardrailClass : guardrailClasses) {
+            try {
+                Instance<? extends G> guardrailInstance = lookup.select(guardrailClass);
+                if (guardrailInstance != null && guardrailInstance.isResolvable()) {
+                    guardrails.add(guardrailInstance.get());
+                } else {
+                    guardrails.add(
+                            guardrailClass.getConstructor((Class<?>[]) null).newInstance((Object[]) null));
+                }
+            } catch (ReflectiveOperationException | IllegalArgumentException ex) {
+                LOGGER.log(
+                        Level.WARNING,
+                        "Failed to create guardrail " + guardrailClass + ", skipping: " + ex.getMessage(),
+                        ex);
+            }
+        }
+        return guardrails;
+    }
+
+    /**
+     * Resolve guardrail instances by named CDI bean lookup. Each name is resolved via {@link #getInstance(Instance,
+     * Class, String)}. Names that cannot be resolved are skipped with a WARNING log.
+     *
+     * @param lookup CDI Instance used for bean resolution.
+     * @param type the guardrail interface class (e.g. InputGuardrail.class).
+     * @param guardrailNames the CDI bean names to resolve.
+     * @param <G> the guardrail type (InputGuardrail or OutputGuardrail).
+     * @return a list of resolved guardrail instances, in declaration order.
+     */
+    private static <G> List<G> resolveGuardrails(Instance<Object> lookup, Class<G> type, String[] guardrailNames) {
+        List<G> guardrails = new ArrayList<>(guardrailNames.length);
+        for (String guardrailName : guardrailNames) {
+            try {
+                Instance<? extends G> guardrailInstance = getInstance(lookup, type, guardrailName);
+                if (guardrailInstance != null && guardrailInstance.isResolvable()) {
+                    guardrails.add(guardrailInstance.get());
+                } else {
+                    LOGGER.log(Level.WARNING, "Named guardrail ''{0}'' is not resolvable, skipping", guardrailName);
+                }
+            } catch (IllegalArgumentException ex) {
+                LOGGER.log(
+                        Level.WARNING,
+                        "Failed to resolve guardrail '" + guardrailName + "', skipping: " + ex.getMessage(),
+                        ex);
+            }
+        }
+        return guardrails;
     }
 
     /**

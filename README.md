@@ -488,6 +488,267 @@ public interface MyAiService {
 
 ---
 
+## Guardrails
+
+Guardrails provide input and output validation for AI service interactions, allowing you to enforce rules, validate content, and ensure safe AI operations. They can be configured at the class or method level.
+
+### Basic Usage
+
+Configure guardrails using the `@RegisterAIService` annotation:
+
+```java
+@RegisterAIService(
+    chatModelName = "chat-model",
+    inputGuardrails = {NoEmptyMessageGuardrail.class},
+    outputGuardrails = {ContentFilterGuardrail.class}
+)
+public interface SafeAssistant {
+    String chat(String message);
+}
+```
+
+### CDI Integration
+
+Guardrails are resolved as CDI beans, enabling full dependency injection support:
+
+```java
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.guardrail.InputGuardrail;
+import dev.langchain4j.guardrail.InputGuardrailResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import java.util.logging.Logger;
+
+@ApplicationScoped
+public class NoEmptyMessageGuardrail implements InputGuardrail {
+    
+    @Inject
+    Logger logger;
+    
+    @Override
+    public InputGuardrailResult validate(UserMessage userMessage) {
+        String text = userMessage.singleText();
+        if (text == null || text.isBlank()) {
+            logger.warning("Empty message rejected by guardrail");
+            return fatal("Message must not be empty");
+        }
+        return success();
+    }
+}
+```
+
+### Output Guardrails
+
+Output guardrails validate AI responses before returning them to the user:
+
+```java
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.guardrail.OutputGuardrail;
+import dev.langchain4j.guardrail.OutputGuardrailResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
+
+@ApplicationScoped
+public class ContentFilterGuardrail implements OutputGuardrail {
+
+    private static final List<String> FORBIDDEN_WORDS = List.of("forbidden", "blocked");
+    
+    @Override
+    public OutputGuardrailResult validate(AiMessage responseFromLLM) {
+        String text = responseFromLLM.text();
+        
+        for (String word : FORBIDDEN_WORDS) {
+            if (text.toLowerCase().contains(word)) {
+                return reprompt("Response contains forbidden content. Please rephrase.");
+            }
+        }
+        
+        return success();
+    }
+}
+```
+
+### Method-Level Guardrails
+
+Override class-level guardrails for specific methods using `@InputGuardrails` and `@OutputGuardrails` annotations:
+
+```java
+import dev.langchain4j.service.guardrail.InputGuardrails;
+import dev.langchain4j.service.guardrail.OutputGuardrails;
+
+@RegisterAIService(
+    chatModelName = "chat-model",
+    inputGuardrails = {BasicGuardrail.class}  // Applied to all methods by default
+)
+public interface FlexibleAssistant {
+    
+    String chat(String message);  // Uses BasicGuardrail
+    
+    @InputGuardrails(StrictGuardrail.class)  // Overrides class-level for this method
+    @OutputGuardrails(ContentFilterGuardrail.class)
+    String sensitiveChat(String message);
+}
+```
+
+### Fallback Behavior
+
+If a guardrail class is not available as a CDI bean, the framework will attempt to instantiate it using the no-arg constructor:
+
+```java
+// This guardrail doesn't need to be a CDI bean
+public class SimpleGuardrail implements InputGuardrail {
+    
+    public SimpleGuardrail() {
+        // No-arg constructor required for fallback
+    }
+    
+    @Override
+    public InputGuardrailResult validate(UserMessage userMessage) {
+        return success();
+    }
+}
+```
+
+### Configuration via Named CDI Beans
+
+You can also reference guardrails by CDI bean name using `@Named`:
+
+```java
+@ApplicationScoped
+@Named("customInputGuardrail")
+public class CustomInputGuardrail implements InputGuardrail {
+
+    @Override
+    public InputGuardrailResult validate(UserMessage userMessage) {
+        // your validation logic
+        return success();
+    }
+}
+```
+
+```java
+@RegisterAIService(
+    chatModelName = "chat-model",
+    inputGuardrailNames = {"customInputGuardrail"},
+    outputGuardrailNames = {"customOutputGuardrail"}
+)
+public interface NamedGuardrailService {
+    String chat(String message);
+}
+```
+
+**Note:** If both `inputGuardrails` (classes) and `inputGuardrailNames` (bean names) are specified, the classes take precedence and names are ignored. A warning will be logged.
+
+### Guardrail Results
+
+Guardrails can return different result types:
+
+| Result Type | Method | Description |
+|-------------|--------|-------------|
+| Success | `success()` | Validation passed, continue processing |
+| Fatal | `fatal(String message)` | Validation failed, abort with error |
+| Reprompt | `reprompt(String message)` | For output guardrails: retry with modified prompt |
+
+### Output Guardrail Retries
+
+Configure maximum retry attempts for output guardrails:
+
+```java
+import dev.langchain4j.service.guardrail.OutputGuardrails;
+
+@RegisterAIService
+public interface RetryableAssistant {
+    
+    @OutputGuardrails(value = ContentFilterGuardrail.class, maxRetries = 3)
+    String chat(String message);
+}
+```
+
+### Guardrail Configuration Properties
+
+Input and output guardrails have separate configuration objects:
+
+| Config Class | Properties | Description |
+|-------------|-----------|-------------|
+| `InputGuardrailsConfig` | *(none)* | Input guardrails have no configurable properties. Failures are passed directly to the caller as a `GuardrailException`. |
+| `OutputGuardrailsConfig` | `maxRetries` (default: 2) | Maximum retry attempts when an output guardrail triggers a retry or reprompt. Set to `0` to disable retries. |
+
+### Method-Level vs Class-Level Guardrails
+
+Guardrails can be applied at both the class level (via `@RegisterAIService`) and the method level (via `@InputGuardrails` / `@OutputGuardrails` annotations from LangChain4j). When both are present, **method-level annotations override class-level settings** for that specific method:
+
+```java
+@RegisterAIService(
+    chatModelName = "chat-model",
+    inputGuardrails = {BasicGuardrail.class}  // Applied to methods without overrides
+)
+@OutputGuardrails(ContentFilterGuardrail.class)  // Class-level output guardrail
+public interface FlexibleAssistant {
+
+    String chat(String message);  // Uses BasicGuardrail (input) + ContentFilterGuardrail (output)
+
+    @InputGuardrails(StrictGuardrail.class)  // Overrides class-level input guardrail
+    String sensitiveChat(String message);    // Uses StrictGuardrail (input) + ContentFilterGuardrail (output)
+}
+```
+
+### Best Practices
+
+1. **Use appropriate CDI scopes:**
+   - `@ApplicationScoped` for stateless guardrails (recommended)
+   - `@RequestScoped` for guardrails that need request-specific data
+
+2. **Keep guardrails focused:** Each guardrail should validate one specific concern
+
+3. **Provide clear error messages:** Use descriptive messages in `fatal()` and `reprompt()` results
+
+4. **Consider performance:** Guardrails are executed on every AI service call
+
+5. **Test thoroughly:** Write unit tests for your guardrail logic
+
+6. **Log appropriately:** Use injected loggers to track guardrail decisions
+
+### Example: Complete Guardrail Implementation
+
+```java
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.guardrail.InputGuardrail;
+import dev.langchain4j.guardrail.InputGuardrailResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import java.util.logging.Logger;
+
+@ApplicationScoped
+public class MessageLengthGuardrail implements InputGuardrail {
+    
+    private static final int MAX_LENGTH = 1000;
+    private static final int MIN_LENGTH = 5;
+    
+    @Inject
+    Logger logger;
+    
+    @Override
+    public InputGuardrailResult validate(UserMessage userMessage) {
+        String text = userMessage.singleText();
+        
+        if (text == null || text.length() < MIN_LENGTH) {
+            logger.warning("Message too short: " + (text != null ? text.length() : 0) + " characters");
+            return fatal("Message must be at least " + MIN_LENGTH + " characters long");
+        }
+        
+        if (text.length() > MAX_LENGTH) {
+            logger.warning("Message too long: " + text.length() + " characters");
+            return fatal("Message must not exceed " + MAX_LENGTH + " characters");
+        }
+        
+        logger.fine("Message length validated: " + text.length() + " characters");
+        return success();
+    }
+}
+```
+
+---
+
 ## Tools and Function Calling
 
 Tools enable your AI service to call your business logic.
