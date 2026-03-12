@@ -5,6 +5,12 @@ import static org.mockito.Mockito.*;
 
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.cdi.spi.RegisterAIService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.guardrail.InputGuardrail;
+import dev.langchain4j.guardrail.InputGuardrailResult;
+import dev.langchain4j.guardrail.OutputGuardrail;
+import dev.langchain4j.guardrail.OutputGuardrailResult;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.ChatModel;
@@ -130,6 +136,236 @@ class CommonAIServiceCreatorTest {
         when(tp.get()).thenReturn(provider);
         // Other lookups return null by default because names are blank -> getInstance returns null
         Object service = CommonAIServiceCreator.create(lookup, MyAIServiceWithToolProvider.class);
+        assertNotNull(service);
+    }
+
+    // --- Guardrail test classes ---
+
+    public static class TestInputGuardrail implements InputGuardrail {
+        @Override
+        public InputGuardrailResult validate(UserMessage userMessage) {
+            return success();
+        }
+    }
+
+    public static class TestOutputGuardrail implements OutputGuardrail {
+        @Override
+        public OutputGuardrailResult validate(AiMessage responseFromLLM) {
+            return success();
+        }
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(
+            inputGuardrails = {TestInputGuardrail.class},
+            outputGuardrails = {TestOutputGuardrail.class})
+    interface MyAIServiceWithGuardrails {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_wiresInputAndOutputGuardrailsFromAnnotation() {
+        Instance<Object> lookup = prepareLookups();
+
+        // Mock guardrail CDI lookups
+        Instance<TestInputGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(TestInputGuardrail.class)).thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(true);
+        when(igInstance.get()).thenReturn(new TestInputGuardrail());
+
+        Instance<TestOutputGuardrail> ogInstance = mock(Instance.class);
+        when(lookup.select(TestOutputGuardrail.class)).thenReturn(ogInstance);
+        when(ogInstance.isResolvable()).thenReturn(true);
+        when(ogInstance.get()).thenReturn(new TestOutputGuardrail());
+
+        Object service = CommonAIServiceCreator.create(lookup, MyAIServiceWithGuardrails.class);
+        assertNotNull(service);
+        assertTrue(service.toString().contains("MyAIServiceWithGuardrails"));
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(inputGuardrails = {TestInputGuardrail.class})
+    interface MyAIServiceWithInputGuardrailsOnly {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_wiresOnlyInputGuardrailsWhenNoOutputGuardrails() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<TestInputGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(TestInputGuardrail.class)).thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(true);
+        when(igInstance.get()).thenReturn(new TestInputGuardrail());
+
+        Object service = CommonAIServiceCreator.create(lookup, MyAIServiceWithInputGuardrailsOnly.class);
+        assertNotNull(service);
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(inputGuardrails = {TestInputGuardrail.class})
+    interface MyAIServiceGuardrailFallback {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_fallsBackToConstructorWhenGuardrailBeanNotResolvable() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<TestInputGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(TestInputGuardrail.class)).thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(false);
+
+        // Should not throw - falls back to no-arg constructor
+        Object service = CommonAIServiceCreator.create(lookup, MyAIServiceGuardrailFallback.class);
+        assertNotNull(service);
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(
+            inputGuardrails = {},
+            outputGuardrails = {})
+    interface ServiceWithEmptyGuardrailArrays {
+        String chat(String question);
+    }
+
+    @Test
+    void create_withEmptyGuardrailArrays_createsServiceSuccessfully() {
+        Instance<Object> lookup = prepareLookups();
+        Object service = CommonAIServiceCreator.create(lookup, ServiceWithEmptyGuardrailArrays.class);
+        assertNotNull(service);
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(
+            inputGuardrails = {TestInputGuardrail.class},
+            inputGuardrailNames = {"someGuardrail"})
+    interface ServiceWithBothInputGuardrailConfigs {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_withBothInputGuardrailConfigsSpecified_usesClassesAndIgnoresNames() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<TestInputGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(TestInputGuardrail.class)).thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(true);
+        when(igInstance.get()).thenReturn(new TestInputGuardrail());
+
+        Object service = CommonAIServiceCreator.create(lookup, ServiceWithBothInputGuardrailConfigs.class);
+        assertNotNull(service);
+        // The warning should be logged (would need log handler to verify)
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(
+            outputGuardrails = {TestOutputGuardrail.class},
+            outputGuardrailNames = {"someOutputGuardrail"})
+    interface ServiceWithBothOutputGuardrailConfigs {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_withBothOutputGuardrailConfigsSpecified_usesClassesAndIgnoresNames() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<TestOutputGuardrail> ogInstance = mock(Instance.class);
+        when(lookup.select(TestOutputGuardrail.class)).thenReturn(ogInstance);
+        when(ogInstance.isResolvable()).thenReturn(true);
+        when(ogInstance.get()).thenReturn(new TestOutputGuardrail());
+
+        Object service = CommonAIServiceCreator.create(lookup, ServiceWithBothOutputGuardrailConfigs.class);
+        assertNotNull(service);
+        // The warning should be logged (would need log handler to verify)
+    }
+
+    // --- Named guardrail tests ---
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(
+            inputGuardrailNames = {"myInputGuardrail"},
+            outputGuardrailNames = {"myOutputGuardrail"})
+    interface MyAIServiceWithNamedGuardrails {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_wiresNamedInputAndOutputGuardrails() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<InputGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(InputGuardrail.class, NamedLiteral.of("myInputGuardrail")))
+                .thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(true);
+        when(igInstance.get()).thenReturn(new TestInputGuardrail());
+
+        Instance<OutputGuardrail> ogInstance = mock(Instance.class);
+        when(lookup.select(OutputGuardrail.class, NamedLiteral.of("myOutputGuardrail")))
+                .thenReturn(ogInstance);
+        when(ogInstance.isResolvable()).thenReturn(true);
+        when(ogInstance.get()).thenReturn(new TestOutputGuardrail());
+
+        Object service = CommonAIServiceCreator.create(lookup, MyAIServiceWithNamedGuardrails.class);
+        assertNotNull(service);
+        assertTrue(service.toString().contains("MyAIServiceWithNamedGuardrails"));
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(inputGuardrailNames = {"nonExistentGuardrail"})
+    interface MyAIServiceWithUnresolvableNamedGuardrail {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_skipsUnresolvableNamedGuardrails() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<InputGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(InputGuardrail.class, NamedLiteral.of("nonExistentGuardrail")))
+                .thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(false);
+
+        // Should not throw - unresolvable names are skipped with a warning
+        Object service = CommonAIServiceCreator.create(lookup, MyAIServiceWithUnresolvableNamedGuardrail.class);
+        assertNotNull(service);
+    }
+
+    // --- Uninstantiable guardrail test ---
+
+    public static class UninstantiableGuardrail implements InputGuardrail {
+        public UninstantiableGuardrail(String required) {}
+
+        @Override
+        public InputGuardrailResult validate(UserMessage userMessage) {
+            return success();
+        }
+    }
+
+    @SuppressWarnings("CdiManagedBeanInconsistencyInspection")
+    @RegisterAIService(inputGuardrails = {UninstantiableGuardrail.class})
+    interface MyAIServiceWithUninstantiableGuardrail {
+        String chat(String question);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void create_skipsGuardrailWhenBothCdiAndConstructorFail() {
+        Instance<Object> lookup = prepareLookups();
+
+        Instance<UninstantiableGuardrail> igInstance = mock(Instance.class);
+        when(lookup.select(UninstantiableGuardrail.class)).thenReturn(igInstance);
+        when(igInstance.isResolvable()).thenReturn(false);
+
+        // Should not throw - guardrail is skipped with a warning
+        Object service = CommonAIServiceCreator.create(lookup, MyAIServiceWithUninstantiableGuardrail.class);
         assertNotNull(service);
     }
 
