@@ -63,9 +63,10 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.build.outputTimestamp>2026-02-19T20:10:00Z</project.build.outputTimestamp>
 
-        <dev.langchain4j.version>1.9.1</dev.langchain4j.version>
-        <dev.langchain4j.community.version>1.9.1-beta17</dev.langchain4j.community.version>
+        <dev.langchain4j.version>1.12.2</dev.langchain4j.version>
+        <dev.langchain4j.community.version>1.12.2-beta22</dev.langchain4j.community.version>
         <jakartaee-api.version>10.0.0</jakartaee-api.version>
         <jakarta.enterprise.cdi-api.version>4.0.1</jakarta.enterprise.cdi-api.version>
 
@@ -80,7 +81,7 @@
         <maven.compiler.testTarget>${maven.compiler.target}</maven.compiler.testTarget>
         <maven.compiler.testSource>${maven.compiler.source}</maven.compiler.testSource>
         <maven.compiler.release>17</maven.compiler.release>
-        <surefire-plugin.version>3.5.4</surefire-plugin.version>
+        <surefire-plugin.version>3.5.5</surefire-plugin.version>
         <compiler-plugin.version>3.14.0</compiler-plugin.version>
     </properties>
 
@@ -300,7 +301,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-report-plugin</artifactId>
-                    <version>3.5.4</version>
+                    <version>3.5.5</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-deploy-plugin</artifactId>
