@@ -23,9 +23,21 @@ public class McpProgressReporter {
      * @param total total expected value (0 if unknown)
      */
     public void reportProgress(Object progressToken, double progress, double total) {
+        reportProgress(progressToken, progress, total, null);
+    }
+
+    /**
+     * Reports progress for a given token, with an optional message.
+     *
+     * @param progressToken the token from the request's {@code _meta.progressToken}
+     * @param progress current progress value
+     * @param total total expected value (0 if unknown)
+     * @param message optional human-readable progress message
+     */
+    public void reportProgress(Object progressToken, double progress, double total, String message) {
         if (progressToken == null || broadcaster == null || broadcaster.connectedStreamCount() == 0) {
             return;
         }
-        broadcaster.broadcast(JsonRpcNotification.progress(progressToken, progress, total));
+        broadcaster.broadcast(JsonRpcNotification.progress(progressToken, progress, total, message));
     }
 }

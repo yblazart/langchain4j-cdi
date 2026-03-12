@@ -1,5 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
+import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpToolNotFoundException;
@@ -45,6 +46,7 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.mcp_java.model.common.Cursor;
 import org.mcp_java.model.completion.CompleteResult;
 import org.mcp_java.model.content.TextContent;
@@ -74,18 +76,22 @@ public class McpEndpoint {
     private static final String FIELD_ARGUMENTS = "arguments";
     private static final String FIELD_PROGRESS_TOKEN = "progressToken";
 
-    private final McpToolRegistry toolRegistry;
-    private final McpResourceRegistry resourceRegistry;
-    private final McpPromptRegistry promptRegistry;
-    private final McpSessionManager sessionManager;
-    private final McpToolInvoker toolInvoker;
-    private final McpBeanInvoker beanInvoker;
-    private final McpNotificationBroadcaster broadcaster;
-    private final McpLogger mcpLogger;
-    private final McpResourceSubscriptionManager subscriptionManager;
-    private final McpServerRequestManager serverRequestManager;
-    private final McpRootsManager rootsManager;
-    private final Instance<McpServerConfig> configInstance;
+    private McpToolRegistry toolRegistry;
+    private McpResourceRegistry resourceRegistry;
+    private McpPromptRegistry promptRegistry;
+    private McpSessionManager sessionManager;
+    private McpToolInvoker toolInvoker;
+    private McpBeanInvoker beanInvoker;
+    private McpNotificationBroadcaster broadcaster;
+    private McpLogger mcpLogger;
+    private McpResourceSubscriptionManager subscriptionManager;
+    private McpServerRequestManager serverRequestManager;
+    private McpRootsManager rootsManager;
+    private McpCancellationManager cancellationManager;
+    private Instance<McpServerConfig> configInstance;
+
+    /** No-arg constructor required by CDI proxying and JAX-RS runtimes. */
+    public McpEndpoint() {}
 
     @Inject
     public McpEndpoint(
@@ -100,6 +106,7 @@ public class McpEndpoint {
             McpResourceSubscriptionManager subscriptionManager,
             McpServerRequestManager serverRequestManager,
             McpRootsManager rootsManager,
+            McpCancellationManager cancellationManager,
             @Named("mcp-server") Instance<McpServerConfig> configInstance) {
         this.toolRegistry = toolRegistry;
         this.resourceRegistry = resourceRegistry;
@@ -112,6 +119,7 @@ public class McpEndpoint {
         this.subscriptionManager = subscriptionManager;
         this.serverRequestManager = serverRequestManager;
         this.rootsManager = rootsManager;
+        this.cancellationManager = cancellationManager;
         this.configInstance = configInstance;
     }
 
@@ -245,7 +253,7 @@ public class McpEndpoint {
     }
 
     private Response handleToolsCall(JsonRpcRequest request, String sessionId, boolean sse) {
-        sessionManager.requireSession(request.getId(), sessionId);
+        McpSession session = sessionManager.requireSession(request.getId(), sessionId);
 
         JsonObject params = request.getParams();
         String toolName =
@@ -261,8 +269,12 @@ public class McpEndpoint {
                 .findTool(toolName)
                 .orElseThrow(() -> new McpToolNotFoundException(request.getId(), toolName));
 
+        AtomicBoolean cancelledFlag = cancellationManager.register(request.getId());
+        McpRequestContext ctx =
+                new McpRequestContext(sessionId, request.getId(), request.getProgressToken(), cancelledFlag);
+
         try {
-            Object callResult = toolInvoker.invoke(request.getId(), tool, arguments);
+            Object callResult = toolInvoker.invoke(request.getId(), tool, arguments, ctx, session);
             CallToolResult result;
             if (callResult == null) {
                 result = CallToolResult.success(List.of());
@@ -272,6 +284,8 @@ public class McpEndpoint {
             return respond(request.getId(), result, sse);
         } catch (McpException e) {
             throw new McpException(request.getId(), e.getErrorCode(), e.getMessage());
+        } finally {
+            cancellationManager.unregister(request.getId());
         }
     }
 
@@ -296,7 +310,7 @@ public class McpEndpoint {
     }
 
     private Response handleResourcesRead(JsonRpcRequest request, String sessionId, boolean sse) {
-        sessionManager.requireSession(request.getId(), sessionId);
+        McpSession session = sessionManager.requireSession(request.getId(), sessionId);
 
         JsonObject params = request.getParams();
         String uri = params != null && params.containsKey("uri") ? params.getString("uri") : null;
@@ -310,8 +324,12 @@ public class McpEndpoint {
                 .orElseThrow(() ->
                         new McpException(request.getId(), McpErrorCode.INVALID_PARAMS, "Resource not found: " + uri));
 
+        McpRequestContext ctx =
+                new McpRequestContext(sessionId, request.getId(), request.getProgressToken(), new AtomicBoolean(false));
+
         try {
-            Object content = beanInvoker.invoke(request.getId(), resource.getBeanType(), resource.getMethod(), null);
+            Object content = beanInvoker.invoke(
+                    request.getId(), resource.getBeanType(), resource.getMethod(), null, ctx, session);
             String text = content != null ? content.toString() : "";
             ReadResourceResult result =
                     ReadResourceResult.of(List.of(ResourceContents.text(uri, resource.getMimeType(), text)));
@@ -346,7 +364,7 @@ public class McpEndpoint {
     }
 
     private Response handlePromptsGet(JsonRpcRequest request, String sessionId, boolean sse) {
-        sessionManager.requireSession(request.getId(), sessionId);
+        McpSession session = sessionManager.requireSession(request.getId(), sessionId);
 
         JsonObject params = request.getParams();
         String promptName = params != null && params.containsKey("name") ? params.getString("name") : null;
@@ -362,9 +380,12 @@ public class McpEndpoint {
                 .orElseThrow(() -> new McpException(
                         request.getId(), McpErrorCode.INVALID_PARAMS, "Prompt not found: " + promptName));
 
+        McpRequestContext ctx =
+                new McpRequestContext(sessionId, request.getId(), request.getProgressToken(), new AtomicBoolean(false));
+
         try {
-            Object callResult =
-                    beanInvoker.invoke(request.getId(), prompt.getBeanType(), prompt.getMethod(), arguments);
+            Object callResult = beanInvoker.invoke(
+                    request.getId(), prompt.getBeanType(), prompt.getMethod(), arguments, ctx, session);
             McpPromptGetResult result;
             if (callResult instanceof List<?> messages) {
                 @SuppressWarnings("unchecked")
@@ -491,9 +512,25 @@ public class McpEndpoint {
 
     // --- Notifications ---
 
-    @SuppressWarnings("unused") // TODO check
     private Response handleNotificationsCancelled(JsonRpcRequest request) {
+        JsonObject params = request.getParams();
+        if (params != null && params.containsKey("requestId")) {
+            Object cancelledRequestId = extractJsonPrimitive(params.get("requestId"));
+            if (cancelledRequestId != null) {
+                cancellationManager.cancel(cancelledRequestId);
+            }
+        }
         return Response.ok().build();
+    }
+
+    private Object extractJsonPrimitive(JsonValue value) {
+        if (value instanceof JsonString s) {
+            return s.getString();
+        }
+        if (value.getValueType() == JsonValue.ValueType.NUMBER) {
+            return ((jakarta.json.JsonNumber) value).longValue();
+        }
+        return value.toString();
     }
 
     @SuppressWarnings("unused") // TODO check

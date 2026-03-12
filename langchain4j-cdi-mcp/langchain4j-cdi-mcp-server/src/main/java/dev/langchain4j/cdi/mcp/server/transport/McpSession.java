@@ -47,4 +47,12 @@ public class McpSession {
     public void touch() {
         this.lastAccessedAt = Instant.now();
     }
+
+    /** Checks if the client declared a given capability during initialization. */
+    public boolean hasCapability(String name) {
+        if (clientCapabilities == null) {
+            return false;
+        }
+        return clientCapabilities.containsKey(name);
+    }
 }

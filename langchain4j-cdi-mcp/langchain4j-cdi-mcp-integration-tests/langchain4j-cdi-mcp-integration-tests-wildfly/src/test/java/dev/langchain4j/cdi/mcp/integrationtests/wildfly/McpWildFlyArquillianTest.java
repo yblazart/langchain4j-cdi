@@ -56,7 +56,8 @@ public class McpWildFlyArquillianTest {
                 .resolve(
                         "dev.langchain4j.cdi.mcp:langchain4j-cdi-mcp-portable-ext",
                         "dev.langchain4j:langchain4j-mcp",
-                        "org.assertj:assertj-core")
+                        "org.assertj:assertj-core",
+                        "org.mcp-java:mcp-server-api")
                 .withTransitivity()
                 .asFile();
 
@@ -65,7 +66,7 @@ public class McpWildFlyArquillianTest {
                         Stream.of(deps).filter(f -> !f.getName().startsWith("langchain4j-cdi-mcp-")))
                 .toArray(File[]::new);
 
-        return ShrinkWrap.create(WebArchive.class, "mcp-test.war")
+        WebArchive war = ShrinkWrap.create(WebArchive.class, "mcp-test.war")
                 .addClasses(
                         McpWildFlyArquillianTest.class,
                         WeatherTool.class,
@@ -77,6 +78,7 @@ public class McpWildFlyArquillianTest {
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
                 .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml")
                 .addAsResource("META-INF/services/jakarta.enterprise.inject.spi.Extension");
+        return war;
     }
 
     private static Optional<Path> findBuildFiles(Path folder, String prefix) throws IOException {

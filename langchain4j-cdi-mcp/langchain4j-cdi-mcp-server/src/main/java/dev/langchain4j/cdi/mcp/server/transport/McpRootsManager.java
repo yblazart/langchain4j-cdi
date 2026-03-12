@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
+import org.mcp_java.model.roots.Root;
 
 /**
  * Manages file roots reported by MCP clients. Roots represent the base directories or URIs that the client has made
@@ -64,11 +65,9 @@ public class McpRootsManager {
         JsonArray rootsArray = result.getJsonArray("roots");
         return rootsArray.stream()
                 .map(v -> (JsonObject) v)
-                .map(obj -> new Root(
+                .map(obj -> Root.of(
                         obj.containsKey("uri") ? obj.getString("uri") : "",
                         obj.containsKey("name") ? obj.getString("name") : ""))
                 .toList();
     }
-
-    public record Root(String uri, String name) {}
 }

@@ -26,7 +26,14 @@
       "Read(//private/tmp/**)",
       "Bash(jar xf /Users/yblazart/.m2/repository/dev/langchain4j/langchain4j-mcp/1.8.0-beta15/langchain4j-mcp-1.8.0-beta15-sources.jar dev/langchain4j/mcp/client/ToolExecutionHelper.java)",
       "Bash(grep -l \"interface\\\\|abstract class\" /Users/yblazart/projects/perso/java-mcp-annotations/mcp-server-api/src/main/java/org/mcp_java/server/*.java)",
-      "Bash(ls langchain4j-cdi-mcp/langchain4j-cdi-mcp-integration-tests/langchain4j-cdi-mcp-integration-tests-wildfly/target/surefire-reports/*.txt 2>/dev/null | head -5)"
+      "Bash(ls langchain4j-cdi-mcp/langchain4j-cdi-mcp-integration-tests/langchain4j-cdi-mcp-integration-tests-wildfly/target/surefire-reports/*.txt 2>/dev/null | head -5)",
+      "Bash(ls /Users/yblazart/.m2/repository/org/mcp-java/mcp-server-api/1.0.0-SNAPSHOT/*.jar)",
+      "Bash(jar xf:*)",
+      "Bash(find /Users/yblazart/projects/perso/langchain4j-cdi-fork -name \"*Mcp*\" -o -name \"*mcp*\" 2>/dev/null | head -30)",
+      "Bash(ls /Users/yblazart/projects/perso/langchain4j-cdi-fork/langchain4j-cdi-mcp/langchain4j-cdi-mcp-integration-tests/langchain4j-cdi-mcp-integration-tests-wildfly/target/surefire-reports/*.txt 2>&1 | head -5)",
+      "Bash(find /Users/yblazart/projects/perso/langchain4j-cdi-fork/langchain4j-cdi-mcp/langchain4j-cdi-mcp-integration-tests/langchain4j-cdi-mcp-integration-tests-wildfly/target -name \"mcp-test.war\" -exec unzip -l {} \\\\; 2>/dev/null | grep -i \"mcp\\\\|org.mcp\" | head -20)",
+      "Bash(unzip -l /Users/yblazart/projects/perso/langchain4j-cdi-fork/langchain4j-cdi-mcp/langchain4j-cdi-mcp-integration-tests/langchain4j-cdi-mcp-integration-tests-wildfly/target/wildfly-38.0.1.Final/standalone/tmp/mcp-test.war 2>/dev/null | grep -i \"mcp\" | head -20)",
+      "Bash(unzip -p langchain4j-cdi-mcp/langchain4j-cdi-mcp-server/target/langchain4j-cdi-mcp-server-1.1.0-SNAPSHOT.jar META-INF/beans.xml)"
     ],
     "deny": [],
     "ask": []

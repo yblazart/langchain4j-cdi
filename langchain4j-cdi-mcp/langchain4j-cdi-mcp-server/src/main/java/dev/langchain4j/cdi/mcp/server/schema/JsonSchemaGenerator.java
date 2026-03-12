@@ -1,5 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.schema;
 
+import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
@@ -22,6 +23,9 @@ public class JsonSchemaGenerator {
         JsonArrayBuilder required = Json.createArrayBuilder();
 
         for (Parameter param : method.getParameters()) {
+            if (McpFrameworkTypes.isFrameworkType(param.getType())) {
+                continue;
+            }
             String paramName = resolveParamName(param);
             ToolArg annotation = param.getAnnotation(ToolArg.class);
             String description = annotation != null ? annotation.description() : "";

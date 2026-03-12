@@ -51,6 +51,11 @@
                     <version>${project.version}</version>
                 </dependency>
                 <dependency>
+                    <groupId>org.mcp-java</groupId>
+                    <artifactId>mcp-server-api</artifactId>
+                    <version>1.0.0-SNAPSHOT</version>
+                </dependency>
+                <dependency>
                     <groupId>dev.langchain4j.cdi.mcp</groupId>
                     <artifactId>langchain4j-cdi-mcp-portable-ext</artifactId>
                     <version>${project.version}</version>

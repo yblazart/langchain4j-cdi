@@ -32,12 +32,19 @@ public class JsonRpcNotification {
     }
 
     public static JsonRpcNotification progress(Object progressToken, double progress, double total) {
+        return progress(progressToken, progress, total, null);
+    }
+
+    public static JsonRpcNotification progress(Object progressToken, double progress, double total, String message) {
         JsonRpcNotification notification = new JsonRpcNotification("notifications/progress");
         java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
         params.put("progressToken", progressToken);
         params.put("progress", progress);
         if (total > 0) {
             params.put("total", total);
+        }
+        if (message != null) {
+            params.put("message", message);
         }
         notification.params = params;
         return notification;
