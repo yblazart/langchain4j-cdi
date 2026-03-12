@@ -2,6 +2,8 @@ package dev.langchain4j.cdi.spi;
 
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
+import dev.langchain4j.guardrail.InputGuardrail;
+import dev.langchain4j.guardrail.OutputGuardrail;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Stereotype;
 import java.lang.annotation.Annotation;
@@ -40,4 +42,32 @@ public @interface RegisterAIService {
     String retrievalAugmentorName() default "";
 
     String toolProviderName() default "";
+
+    /**
+     * Input guardrail classes to validate messages before sending to the LLM. If a class is a CDI managed bean, the
+     * bean instance is used; otherwise it is instantiated via its no-arg constructor. Mutually exclusive with
+     * {@link #inputGuardrailNames()}: if both are specified, only the classes are used and the names are ignored.
+     */
+    Class<? extends InputGuardrail>[] inputGuardrails() default {};
+
+    /**
+     * Output guardrail classes to validate LLM responses before returning them. If a class is a CDI managed bean, the
+     * bean instance is used; otherwise it is instantiated via its no-arg constructor. Mutually exclusive with
+     * {@link #outputGuardrailNames()}: if both are specified, only the classes are used and the names are ignored.
+     */
+    Class<? extends OutputGuardrail>[] outputGuardrails() default {};
+
+    /**
+     * Named CDI beans implementing {@link InputGuardrail} to validate messages before sending to the LLM. Unresolvable
+     * names are skipped with a WARNING log. Mutually exclusive with {@link #inputGuardrails()}: if both are specified,
+     * only the classes are used and the names are ignored.
+     */
+    String[] inputGuardrailNames() default {};
+
+    /**
+     * Named CDI beans implementing {@link OutputGuardrail} to validate LLM responses before returning them.
+     * Unresolvable names are skipped with a WARNING log. Mutually exclusive with {@link #outputGuardrails()}: if both
+     * are specified, only the classes are used and the names are ignored.
+     */
+    String[] outputGuardrailNames() default {};
 }

@@ -3,6 +3,7 @@
     	<platform>jakartaee-10.0</platform>
         <platform>microprofile-7.1</platform>
         <feature>cdi</feature>
+        <feature>concurrent-3.0</feature>
         <feature>jsonb</feature>
         <feature>mpConfig</feature>
         <feature>mpTelemetry</feature>
@@ -28,7 +29,7 @@
     <mpMetrics authentication="false"/>
     <mpTelemetry source="message, trace, ffdc"/>
     
-    <!--
+
     <logging consoleLogLevel="INFO"/>
-    -->
+    
 </server>
