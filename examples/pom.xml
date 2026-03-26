@@ -22,7 +22,6 @@
         <module>quarkus-car-booking</module>
         <module>car-booking-mcp</module>
         <module>liberty-car-booking-mcp</module>
-        <module>helidon-mcp-server</module>
     </modules>
 
     <dependencyManagement>
