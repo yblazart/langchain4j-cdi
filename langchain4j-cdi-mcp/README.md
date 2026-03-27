@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="langchain4j-cdi-mcp-server-logo.png" alt="LangChain4j CDI MCP Server Logo" width="400">
+</p>
+
 # LangChain4j CDI — MCP Server
 
 Turn any CDI bean into a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server with a few annotations. The server exposes **tools**, **prompts**, and **resources** over HTTP using the Streamable HTTP transport, so any MCP-compatible client (Claude Desktop, VS Code Copilot, custom agents…) can connect to your Jakarta EE / MicroProfile application.
