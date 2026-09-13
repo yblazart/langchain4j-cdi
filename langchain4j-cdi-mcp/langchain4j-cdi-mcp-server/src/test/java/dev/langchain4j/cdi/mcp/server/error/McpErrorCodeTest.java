@@ -20,4 +20,11 @@ class McpErrorCodeTest {
         assertThat(McpErrorCode.SESSION_NOT_FOUND.getCode()).isEqualTo(-32001);
         assertThat(McpErrorCode.TOOL_NOT_FOUND.getCode()).isEqualTo(-32002);
     }
+
+    @Test
+    void modernProtocolErrorCodes() {
+        assertThat(McpErrorCode.HEADER_MISMATCH.getCode()).isEqualTo(-32020);
+        assertThat(McpErrorCode.MISSING_REQUIRED_CLIENT_CAPABILITY.getCode()).isEqualTo(-32021);
+        assertThat(McpErrorCode.UNSUPPORTED_PROTOCOL_VERSION.getCode()).isEqualTo(-32022);
+    }
 }

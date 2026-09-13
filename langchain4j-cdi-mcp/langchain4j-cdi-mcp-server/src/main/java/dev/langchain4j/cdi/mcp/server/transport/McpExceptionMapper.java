@@ -27,11 +27,14 @@ public class McpExceptionMapper implements ExceptionMapper<McpException> {
     @Override
     public Response toResponse(McpException e) {
         JsonRpcResponse errorResponse = JsonRpcResponse.error(
-                e.getRequestId(), new JsonRpcError(e.getErrorCode().getCode(), e.getMessage()));
+                e.getRequestId(), new JsonRpcError(e.getErrorCode().getCode(), e.getMessage(), e.getData()));
         JsonbConfig config = new JsonbConfig().withNullValues(false);
         try (Jsonb jsonb = JsonbBuilder.create(config)) {
             String json = jsonb.toJson(errorResponse);
-            return Response.ok(json).type(MediaType.APPLICATION_JSON).build();
+            return Response.status(e.getHttpStatus())
+                    .entity(json)
+                    .type(MediaType.APPLICATION_JSON)
+                    .build();
         } catch (Exception ex) {
             return Response.serverError().build();
         }

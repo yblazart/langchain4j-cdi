@@ -5,6 +5,7 @@ public class JsonRpcError {
 
     private int code;
     private String message;
+    private Object data;
 
     /** Default constructor for JSON-B deserialization. */
     public JsonRpcError() {}
@@ -18,6 +19,19 @@ public class JsonRpcError {
     public JsonRpcError(int code, String message) {
         this.code = code;
         this.message = message;
+    }
+
+    /**
+     * Creates an error with the given code, message, and optional data.
+     *
+     * @param code the error code
+     * @param message the error message
+     * @param data optional error data, or {@code null}
+     */
+    public JsonRpcError(int code, String message, Object data) {
+        this.code = code;
+        this.message = message;
+        this.data = data;
     }
 
     /**
@@ -54,5 +68,23 @@ public class JsonRpcError {
      */
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    /**
+     * Returns the optional error data.
+     *
+     * @return the error data, or {@code null}
+     */
+    public Object getData() {
+        return data;
+    }
+
+    /**
+     * Sets the optional error data.
+     *
+     * @param data the error data, or {@code null}
+     */
+    public void setData(Object data) {
+        this.data = data;
     }
 }

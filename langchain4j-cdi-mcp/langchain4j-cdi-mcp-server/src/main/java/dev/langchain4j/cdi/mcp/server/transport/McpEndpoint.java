@@ -20,7 +20,7 @@ import dev.langchain4j.cdi.mcp.server.protocol.McpPagination;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptArgument;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptMessage;
 import dev.langchain4j.cdi.mcp.server.protocol.McpPromptModel;
-import dev.langchain4j.cdi.mcp.server.protocol.McpProtocol;
+import dev.langchain4j.cdi.mcp.server.protocol.McpProtocolVersions;
 import dev.langchain4j.cdi.mcp.server.protocol.McpResourceModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpResourceTemplateModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpServerCapabilities;
@@ -84,7 +84,7 @@ public class McpEndpoint {
     private static final String FIELD_ERROR = "error";
     private static final String FIELD_ARGUMENTS = "arguments";
     private static final String FIELD_PROGRESS_TOKEN = "progressToken";
-    private static final String MCP_PROTOCOL_VERSION = McpProtocol.VERSION;
+    private static final String MCP_PROTOCOL_VERSION = McpProtocolVersions.LEGACY_2025_03_26;
 
     private McpToolRegistry toolRegistry;
     private McpResourceRegistry resourceRegistry;
