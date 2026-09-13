@@ -4,6 +4,12 @@ import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
+import jakarta.json.JsonReader;
+import jakarta.json.JsonValue;
+import jakarta.json.bind.Jsonb;
+import jakarta.json.bind.JsonbBuilder;
+import jakarta.json.bind.JsonbConfig;
+import java.io.StringReader;
 import java.util.Base64;
 import java.util.Optional;
 import org.mcpjava.server.completion.CompletionResult;
@@ -85,7 +91,7 @@ public final class McpJsonSerializer {
         if (response.isError()) {
             json.add("isError", true);
         }
-        response.structuredContent().ifPresent(sc -> json.add("structuredContent", sc.toString()));
+        response.structuredContent().ifPresent(sc -> json.add("structuredContent", toJsonValue(sc)));
         return json.build();
     }
 
@@ -168,6 +174,49 @@ public final class McpJsonSerializer {
         result.hasMore().ifPresent(hm -> completion.add("hasMore", hm));
         json.add("completion", completion);
         return json.build();
+    }
+
+    /**
+     * Converts an arbitrary value to a JSON-P value. JSON strings starting with an object or array are parsed.
+     *
+     * @param value the value to convert
+     * @return the JSON value
+     */
+    public static JsonValue toJsonValue(Object value) {
+        if (value == null) {
+            return JsonValue.NULL;
+        }
+        if (value instanceof JsonValue jsonValue) {
+            return jsonValue;
+        }
+        if (value instanceof String s) {
+            String trimmed = s.trim();
+            if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                return parse(trimmed);
+            }
+            return Json.createValue(s);
+        }
+        try (Jsonb jsonb = JsonbBuilder.create(new JsonbConfig().withNullValues(false))) {
+            return parse(jsonb.toJson(value));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot serialize value to JSON: " + value.getClass(), e);
+        }
+    }
+
+    /**
+     * Converts a Java object (record, POJO, map) to a JSON object, skipping null properties.
+     *
+     * @param value the value to convert
+     * @return the JSON object
+     */
+    public static JsonObject toJsonObject(Object value) {
+        return toJsonValue(value).asJsonObject();
+    }
+
+    private static JsonValue parse(String json) {
+        try (JsonReader reader = Json.createReader(new StringReader(json))) {
+            return reader.readValue();
+        }
     }
 
     private static void addAnnotations(JsonObjectBuilder json, Optional<Annotations> annotations) {

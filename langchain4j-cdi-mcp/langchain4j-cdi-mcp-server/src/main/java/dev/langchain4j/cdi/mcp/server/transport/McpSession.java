@@ -95,6 +95,9 @@ public class McpSession {
         if (clientCapabilities == null) {
             return false;
         }
+        if (clientCapabilities.get("capabilities") instanceof JsonObject nested) {
+            return nested.containsKey(name);
+        }
         return clientCapabilities.containsKey(name);
     }
 }

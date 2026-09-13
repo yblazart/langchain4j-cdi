@@ -255,7 +255,8 @@ public class McpEndpoint {
                         new McpServerCapabilities.ToolsCapability(true),
                         new McpServerCapabilities.ResourcesCapability(true, true),
                         new McpServerCapabilities.PromptsCapability(true),
-                        McpServerCapabilities.LoggingCapability.INSTANCE),
+                        McpServerCapabilities.LoggingCapability.INSTANCE,
+                        McpServerCapabilities.CompletionsCapability.INSTANCE),
                 new McpImplementation(config.getServerName(), config.getServerVersion()));
 
         if (wantsSse) {
