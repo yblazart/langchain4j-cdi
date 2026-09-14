@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import dev.langchain4j.cdi.mcp.server.api.McpApiFactory;
 import dev.langchain4j.cdi.mcp.server.fixtures.GreetingTool;
+import dev.langchain4j.cdi.mcp.server.fixtures.InheritedTools;
 import dev.langchain4j.cdi.mcp.server.fixtures.ReflectionTrapTool;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Instance;
@@ -21,6 +22,7 @@ import jakarta.json.JsonObject;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,8 +31,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests {@link McpBeanInvoker}'s use of the {@link McpInvokerProvider} SPI: a supplied {@link McpMethodInvoker} is
  * preferred over reflection, its {@code resolvesInstance()} flag controls whether the CDI bean is looked up, the lookup
- * result is cached per {@link Method}, and reflection remains the fallback when no provider (or no matching invoker) is
- * available.
+ * result is cached per (bean type, {@link Method}) pair, and reflection remains the fallback when no provider (or no
+ * matching invoker) is available.
  */
 class McpBeanInvokerInvokerSpiTest {
 
@@ -121,6 +123,41 @@ class McpBeanInvokerInvokerSpiTest {
         invoker.invoke("req-2", ReflectionTrapTool.class, method, emptyArguments());
 
         verify(provider, times(1)).lookup(any(), any(), any());
+    }
+
+    @Test
+    void shouldNotShareTheCachedInvokerBetweenTwoBeansInheritingTheSameMethod() throws Exception {
+        Method fromFirstBean = InheritedTools.FirstTool.class.getMethod("describe");
+        Method fromSecondBean = InheritedTools.SecondTool.class.getMethod("describe");
+        // getMethods() hands back the declaring Method for an inherited method, so these two are equal and hash
+        // alike: a cache keyed on the Method alone cannot tell the two beans apart.
+        assertThat(fromFirstBean).isEqualTo(fromSecondBean);
+
+        RecordingInvoker firstInvoker = new RecordingInvoker("first", true);
+        RecordingInvoker secondInvoker = new RecordingInvoker("second", true);
+        McpInvokerProvider provider = providerPerBeanType(Map.of(
+                InheritedTools.FirstTool.class, firstInvoker,
+                InheritedTools.SecondTool.class, secondInvoker));
+        invoker.invokerProviders = instanceOf(provider);
+
+        Object firstResult = invoker.invoke("req-1", InheritedTools.FirstTool.class, fromFirstBean, emptyArguments());
+        Object secondResult =
+                invoker.invoke("req-2", InheritedTools.SecondTool.class, fromSecondBean, emptyArguments());
+
+        assertThat(firstResult)
+                .as("the first bean must be invoked through its own invoker")
+                .isEqualTo("first");
+        assertThat(secondResult)
+                .as("the second bean must not reuse the invoker built for the first bean")
+                .isEqualTo("second");
+        assertThat(secondInvoker.invoked)
+                .as("the invoker built for the second bean must actually be used")
+                .isTrue();
+    }
+
+    /** A provider that offers a different invoker per bean type, as a real container's would. */
+    private static McpInvokerProvider providerPerBeanType(Map<Class<?>, McpMethodInvoker> invokers) {
+        return (beanType, methodName, parameterTypes) -> Optional.ofNullable(invokers.get(beanType));
     }
 
     private static McpInvokerProvider providerReturning(McpMethodInvoker methodInvoker) {

@@ -49,7 +49,21 @@ public class McpBeanInvoker {
     @Inject
     Instance<McpInvokerProvider> invokerProviders;
 
-    private final ConcurrentHashMap<Method, Optional<McpMethodInvoker>> invokerCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<InvokerCacheKey, Optional<McpMethodInvoker>> invokerCache =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Cache key for a provider lookup. The lookup depends on the bean type as well as the method, and the two cannot be
+     * collapsed: registries collect MCP methods with {@code beanClass.getMethods()}, which returns the
+     * <em>declaring</em> {@link Method} for an inherited method, so two beans extending a common base that declares an
+     * annotated method produce {@link Method} objects that are {@code equals()}. Keyed on the method alone, the second
+     * bean would reuse the invoker the container built for the first — and since those invokers are built
+     * {@code withInstanceLookup()}, the container would then resolve and invoke the wrong bean instance, silently.
+     *
+     * @param beanType the CDI bean class the lookup was made for
+     * @param method the method the lookup was made for
+     */
+    private record InvokerCacheKey(Class<?> beanType, Method method) {}
 
     /**
      * Invokes a method without MCP framework context (backward compatible).
@@ -82,8 +96,8 @@ public class McpBeanInvoker {
             JsonObject arguments,
             McpRequestContext ctx,
             McpSession session) {
-        Optional<McpMethodInvoker> providedInvoker =
-                invokerCache.computeIfAbsent(method, m -> lookupInvoker(beanType, m));
+        Optional<McpMethodInvoker> providedInvoker = invokerCache.computeIfAbsent(
+                new InvokerCacheKey(beanType, method), k -> lookupInvoker(k.beanType(), k.method()));
         if (providedInvoker.isPresent()) {
             return invokeViaProvider(requestId, beanType, method, arguments, ctx, session, providedInvoker.get());
         }
