@@ -9,6 +9,50 @@ import org.junit.jupiter.api.Test;
 class McpNotificationBroadcasterTest {
 
     @Test
+    void registeringASecondChannelForASessionClosesTheFirstAndKeepsTheSecond() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink firstSink = new FakeSseEventSink();
+        FakeSseEventSink secondSink = new FakeSseEventSink();
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(firstSink, new FakeSse(), null));
+
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(secondSink, new FakeSse(), null));
+        broadcaster.broadcast(JsonRpcNotification.toolsListChanged());
+
+        assertThat(firstSink.isClosed()).isTrue();
+        assertThat(firstSink.events()).isEmpty();
+        assertThat(secondSink.isClosed()).isFalse();
+        assertThat(secondSink.rendered()).contains("notifications/tools/list_changed");
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+    }
+
+    @Test
+    void reRegisteringTheSameChannelDoesNotCloseIt() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        McpSseEventSinkChannel channel = new McpSseEventSinkChannel(sink, new FakeSse(), null);
+        broadcaster.registerStream("s1", channel);
+
+        broadcaster.registerStream("s1", channel);
+
+        assertThat(sink.isClosed()).isFalse();
+        assertThat(channel.isOpen()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+    }
+
+    @Test
+    void closeStreamClosesAndRemovesTheSessionChannel() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(sink, new FakeSse(), null));
+
+        broadcaster.closeStream("s1");
+        broadcaster.closeStream("unknown");
+
+        assertThat(sink.isClosed()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+    }
+
+    @Test
     void shouldBroadcastToRegisteredChannelsWithSseFraming() {
         McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
         FakeSseEventSink sink = new FakeSseEventSink();

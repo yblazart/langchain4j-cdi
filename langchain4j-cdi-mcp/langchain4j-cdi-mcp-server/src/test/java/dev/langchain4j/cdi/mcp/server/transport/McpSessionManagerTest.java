@@ -5,18 +5,63 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.langchain4j.cdi.mcp.server.error.McpSessionException;
 import java.lang.reflect.Field;
+import java.time.Duration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class McpSessionManagerTest {
 
     McpSessionManager manager;
+    McpNotificationBroadcaster broadcaster;
 
     @BeforeEach
     void setUp() throws Exception {
         manager = new McpSessionManager();
-        setField(manager, "subscriptionManager", new McpResourceSubscriptionManager());
-        setField(manager, "rootsManager", new McpRootsManager());
+        broadcaster = new McpNotificationBroadcaster();
+        wire(manager);
+    }
+
+    @AfterEach
+    void tearDown() {
+        manager.shutdown();
+    }
+
+    private void wire(McpSessionManager target) throws Exception {
+        setField(target, "subscriptionManager", new McpResourceSubscriptionManager());
+        setField(target, "rootsManager", new McpRootsManager());
+        setField(target, "broadcaster", broadcaster);
+    }
+
+    @Test
+    void terminatingASessionClosesAndRemovesItsNotificationStream() {
+        String sessionId = manager.createSession(null);
+        FakeSseEventSink sink = new FakeSseEventSink();
+        broadcaster.registerStream(sessionId, new McpSseEventSinkChannel(sink, new FakeSse(), null));
+
+        manager.terminateSession(sessionId);
+
+        assertThat(sink.isClosed()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+    }
+
+    @Test
+    void expiringASessionClosesAndRemovesItsNotificationStream() throws Exception {
+        McpSessionManager expiring = new McpSessionManager(Duration.ofSeconds(-1));
+        try {
+            wire(expiring);
+            String sessionId = expiring.createSession(null);
+            FakeSseEventSink sink = new FakeSseEventSink();
+            broadcaster.registerStream(sessionId, new McpSseEventSinkChannel(sink, new FakeSse(), null));
+
+            expiring.cleanupExpiredSessions();
+
+            assertThat(expiring.activeSessionCount()).isZero();
+            assertThat(sink.isClosed()).isTrue();
+            assertThat(broadcaster.connectedStreamCount()).isZero();
+        } finally {
+            expiring.shutdown();
+        }
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {

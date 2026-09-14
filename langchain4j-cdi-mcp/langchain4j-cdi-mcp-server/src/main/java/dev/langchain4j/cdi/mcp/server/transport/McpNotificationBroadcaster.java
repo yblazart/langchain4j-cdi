@@ -43,13 +43,29 @@ public class McpNotificationBroadcaster {
     }
 
     /**
-     * Registers an SSE channel for a session, replacing any channel previously registered for it.
+     * Registers an SSE channel for a session. A different channel previously registered for the session is closed,
+     * since nothing would write to or close it any more.
      *
      * @param sessionId the session identifier
      * @param channel the channel to send notifications to
      */
     public void registerStream(String sessionId, McpSseChannel channel) {
-        sseStreams.put(sessionId, channel);
+        McpSseChannel previous = sseStreams.put(sessionId, channel);
+        if (previous != null && previous != channel) {
+            previous.close();
+        }
+    }
+
+    /**
+     * Removes and closes the SSE channel of a session, if any, typically when the session is terminated or expires.
+     *
+     * @param sessionId the session identifier
+     */
+    public void closeStream(String sessionId) {
+        McpSseChannel channel = sseStreams.remove(sessionId);
+        if (channel != null) {
+            channel.close();
+        }
     }
 
     /**
