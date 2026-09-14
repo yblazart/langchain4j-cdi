@@ -73,6 +73,9 @@ public class McpBeanInvoker {
             Object[] args = resolveArguments(method, arguments, ctx, session, beanType);
             return method.invoke(instance, args);
         } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof McpException mcpException) {
+                throw mcpException;
+            }
             throw new McpException(
                     requestId,
                     McpErrorCode.INTERNAL_ERROR,

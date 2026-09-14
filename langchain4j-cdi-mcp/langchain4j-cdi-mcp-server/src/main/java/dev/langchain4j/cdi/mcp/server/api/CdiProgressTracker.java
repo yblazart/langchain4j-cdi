@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
-import dev.langchain4j.cdi.mcp.server.transport.McpProgressReporter;
+import dev.langchain4j.cdi.mcp.server.transport.McpProgressSink;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -8,14 +8,14 @@ import java.util.function.Function;
 import org.mcpjava.server.progress.ProgressToken;
 import org.mcpjava.server.progress.ProgressTracker;
 
-/** Thread-safe implementation of {@link ProgressTracker} that delegates to {@link McpProgressReporter}. */
+/** Thread-safe implementation of {@link ProgressTracker} that delegates to an {@link McpProgressSink}. */
 public class CdiProgressTracker implements ProgressTracker {
 
     private final Object rawToken;
     private final BigDecimal totalValue;
     private final BigDecimal stepValue;
     private final Function<BigDecimal, String> messageBuilder;
-    private final McpProgressReporter progressReporter;
+    private final McpProgressSink progressReporter;
     private final AtomicReference<BigDecimal> currentProgress;
 
     /**
@@ -30,7 +30,7 @@ public class CdiProgressTracker implements ProgressTracker {
             BigDecimal totalValue,
             BigDecimal stepValue,
             Function<BigDecimal, String> messageBuilder,
-            McpProgressReporter progressReporter) {
+            McpProgressSink progressReporter) {
         this.rawToken = rawToken;
         this.totalValue = totalValue;
         this.stepValue = stepValue;
@@ -82,12 +82,12 @@ public class CdiProgressTracker implements ProgressTracker {
     static class CdiBuilder implements ProgressTracker.Builder {
 
         private final Object rawToken;
-        private final McpProgressReporter progressReporter;
+        private final McpProgressSink progressReporter;
         private BigDecimal totalValue = null;
         private BigDecimal stepValue = BigDecimal.ONE;
         private Function<BigDecimal, String> messageBuilder = null;
 
-        CdiBuilder(Object rawToken, McpProgressReporter progressReporter) {
+        CdiBuilder(Object rawToken, McpProgressSink progressReporter) {
             this.rawToken = rawToken;
             this.progressReporter = progressReporter;
         }

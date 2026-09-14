@@ -1,38 +1,51 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
 import dev.langchain4j.cdi.mcp.server.logging.McpLogLevel;
+import dev.langchain4j.cdi.mcp.server.logging.McpLogSink;
 import dev.langchain4j.cdi.mcp.server.logging.McpLogger;
 
-/** Implementation of {@link McpLog} that delegates to our internal {@link McpLogger}. */
+/** Implementation of {@link McpLog} that delegates to an {@link McpLogSink}. */
 public class CdiMcpLog implements McpLog {
 
-    private final McpLogger mcpLogger;
+    private final McpLogSink sink;
     private final String loggerName;
+
+    /**
+     * Creates a new MCP log wrapper backed by the internal broadcast logger.
+     *
+     * @param mcpLogger the internal MCP logger
+     * @param loggerName the logger name used for log entries
+     * @deprecated use {@link #CdiMcpLog(McpLogSink, String)}
+     */
+    @Deprecated
+    public CdiMcpLog(McpLogger mcpLogger, String loggerName) {
+        this((McpLogSink) mcpLogger, loggerName);
+    }
 
     /**
      * Creates a new MCP log wrapper.
      *
-     * @param mcpLogger the internal MCP logger
+     * @param sink the log sink to send log entries to
      * @param loggerName the logger name used for log entries
      */
-    public CdiMcpLog(McpLogger mcpLogger, String loggerName) {
-        this.mcpLogger = mcpLogger;
+    public CdiMcpLog(McpLogSink sink, String loggerName) {
+        this.sink = sink;
         this.loggerName = loggerName;
     }
 
     @Override
     public LogLevel level() {
-        return toApiLevel(mcpLogger.getMinimumLevel());
+        return toApiLevel(sink.minimumLevel());
     }
 
     @Override
     public void send(LogLevel level, Object data) {
-        mcpLogger.log(toInternalLevel(level), loggerName, data != null ? data.toString() : "null");
+        sink.log(toInternalLevel(level), loggerName, data != null ? data.toString() : "null");
     }
 
     @Override
     public void send(LogLevel level, String format, Object... params) {
-        mcpLogger.log(toInternalLevel(level), loggerName, formatMessage(format, params));
+        sink.log(toInternalLevel(level), loggerName, formatMessage(format, params));
     }
 
     @Override

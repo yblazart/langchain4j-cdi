@@ -7,7 +7,7 @@ import java.util.Map;
 
 /** Injectable MCP logger that sends log notifications to connected clients via {@code notifications/message}. */
 @ApplicationScoped
-public class McpLogger {
+public class McpLogger implements McpLogSink {
 
     /** CDI-required default constructor. */
     public McpLogger() {}
@@ -33,6 +33,26 @@ public class McpLogger {
      */
     public McpLogLevel getMinimumLevel() {
         return minimumLevel;
+    }
+
+    @Override
+    public McpLogLevel minimumLevel() {
+        return minimumLevel;
+    }
+
+    /**
+     * Builds a {@code notifications/message} JSON-RPC notification.
+     *
+     * @param level level
+     * @param loggerName logger name
+     * @param message message
+     * @return the notification as a map
+     */
+    public static Map<String, Object> notification(McpLogLevel level, String loggerName, String message) {
+        return Map.of(
+                "jsonrpc", "2.0",
+                "method", "notifications/message",
+                "params", Map.of("level", level.name(), "logger", loggerName, "data", message));
     }
 
     /**
@@ -82,6 +102,7 @@ public class McpLogger {
      * @param loggerName the logger name included in the notification
      * @param message the log message
      */
+    @Override
     public void log(McpLogLevel level, String loggerName, String message) {
         if (level.ordinal() < minimumLevel.ordinal()) {
             return;
@@ -89,14 +110,6 @@ public class McpLogger {
         if (broadcaster == null || broadcaster.connectedStreamCount() == 0) {
             return;
         }
-        Map<String, Object> notification = Map.of(
-                "jsonrpc", "2.0",
-                "method", "notifications/message",
-                "params",
-                        Map.of(
-                                "level", level.name(),
-                                "logger", loggerName,
-                                "data", message));
-        broadcaster.broadcast(notification);
+        broadcaster.broadcast(notification(level, loggerName, message));
     }
 }

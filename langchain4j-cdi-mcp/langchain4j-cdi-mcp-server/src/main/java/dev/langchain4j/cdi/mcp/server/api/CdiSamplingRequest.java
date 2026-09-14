@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.server.api;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpModelPreferences;
 import dev.langchain4j.cdi.mcp.server.protocol.McpSamplingMessage;
+import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpSamplingManager;
 import jakarta.json.JsonObject;
 import java.math.BigDecimal;
@@ -23,7 +24,7 @@ public class CdiSamplingRequest implements SamplingRequest {
     private final McpModelPreferences modelPreferences;
     private final Map<String, Object> metadata;
     private final McpSamplingManager samplingManager;
-    private final String sessionId;
+    private final McpClientRequester requester;
 
     CdiSamplingRequest(
             long maxTokens,
@@ -35,7 +36,7 @@ public class CdiSamplingRequest implements SamplingRequest {
             McpModelPreferences modelPreferences,
             Map<String, Object> metadata,
             McpSamplingManager samplingManager,
-            String sessionId) {
+            McpClientRequester requester) {
         this.maxTokens = maxTokens;
         this.messages = messages;
         this.stopSequences = stopSequences;
@@ -45,7 +46,7 @@ public class CdiSamplingRequest implements SamplingRequest {
         this.modelPreferences = modelPreferences;
         this.metadata = metadata;
         this.samplingManager = samplingManager;
-        this.sessionId = sessionId;
+        this.requester = requester;
     }
 
     @Override
@@ -96,6 +97,7 @@ public class CdiSamplingRequest implements SamplingRequest {
 
     @Override
     public SamplingResponse sendAndAwait() {
+        requester.requireCapability("sampling");
         List<Map<String, Object>> messageMaps = messages.stream()
                 .map(m -> {
                     Map<String, Object> map = new LinkedHashMap<>();
@@ -111,7 +113,7 @@ public class CdiSamplingRequest implements SamplingRequest {
             modelPrefsMap.put("hints", modelPreferences.hints());
         }
 
-        JsonObject result = samplingManager.createMessage(sessionId, messageMaps, modelPrefsMap, (int) maxTokens);
+        JsonObject result = samplingManager.createMessage(requester, messageMaps, modelPrefsMap, (int) maxTokens);
         if (result == null) {
             return null;
         }
@@ -122,7 +124,7 @@ public class CdiSamplingRequest implements SamplingRequest {
     static class CdiBuilder implements SamplingRequest.Builder {
 
         private final McpSamplingManager samplingManager;
-        private final String sessionId;
+        private final McpClientRequester requester;
         private long maxTokens = 1024;
         private final List<McpSamplingMessage> messages = new ArrayList<>();
         private List<String> stopSequences = List.of();
@@ -132,9 +134,9 @@ public class CdiSamplingRequest implements SamplingRequest {
         private McpModelPreferences modelPreferences;
         private Map<String, Object> metadata = Map.of();
 
-        CdiBuilder(McpSamplingManager samplingManager, String sessionId) {
+        CdiBuilder(McpSamplingManager samplingManager, McpClientRequester requester) {
             this.samplingManager = samplingManager;
-            this.sessionId = sessionId;
+            this.requester = requester;
         }
 
         @Override
@@ -209,7 +211,7 @@ public class CdiSamplingRequest implements SamplingRequest {
                     modelPreferences,
                     Map.copyOf(metadata),
                     samplingManager,
-                    sessionId);
+                    requester);
         }
     }
 }

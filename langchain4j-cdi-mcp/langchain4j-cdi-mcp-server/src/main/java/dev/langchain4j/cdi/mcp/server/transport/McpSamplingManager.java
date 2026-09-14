@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.JsonObject;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,9 @@ public class McpSamplingManager {
      * @param modelPreferences optional model preferences (can be null)
      * @param maxTokens maximum tokens in the response
      * @return the client's response as a JsonObject, or null on timeout/error
+     * @deprecated use {@link #createMessage(McpClientRequester, List, Map, int)}
      */
+    @Deprecated
     public JsonObject createMessage(
             String sessionId, List<Map<String, Object>> messages, Map<String, Object> modelPreferences, int maxTokens) {
 
@@ -47,5 +50,37 @@ public class McpSamplingManager {
             LOGGER.fine("MCP: Received sampling response from session " + sessionId);
         }
         return result;
+    }
+
+    /**
+     * Requests the client to create a message using its LLM, via the given requester.
+     *
+     * @param requester the client requester to send the request through
+     * @param messages the conversation messages (list of maps with "role" and "content")
+     * @param modelPreferences optional model preferences (can be null)
+     * @param maxTokens maximum tokens in the response
+     * @return the client's response as a JsonObject, or null on timeout/error
+     */
+    public JsonObject createMessage(
+            McpClientRequester requester,
+            List<Map<String, Object>> messages,
+            Map<String, Object> modelPreferences,
+            int maxTokens) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("messages", messages);
+        if (modelPreferences != null) {
+            params.put("modelPreferences", modelPreferences);
+        }
+        params.put("maxTokens", maxTokens);
+        return requester.request("sampling/createMessage", params, Duration.ofSeconds(30));
+    }
+
+    /**
+     * Returns the server request manager used for legacy client requests.
+     *
+     * @return the server request manager
+     */
+    public McpServerRequestManager getRequestManager() {
+        return requestManager;
     }
 }

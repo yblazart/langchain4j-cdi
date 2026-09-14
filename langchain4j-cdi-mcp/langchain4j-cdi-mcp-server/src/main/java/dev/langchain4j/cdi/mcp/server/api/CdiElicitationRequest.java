@@ -1,5 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
+import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpElicitationManager;
 import jakarta.json.JsonObject;
 import java.time.Duration;
@@ -12,19 +13,19 @@ public class CdiElicitationRequest implements ElicitationRequest {
     private final String message;
     private final Map<String, PrimitiveSchema> requestedSchema;
     private final McpElicitationManager elicitationManager;
-    private final String sessionId;
+    private final McpClientRequester requester;
     private final long timeoutSeconds;
 
     CdiElicitationRequest(
             String message,
             Map<String, PrimitiveSchema> requestedSchema,
             McpElicitationManager elicitationManager,
-            String sessionId,
+            McpClientRequester requester,
             long timeoutSeconds) {
         this.message = message;
         this.requestedSchema = requestedSchema;
         this.elicitationManager = elicitationManager;
-        this.sessionId = sessionId;
+        this.requester = requester;
         this.timeoutSeconds = timeoutSeconds;
     }
 
@@ -46,16 +47,13 @@ public class CdiElicitationRequest implements ElicitationRequest {
 
     @Override
     public ElicitationResponse sendAndAwait() {
+        requester.requireCapability("elicitation");
         Map<String, Object> schemaMap = new LinkedHashMap<>();
         if (requestedSchema != null) {
             requestedSchema.forEach((key, schema) -> schemaMap.put(key, schema.asJson()));
         }
-
-        JsonObject result = elicitationManager.createElicitation(sessionId, message, schemaMap, timeoutSeconds);
-        if (result == null) {
-            return null;
-        }
-        return new CdiElicitationResponse(result);
+        JsonObject result = elicitationManager.createElicitation(requester, message, schemaMap, timeoutSeconds);
+        return result == null ? null : new CdiElicitationResponse(result);
     }
 
     static class CdiBuilder implements ElicitationRequest.Builder {
@@ -63,14 +61,14 @@ public class CdiElicitationRequest implements ElicitationRequest {
         private static final long DEFAULT_TIMEOUT_SECONDS = 30L;
 
         private final McpElicitationManager elicitationManager;
-        private final String sessionId;
+        private final McpClientRequester requester;
         private String message;
         private final Map<String, PrimitiveSchema> requestedSchema = new LinkedHashMap<>();
         private long timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
 
-        CdiBuilder(McpElicitationManager elicitationManager, String sessionId) {
+        CdiBuilder(McpElicitationManager elicitationManager, McpClientRequester requester) {
             this.elicitationManager = elicitationManager;
-            this.sessionId = sessionId;
+            this.requester = requester;
         }
 
         @Override
@@ -97,7 +95,7 @@ public class CdiElicitationRequest implements ElicitationRequest {
         @Override
         public ElicitationRequest build() {
             return new CdiElicitationRequest(
-                    message, Map.copyOf(requestedSchema), elicitationManager, sessionId, timeoutSeconds);
+                    message, Map.copyOf(requestedSchema), elicitationManager, requester, timeoutSeconds);
         }
     }
 }

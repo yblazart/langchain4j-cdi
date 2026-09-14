@@ -1,10 +1,17 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
 import dev.langchain4j.cdi.mcp.server.logging.McpLogger;
+import dev.langchain4j.cdi.mcp.server.logging.McpRequestLogSink;
+import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpElicitationManager;
+import dev.langchain4j.cdi.mcp.server.transport.McpLegacyClientRequester;
+import dev.langchain4j.cdi.mcp.server.transport.McpNoopResponseChannel;
 import dev.langchain4j.cdi.mcp.server.transport.McpProgressReporter;
+import dev.langchain4j.cdi.mcp.server.transport.McpProgressSink;
+import dev.langchain4j.cdi.mcp.server.transport.McpResponseChannel;
 import dev.langchain4j.cdi.mcp.server.transport.McpRootsManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSamplingManager;
+import dev.langchain4j.cdi.mcp.server.transport.McpServerRequestManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSession;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -36,6 +43,9 @@ public class McpApiFactory {
     @Inject
     McpElicitationManager elicitationManager;
 
+    @Inject
+    McpServerRequestManager serverRequestManager;
+
     /**
      * Creates an instance of the given MCP framework type.
      *
@@ -47,29 +57,40 @@ public class McpApiFactory {
      * @throws IllegalArgumentException if the type is not a known framework type
      */
     public Object createInstance(Class<?> type, McpRequestContext ctx, McpSession session, Class<?> beanType) {
+        boolean modern = ctx != null && ctx.isModern();
+        McpResponseChannel channel =
+                ctx != null && ctx.channel() != null ? ctx.channel() : McpNoopResponseChannel.INSTANCE;
         if (type == McpLog.class) {
-            return new CdiMcpLog(mcpLogger, beanType.getSimpleName());
+            return modern
+                    ? new CdiMcpLog(
+                            new McpRequestLogSink(channel, ctx.protocol().logLevel()), beanType.getSimpleName())
+                    : new CdiMcpLog(mcpLogger, beanType.getSimpleName());
         }
         if (type == Progress.class) {
-            return new CdiProgress(ctx != null ? ctx.progressToken() : null, progressReporter);
+            Object token = ctx != null ? ctx.progressToken() : null;
+            return modern
+                    ? new CdiProgress(token, McpProgressSink.forChannel(channel))
+                    : new CdiProgress(token, progressReporter);
         }
         if (type == Cancellation.class) {
             return new CdiCancellation(ctx != null ? ctx.cancelledFlag() : null);
         }
         if (type == McpConnection.class) {
-            return new CdiMcpConnection(session, mcpLogger);
+            return modern
+                    ? new CdiMcpConnection(ctx.protocol(), ctx.requestId())
+                    : new CdiMcpConnection(session, mcpLogger);
         }
+        McpClientRequester requester = ctx != null && ctx.clientRequester() != null
+                ? ctx.clientRequester()
+                : new McpLegacyClientRequester(session, serverRequestManager);
         if (type == Roots.class) {
-            String sessionId = ctx != null ? ctx.sessionId() : session.getId();
-            return new CdiRoots(session, rootsManager, sessionId);
+            return new CdiRoots(requester, rootsManager);
         }
         if (type == Sampling.class) {
-            String sessionId = ctx != null ? ctx.sessionId() : session.getId();
-            return new CdiSampling(session, samplingManager, sessionId);
+            return new CdiSampling(requester, samplingManager);
         }
         if (type == Elicitation.class) {
-            String sessionId = ctx != null ? ctx.sessionId() : session.getId();
-            return new CdiElicitation(session, elicitationManager, sessionId);
+            return new CdiElicitation(requester, elicitationManager);
         }
         throw new IllegalArgumentException("Unknown MCP framework type: " + type.getName());
     }

@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.JsonObject;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -30,7 +31,9 @@ public class McpElicitationManager {
      * @param requestedSchema the JSON schema for the expected response
      * @param timeoutSeconds how long to wait for the response
      * @return the client's response as a JsonObject, or null on timeout/error
+     * @deprecated use {@link #createElicitation(McpClientRequester, String, Map, long)}
      */
+    @Deprecated
     public JsonObject createElicitation(
             String sessionId, String message, Map<String, Object> requestedSchema, long timeoutSeconds) {
 
@@ -45,5 +48,35 @@ public class McpElicitationManager {
             LOGGER.fine("MCP: Received elicitation response from session " + sessionId);
         }
         return result;
+    }
+
+    /**
+     * Sends an elicitation request to the client via the given requester.
+     *
+     * @param requester the client requester to send the request through
+     * @param message the message to display to the user
+     * @param properties the JSON schema properties for the expected response
+     * @param timeoutSeconds how long to wait for the response (ignored by stateless requesters)
+     * @return the client's response as a JsonObject, or null on timeout/error
+     */
+    public JsonObject createElicitation(
+            McpClientRequester requester, String message, Map<String, Object> properties, long timeoutSeconds) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (requester.isModern()) {
+            params.put("mode", "form");
+        }
+        params.put("message", message);
+        params.put(
+                "requestedSchema", Map.of("type", "object", "properties", properties != null ? properties : Map.of()));
+        return requester.request("elicitation/create", params, Duration.ofSeconds(timeoutSeconds));
+    }
+
+    /**
+     * Returns the server request manager used for legacy client requests.
+     *
+     * @return the server request manager
+     */
+    public McpServerRequestManager getRequestManager() {
+        return requestManager;
     }
 }
