@@ -18,8 +18,6 @@
         <maven.compiler.source combine.self="override">21</maven.compiler.source>
         <maven.compiler.target combine.self="override">21</maven.compiler.target>
         <maven.compiler.release combine.self="override">21</maven.compiler.release>
-        <!-- Prompt argument names are read from java.lang.reflect.Parameter#getName(). -->
-        <maven.compiler.parameters>true</maven.compiler.parameters>
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.install.skip>true</maven.install.skip>
     </properties>

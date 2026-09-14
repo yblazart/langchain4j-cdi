@@ -38,6 +38,17 @@ public final class McpTestRequests {
         return "{\"jsonrpc\":\"2.0\",\"id\":%s,\"method\":\"ping\",\"params\":{}}".formatted(formatId(id));
     }
 
+    /**
+     * Builds a {@code ping} sent as a notification, i.e. without a JSON-RPC {@code id}. The Streamable HTTP transport
+     * keys its {@code 202 Accepted} answer on that shape, not on the method name.
+     *
+     * @return the notification body
+     */
+    @SuppressWarnings("java:S3400")
+    public static String pingNotification() {
+        return "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"params\":{}}";
+    }
+
     // --- Tools ---
 
     /**

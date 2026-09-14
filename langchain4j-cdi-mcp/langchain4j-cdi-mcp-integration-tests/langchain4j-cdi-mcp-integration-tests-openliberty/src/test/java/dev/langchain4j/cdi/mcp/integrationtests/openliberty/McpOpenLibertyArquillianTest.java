@@ -457,6 +457,14 @@ public class McpOpenLibertyArquillianTest {
         JsonRpcAssertions.assertNotificationAccepted(response);
     }
 
+    @Test
+    public void shouldAcceptAnyNotificationShapedMessage() {
+        // the 202 is keyed on the absence of a JSON-RPC id, not on the method name
+        String sessionId = initializeSession();
+        McpHttpResponse response = postMcp(sessionId, McpTestRequests.pingNotification());
+        JsonRpcAssertions.assertNotificationAccepted(response);
+    }
+
     // --- Capabilities ---
 
     @Test

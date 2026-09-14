@@ -70,12 +70,23 @@ public class McpLegacyProtocolHandler {
     /**
      * Dispatches a legacy JSON-RPC request to the appropriate handler.
      *
+     * <p>The answer is keyed on the JSON-RPC shape of the body, not on the method name: a message without an {@code id}
+     * is a notification, and the Streamable HTTP transport requires a POST whose body is only notifications to be
+     * answered {@code 202 Accepted} with no body whatever the method is. The method is still dispatched first, so its
+     * side effects (marking a session initialized, cancelling a request, refreshing the client's roots) happen as
+     * before; only the response is replaced.
+     *
      * @param request the parsed JSON-RPC request
      * @param sessionId the {@code Mcp-Session-Id} header value, or {@code null}
      * @param wantsSse whether the client accepts {@code text/event-stream} responses
      * @return the JAX-RS response
      */
     public Response handle(JsonRpcRequest request, String sessionId, boolean wantsSse) {
+        Response response = dispatch(request, sessionId, wantsSse);
+        return request.getId() == null ? accepted() : response;
+    }
+
+    private Response dispatch(JsonRpcRequest request, String sessionId, boolean wantsSse) {
         Object id = request.getId();
         JsonObject params = request.getParams();
         return switch (request.getMethod()) {
