@@ -1,7 +1,9 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
 import org.junit.jupiter.api.Test;
 
@@ -34,5 +36,24 @@ class McpJsonRpcParserTest {
         assertThat(McpJsonRpcParser.isJsonRpcResponse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}"))
                 .isFalse();
         assertThat(McpJsonRpcParser.isJsonRpcResponse("not json")).isFalse();
+    }
+
+    @Test
+    void malformedBodyMapsToParseError() {
+        McpException exception =
+                catchThrowableOfType(() -> McpJsonRpcParser.parseRequest("not json"), McpException.class);
+
+        assertThat(exception.getErrorCode().getCode()).isEqualTo(-32700);
+        assertThat(exception.getHttpStatus()).isEqualTo(400);
+        assertThat(exception.getRequestId()).isNull();
+    }
+
+    @Test
+    void nonObjectJsonMapsToParseError() {
+        McpException exception = catchThrowableOfType(() -> McpJsonRpcParser.parseRequest("[1,2]"), McpException.class);
+
+        assertThat(exception.getErrorCode().getCode()).isEqualTo(-32700);
+        assertThat(exception.getHttpStatus()).isEqualTo(400);
+        assertThat(exception.getRequestId()).isNull();
     }
 }

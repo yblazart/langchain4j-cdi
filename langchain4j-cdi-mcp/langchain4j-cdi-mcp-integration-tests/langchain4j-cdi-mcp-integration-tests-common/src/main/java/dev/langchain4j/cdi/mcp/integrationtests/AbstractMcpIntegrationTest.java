@@ -10,8 +10,11 @@ import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.service.tool.ToolExecutionResult;
+import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
+import java.io.StringReader;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -171,6 +174,18 @@ public abstract class AbstractMcpIntegrationTest {
         String sessionId = initializeSession();
         McpHttpResponse response = postMcp(sessionId, McpTestRequests.unknownMethodRequest("5", "unknown/method"));
         JsonRpcAssertions.assertJsonRpcError(response, "5", -32601, "Unknown method");
+    }
+
+    @Test
+    void shouldReturnParseErrorForMalformedBody() {
+        McpHttpResponse response = transport().post("/mcp", "{not json", Map.of());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        JsonObject json;
+        try (JsonReader reader = Json.createReader(new StringReader(response.body()))) {
+            json = reader.readObject();
+        }
+        assertThat(json.getJsonObject("error").getInt("code")).isEqualTo(-32700);
     }
 
     // --- Resources ---
