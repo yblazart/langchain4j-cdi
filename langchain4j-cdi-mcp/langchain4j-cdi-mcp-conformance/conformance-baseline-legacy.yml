@@ -9,26 +9,14 @@
 #       --expected-failures conformance-baseline-legacy.yml
 #
 # Note: the legacy era implemented by this server is MCP 2025-03-26, while these
-# scenarios target 2025-06-18 / 2025-11-25.
+# scenarios target 2025-06-18 / 2025-11-25. Not one failure is attributable to
+# that difference.
+#
+# Scores at the time of writing: 2025-11-25 -> 74 passed, 1 failed;
+# stable line @0.1.16 -> 40 passed, 0 failed (a clean sweep).
 server:
-  # `POST /mcp` carrying only notifications answers HTTP 200 instead of the
-  # 202 Accepted the Streamable HTTP transport requires. The MCP TypeScript SDK
-  # only opens the standalone `GET /mcp` SSE stream after a 202 on
-  # `notifications/initialized`, so the conformance client never receives any
-  # server-initiated request or notification.
-  - tools-call-with-logging
-  - tools-call-with-progress
-  - tools-call-sampling
-  - tools-call-elicitation
-  - elicitation-sep1034-defaults
-  - elicitation-sep1330-enums
-
-  # After `DELETE /mcp`, requests carrying the terminated session id answer
-  # HTTP 200 with a JSON-RPC error instead of HTTP 404.
-  - server-session-lifecycle:server-session-terminated-returns-404
-
-  # `resources/read` does not resolve registered `@ResourceTemplate` URI templates.
-  - resources-templates-read
-
-  # No API to supply a hand-written tool inputSchema (2025-11-25 run only).
-  - json-schema-2020-12
+  # No API to supply a hand-written tool inputSchema: the schema is always
+  # generated from the Java signature, so the SEP-1613/SEP-2106 fixture tool
+  # `json_schema_2020_12_tool` cannot be expressed. The scenario's second check
+  # passes and stays enforced; the scenario is absent from the @0.1.16 suite.
+  - json-schema-2020-12:json-schema-2020-12-tool-found

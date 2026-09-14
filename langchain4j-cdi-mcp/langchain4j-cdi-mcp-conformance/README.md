@@ -75,13 +75,17 @@ and the failing check ids from `results/server-<scenario>-*/checks.json`, and ed
 `<scenario>:<check-id>` entries so the remaining checks of that scenario stay enforced; warnings must be
 baselined too, they are treated as failures by the gate.
 
-## Recorded results (2026-09-14)
+## Recorded results (2026-09-14, after the first fix wave)
 
-| Run | Passed | Failed |
-|---|---|---|
-| `--spec-version 2026-07-28 --suite all` | 108 | 29 |
-| `--spec-version 2025-11-25 --suite all` | 58 | 9 |
-| stable line `@0.1.16`, default suite | 25 | 7 |
+| Run | Passed | Failed | First measurement |
+|---|---|---|---|
+| `--spec-version 2026-07-28 --suite all` | 130 | 8 | 108 / 29 |
+| `--spec-version 2025-11-25 --suite all` | 74 | 1 | 58 / 9 |
+| stable line `@0.1.16`, default suite | 40 | 0 | 25 / 7 |
+
+The eight remaining 2026-07-28 failures and the single 2025-11-25 one are missing features or known API
+limitations (custom tool `inputSchema`, `x-mcp-header`, SEP-2322 input-request naming, one pending input request
+per round); see the two baseline files and `langchain4j-cdi-mcp/README.md` ("Conformance").
 
 ## Fixtures
 
@@ -114,6 +118,9 @@ that `notifications/tools/list_changed` and `notifications/prompts/list_changed`
 
 ### Notes
 
-- The module compiles with `-parameters`: prompt argument names come from `java.lang.reflect.Parameter#getName()`
-  (`@PromptArg(name = …)` is not honoured), so without the flag the arguments would be advertised as `arg0`, `arg1`.
-- `@Tool` parameters use explicit `@ToolArg(name = …)`, which *is* honoured.
+- The whole `langchain4j-cdi-mcp` tree now compiles with `-parameters`, so an unannotated argument is advertised
+  and bound under its Java parameter name instead of `arg0`. `@ToolArg(name = …)`, `@PromptArg(name = …)` and
+  `@ResourceTemplateArg(name = …)` are honoured and take precedence.
+- `test_elicitation_sep1330_enums` builds its titled enums as `oneOf: [{const, title}]` and
+  `items.anyOf: [{const, title}]`, which is what SEP-1330 asks of a *titled* enum; `enum` + `enumNames` is kept
+  only for the `legacyEnum` field the suite checks for the deprecated shape.

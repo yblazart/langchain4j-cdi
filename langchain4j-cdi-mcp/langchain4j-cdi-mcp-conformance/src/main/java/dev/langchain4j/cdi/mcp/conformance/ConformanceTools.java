@@ -317,6 +317,7 @@ public class ConformanceTools {
                                     "Select one option",
                                     "enum",
                                     List.of("option1", "option2", "option3")))
+                    // SEP-1330: a titled single-select carries oneOf: [{const, title}] and no enum array
                     .addSchemaProperty(
                             "titledSingle",
                             () -> Map.of(
@@ -324,10 +325,11 @@ public class ConformanceTools {
                                     "string",
                                     "description",
                                     "Select one option with titles",
-                                    "enum",
-                                    List.of("value1", "value2", "value3"),
-                                    "enumNames",
-                                    List.of("First Option", "Second Option", "Third Option")))
+                                    "oneOf",
+                                    List.of(
+                                            titledOption("value1", "First Option"),
+                                            titledOption("value2", "Second Option"),
+                                            titledOption("value3", "Third Option"))))
                     .addSchemaProperty(
                             "legacyEnum",
                             () -> Map.of(
@@ -352,6 +354,7 @@ public class ConformanceTools {
                                     1,
                                     "maxItems",
                                     3))
+                    // SEP-1330: a titled multi-select carries items.anyOf: [{const, title}] and no items.enum
                     .addSchemaProperty(
                             "titledMulti",
                             () -> Map.of(
@@ -363,10 +366,11 @@ public class ConformanceTools {
                                     Map.of(
                                             "type",
                                             "string",
-                                            "enum",
-                                            List.of("value1", "value2", "value3"),
-                                            "enumNames",
-                                            List.of("First Choice", "Second Choice", "Third Choice")),
+                                            "anyOf",
+                                            List.of(
+                                                    titledOption("value1", "First Choice"),
+                                                    titledOption("value2", "Second Choice"),
+                                                    titledOption("value3", "Third Choice"))),
                                     "minItems",
                                     1,
                                     "maxItems",
@@ -377,6 +381,10 @@ public class ConformanceTools {
         } catch (RuntimeException e) {
             return ToolResponse.ofText("Elicitation not supported or error: " + e.getMessage());
         }
+    }
+
+    private static Map<String, Object> titledOption(String value, String title) {
+        return Map.of("const", value, "title", title);
     }
 
     /**

@@ -25,6 +25,7 @@ The server is **dual-era**: on the same `/mcp` endpoint it speaks both MCP **202
   - [Protocol Versions & Compatibility](#protocol-versions--compatibility)
   - [Client Interactions with MCP 2026-07-28](#client-interactions-with-mcp-2026-07-28)
   - [Server Configuration](#server-configuration)
+- [Conformance](#conformance)
 - [Runtime Support](#runtime-support)
 - [Module Structure](#module-structure)
 
@@ -232,6 +233,22 @@ public class AppResources {
 
 Clients can also **subscribe** to resources and receive notifications when the data changes.
 
+A `@ResourceTemplate` serves a whole family of URIs. The `{variable}` expressions of the URI template (RFC 6570 level 1) are matched against the requested URI and bound to the method's parameters by name:
+
+```java
+@ResourceTemplate(
+        uriTemplate = "user://{userId}/profile",
+        name = "User Profile",
+        mimeType = "application/json")
+public String userProfile(@ResourceTemplateArg(name = "userId") String userId) {
+    return repository.profileJson(userId);
+}
+```
+
+`resources/read` resolves an exactly registered `@Resource` URI first and falls back to the templates; when several templates match, the most specific one wins (fewest variables, then the longest template). A variable in the middle of the template matches one path segment, a variable ending it matches the rest of the URI.
+
+> Without `@ResourceTemplateArg(name = …)` — and likewise without `@ToolArg(name = …)` / `@PromptArg(name = …)` — arguments are named after the Java parameter, which requires the module holding your beans to be **compiled with `-parameters`**; otherwise they are advertised and bound as `arg0`, `arg1`, … Set `<maven.compiler.parameters>true</maven.compiler.parameters>` in your application's POM.
+
 ### Framework Types
 
 You can inject special MCP framework types as parameters in any `@Tool`, `@Prompt`, or `@Resource` method. These are resolved automatically at invocation time and do **not** appear in the generated JSON Schema.
@@ -280,13 +297,20 @@ All types are from the `org.mcpjava.server` package.
 | Change notifications | `GET /mcp` SSE stream + `resources/subscribe` | `subscriptions/listen` |
 | Elicitation / sampling / roots | server-initiated requests on the GET stream | multi round-trip requests (`input_required` results) |
 | Logging | `logging/setLevel` (global) | `io.modelcontextprotocol/logLevel` per request |
-| Errors | HTTP 200 + JSON-RPC error | HTTP 400 for `HeaderMismatch` (-32020), `MissingRequiredClientCapability` (-32021), `UnsupportedProtocolVersion` (-32022); HTTP 404 for unknown methods |
+| Errors | HTTP 200 + JSON-RPC error; HTTP 400 for a request without a session id, HTTP 404 for one carrying an unknown or terminated session id | HTTP 400 for `InvalidParams` (-32602) on a missing or incomplete `_meta`, `HeaderMismatch` (-32020), `MissingRequiredClientCapability` (-32021), `UnsupportedProtocolVersion` (-32022); HTTP 404 for unknown methods |
+| Notification POSTs | HTTP 202 Accepted, empty body | HTTP 202 Accepted, empty body |
+| Caching hints | none | `ttlMs` / `cacheScope` (SEP-2549) on `server/discover` and on every cacheable result (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `resources/read`) |
 
 `server/discover` advertises `supportedVersions: ["2026-07-28", "2025-03-26"]`. A modern request with another version is rejected with `UnsupportedProtocolVersion` listing these versions, and dual-era clients (such as `langchain4j-mcp` 1.19+) fall back automatically.
 
 The server validates the `Origin` header on every request (DNS rebinding protection). Requests without `Origin` (non-browser clients) are accepted. With the default empty `allowedOrigins`, a request with an `Origin` is accepted only when both the `Origin` host and the `Host` header host are loopback (`localhost`, `127.0.0.1`, `::1`); any other origin — including one matching the `Host` header, which is exactly what a DNS rebinding attack sends — gets HTTP 403. When the server is reached from browsers through a real host name, list the accepted origins in `allowedOrigins` (see [Server Configuration](#server-configuration)).
 
 > **Breaking change:** `McpEndpoint` is container-managed. Its public constructor and its resource method signatures (`handlePost`, `handleGet`, `handleDelete`) changed: code that subclassed `McpEndpoint` or invoked these methods directly must be updated.
+
+> **Breaking change — legacy-era HTTP status codes.** Two legacy (2025-03-26) responses changed to the status the Streamable HTTP transport requires, and clients that hard-coded the old ones must be updated:
+>
+> - A `POST /mcp` whose body is only JSON-RPC **notifications or responses** now answers **202 Accepted** with an empty body instead of 200. This is not cosmetic: the MCP TypeScript SDK opens the standalone `GET /mcp` notification stream only when `notifications/initialized` is answered exactly 202, so with 200 no server-initiated elicitation, sampling, log or progress message ever reached such a client.
+> - A request carrying an unknown or **terminated** session id now answers **404 Not Found** (still with the `-32001` JSON-RPC error body) instead of 200. A request carrying *no* session id stays a 400 Bad Request.
 
 #### Known limitations
 
@@ -345,6 +369,8 @@ public class McpConfigProducer {
                 .requestStateSecret(System.getenv("MCP_REQUEST_STATE_SECRET")) // >= 32 characters
                 .requestStateTtl(Duration.ofMinutes(10))
                 .continuationTimeout(Duration.ofMinutes(5))
+                .cacheTtl(Duration.ofMinutes(5))
+                .cacheScope("public")
                 .build();
     }
 }
@@ -358,6 +384,41 @@ public class McpConfigProducer {
 | `requestStateSecret` | random per JVM | HMAC key protecting `requestState`; **set it when running several instances** |
 | `requestStateTtl` | 10 minutes | Validity of a `requestState` |
 | `continuationTimeout` | 5 minutes | `CONTINUATION` mode: maximum wait for a client answer or for the method to finish |
+| `cacheTtl` | 0 (immediately stale) | SEP-2549 `ttlMs` emitted on cacheable MCP 2026-07-28 results; raise it when your tool/prompt/resource catalogue is stable |
+| `cacheScope` | `public` | SEP-2549 `cacheScope` emitted on the same results; use `private` when a result depends on the caller's authorization context |
+
+---
+
+## Conformance
+
+The server is measured against the official [`@modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance) suite by the `langchain4j-cdi-mcp-conformance` fixture application (a Helidon MP app serving `/mcp` on port 8080, built with `mvn package`, run with `java -jar target/langchain4j-cdi-mcp-conformance.jar`).
+
+| Run | Score |
+|---|---|
+| `--spec-version 2026-07-28 --suite all` | **130 passed, 8 failed** |
+| `--spec-version 2025-11-25 --suite all` | **74 passed, 1 failed** |
+| `@0.1.16` (stable line, default suite) | **40 passed, 0 failed** |
+
+```bash
+npx -y @modelcontextprotocol/conformance@alpha server --url http://localhost:8080/mcp \
+    --spec-version 2026-07-28 --suite all --expected-failures conformance-baseline.yml
+npx -y @modelcontextprotocol/conformance@alpha server --url http://localhost:8080/mcp \
+    --spec-version 2025-11-25 --suite all --expected-failures conformance-baseline-legacy.yml
+npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:8080/mcp \
+    --expected-failures conformance-baseline-legacy.yml
+```
+
+`--suite all` is required: the default `active` suite runs 20 scenarios and silently skips the entire 2026-07-28 surface, including all 15 multi-round-trip (`input-required-result-*`) scenarios.
+
+### Known gaps
+
+The remaining failures are missing features and API limitations, not protocol bugs. They are listed in `conformance-baseline.yml` / `conformance-baseline-legacy.yml`, so a regression anywhere else fails the gate.
+
+- **Custom tool `inputSchema`** — a tool's schema is always derived from its Java signature; there is no API to supply a hand-written JSON Schema 2020-12 document (`$defs`, `allOf`/`anyOf`, `if`/`then`/`else`, …).
+- **SEP-2243 `x-mcp-header` / `Mcp-Param-*`** — custom header mirroring is not implemented server-side.
+- **SEP-2322 input-request names** — multi-round-trip input requests are named by call order (`input-0`, `input-1`, …); a server cannot choose the key it publishes. Needs an API change on the `Elicitation` / `Sampling` / `Roots` builders.
+- **One pending input request per round** — the blocking `sendAndAwait()` API suspends the method at its first interaction, so an `input_required` result always carries a single `inputRequests` entry. Asking several questions in one round trip needs a batch interaction API.
+- **Tasks extension** — not implemented.
 
 ---
 
