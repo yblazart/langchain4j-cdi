@@ -5,6 +5,8 @@ import dev.langchain4j.cdi.mcp.server.protocol.McpSamplingMessage;
 import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpSamplingManager;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonString;
+import jakarta.json.JsonValue;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -118,7 +120,26 @@ public class CdiSamplingRequest implements SamplingRequest {
             return null;
         }
 
-        return new SamplingResponse(null, result.getString("model", null), null, result.getString("stopReason", null));
+        return new SamplingResponse(
+                content(result.get("content")),
+                result.getString("model", null),
+                result.getString("role", null),
+                result.getString("stopReason", null));
+    }
+
+    /**
+     * Unwraps the {@code content} of a {@code sampling/createMessage} result. A content block stays a
+     * {@link JsonObject} (it is itself a {@code Map<String, JsonValue>}); a bare string is unwrapped to a
+     * {@link String} so a caller never has to unquote it.
+     *
+     * @param content the raw {@code content} value, or {@code null} when absent
+     * @return the content to expose on the {@link SamplingResponse}, or {@code null}
+     */
+    private static Object content(JsonValue content) {
+        if (content == null || content.getValueType() == JsonValue.ValueType.NULL) {
+            return null;
+        }
+        return content instanceof JsonString s ? s.getString() : content;
     }
 
     static class CdiBuilder implements SamplingRequest.Builder {
