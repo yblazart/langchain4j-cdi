@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.server.protocol;
 
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
+import jakarta.json.JsonException;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonReader;
@@ -91,7 +92,7 @@ public final class McpJsonSerializer {
         if (response.isError()) {
             json.add("isError", true);
         }
-        response.structuredContent().ifPresent(sc -> json.add("structuredContent", toJsonValue(sc)));
+        response.structuredContent().ifPresent(sc -> json.add("structuredContent", structuredContentToJson(sc)));
         return json.build();
     }
 
@@ -177,7 +178,8 @@ public final class McpJsonSerializer {
     }
 
     /**
-     * Converts an arbitrary value to a JSON-P value. JSON strings starting with an object or array are parsed.
+     * Converts an arbitrary value to a JSON-P value. A {@link String} always becomes a JSON string, even when its
+     * content looks like JSON; other objects are serialized with JSON-B, skipping null properties.
      *
      * @param value the value to convert
      * @return the JSON value
@@ -190,17 +192,40 @@ public final class McpJsonSerializer {
             return jsonValue;
         }
         if (value instanceof String s) {
+            return Json.createValue(s);
+        }
+        try {
+            return parse(JsonbHolder.INSTANCE.toJson(value));
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Cannot serialize value to JSON: " + value.getClass(), e);
+        }
+    }
+
+    /**
+     * Converts a tool's structured content to a JSON-P value. A string holding a JSON object or array is parsed; any
+     * other string, including one that is not valid JSON, becomes a JSON string.
+     *
+     * @param structuredContent the structured content
+     * @return the JSON value
+     */
+    private static JsonValue structuredContentToJson(Object structuredContent) {
+        if (structuredContent instanceof String s) {
             String trimmed = s.trim();
             if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                return parse(trimmed);
+                try {
+                    return parse(trimmed);
+                } catch (JsonException e) {
+                    return Json.createValue(s);
+                }
             }
             return Json.createValue(s);
         }
-        try (Jsonb jsonb = JsonbBuilder.create(new JsonbConfig().withNullValues(false))) {
-            return parse(jsonb.toJson(value));
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Cannot serialize value to JSON: " + value.getClass(), e);
-        }
+        return toJsonValue(structuredContent);
+    }
+
+    /** Lazily created, shared JSON-B instance; JSON-B instances are thread-safe. */
+    private static final class JsonbHolder {
+        static final Jsonb INSTANCE = JsonbBuilder.create(new JsonbConfig().withNullValues(false));
     }
 
     /**

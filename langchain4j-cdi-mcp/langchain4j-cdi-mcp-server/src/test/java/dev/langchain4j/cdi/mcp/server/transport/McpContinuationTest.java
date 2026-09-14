@@ -139,6 +139,19 @@ class McpContinuationTest {
     }
 
     @Test
+    void progressTokenLookingLikeJsonIsRewrittenAsString() {
+        McpContinuation continuation = new McpContinuation("c5b", Duration.ofSeconds(1), () -> {});
+        List<Object> messages = new ArrayList<>();
+
+        continuation.useRound(messages::add, "{x", false);
+        continuation.channel().send(JsonRpcNotification.progress("round1-token", 1, 2, null));
+
+        assertThat(messages).hasSize(1);
+        JsonObject delivered = McpJsonSerializer.toJsonObject(messages.get(0));
+        assertThat(delivered.getJsonObject("params").getString("progressToken")).isEqualTo("{x");
+    }
+
+    @Test
     void progressIsDroppedWhenCurrentRoundHasNoToken() {
         McpContinuation continuation = new McpContinuation("c6", Duration.ofSeconds(1), () -> {});
         List<Object> messages = new ArrayList<>();
