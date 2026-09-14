@@ -1,0 +1,55 @@
+# Known failures of langchain4j-cdi-mcp against @modelcontextprotocol/conformance
+# for the MCP 2026-07-28 (modern / stateless) run:
+#
+#   npx -y @modelcontextprotocol/conformance@alpha server \
+#       --url http://localhost:8080/mcp --spec-version 2026-07-28 --suite all \
+#       --expected-failures conformance-baseline.yml
+#
+# Use conformance-baseline-legacy.yml for the 2025-11-25 / stable-line runs.
+# Entries are per-check where only one check of a scenario fails, so the other
+# checks of that scenario stay enforced.
+server:
+  # SEP-2575: `_meta` validation reports HeaderMismatch (-32020) where the spec
+  # requires Invalid params (-32602), and an unsupported `_meta.protocolVersion`
+  # is reported as -32022 before the header/_meta mismatch is detected.
+  - server-stateless:sep-2575-request-meta-invalid-missing-meta
+  - server-stateless:sep-2575-request-meta-invalid-missing-protocol-version
+  - server-stateless:sep-2575-http-server-header-mismatch-400
+
+  # SEP-2549: caching hints (`ttlMs`, `cacheScope`) are only emitted on
+  # `server/discover`, not on list results or `resources/read`. This also makes
+  # the generic wire-schema check fail on every list/read response.
+  - caching
+  - tools-list:wire-schema-valid
+  - prompts-list:wire-schema-valid
+  - resources-list:wire-schema-valid
+  - resources-read-text:wire-schema-valid
+  - resources-read-binary:wire-schema-valid
+  - http-header-validation:wire-schema-valid
+  - input-required-result-unsupported-methods:wire-schema-valid
+
+  # `resources/read` does not resolve registered `@ResourceTemplate` URI
+  # templates, so a template instance URI is reported as "Resource not found".
+  - resources-templates-read
+
+  # No API to supply a hand-written tool inputSchema: the schema is always
+  # generated from the Java signature, so the SEP-1613/SEP-2106 fixture tool
+  # `json_schema_2020_12_tool` cannot be expressed.
+  - json-schema-2020-12
+
+  # SEP-2243 custom `x-mcp-header` / `Mcp-Param-*` headers are not implemented,
+  # so no fixture tool can carry the annotation.
+  - http-custom-header-server-validation
+
+  # SEP-2164 (warning): the "Resource not found" error does not carry the
+  # requested `uri` in its `data` field (SHOULD).
+  - sep-2164-resource-not-found:sep-2164-data-uri
+
+  # SEP-2322 MRTR: the framework names input requests by call order
+  # (`input-0`, `input-1`, ...); a fixture cannot choose the key `user_name`.
+  - input-required-result-basic-elicitation:sep-2322-elicitation-incomplete
+  - input-required-result-ignore-extra-params:sep-2322-ignore-unexpected-params
+
+  # SEP-2322 MRTR: the blocking client-interaction API suspends on the first
+  # pending interaction, so only one `inputRequests` entry is ever returned.
+  - input-required-result-multiple-input-requests:sep-2322-multiple-inputs-incomplete

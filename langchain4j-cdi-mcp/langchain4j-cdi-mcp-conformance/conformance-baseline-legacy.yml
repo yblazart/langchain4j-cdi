@@ -1,0 +1,34 @@
+# Known failures of langchain4j-cdi-mcp against @modelcontextprotocol/conformance
+# for the legacy (stateful) runs:
+#
+#   npx -y @modelcontextprotocol/conformance@alpha server \
+#       --url http://localhost:8080/mcp --spec-version 2025-11-25 --suite all \
+#       --expected-failures conformance-baseline-legacy.yml
+#   npx -y @modelcontextprotocol/conformance@0.1.16 server \
+#       --url http://localhost:8080/mcp \
+#       --expected-failures conformance-baseline-legacy.yml
+#
+# Note: the legacy era implemented by this server is MCP 2025-03-26, while these
+# scenarios target 2025-06-18 / 2025-11-25.
+server:
+  # `POST /mcp` carrying only notifications answers HTTP 200 instead of the
+  # 202 Accepted the Streamable HTTP transport requires. The MCP TypeScript SDK
+  # only opens the standalone `GET /mcp` SSE stream after a 202 on
+  # `notifications/initialized`, so the conformance client never receives any
+  # server-initiated request or notification.
+  - tools-call-with-logging
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+
+  # After `DELETE /mcp`, requests carrying the terminated session id answer
+  # HTTP 200 with a JSON-RPC error instead of HTTP 404.
+  - server-session-lifecycle:server-session-terminated-returns-404
+
+  # `resources/read` does not resolve registered `@ResourceTemplate` URI templates.
+  - resources-templates-read
+
+  # No API to supply a hand-written tool inputSchema (2025-11-25 run only).
+  - json-schema-2020-12

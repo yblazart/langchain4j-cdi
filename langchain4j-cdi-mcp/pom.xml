@@ -32,6 +32,7 @@
             <modules>
                 <module>langchain4j-cdi-mcp-integration-tests</module>
                 <module>langchain4j-cdi-mcp-example-helidon</module>
+                <module>langchain4j-cdi-mcp-conformance</module>
             </modules>
         </profile>
     </profiles>
