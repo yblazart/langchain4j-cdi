@@ -56,9 +56,14 @@ class McpElicitationManagerTest {
     @Test
     void legacyElicitationHasNoMode() {
         CapturingRequester requester = new CapturingRequester(false);
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("name", Map.of("type", "string"));
 
-        new McpElicitationManager().createElicitation(requester, "m", Map.of(), 30);
+        new McpElicitationManager().createElicitation(requester, "m", properties, 30);
 
-        assertThat(requester.params).doesNotContainKey("mode").containsKey("requestedSchema");
+        assertThat(requester.params)
+                .doesNotContainKey("mode")
+                .containsEntry("message", "m")
+                .containsEntry("requestedSchema", Map.of("type", "object", "properties", properties));
     }
 }
