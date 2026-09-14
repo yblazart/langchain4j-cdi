@@ -8,6 +8,8 @@ Turn any CDI bean into a [Model Context Protocol (MCP)](https://modelcontextprot
 
 This module builds on the [MCP Java](https://github.com/mcp-java) project, using [java-mcp-annotations](https://github.com/mcp-java/java-mcp-annotations) for the annotation API (`@Tool`, `@Prompt`, `@Resource`, …).
 
+The server is **dual-era**: on the same `/mcp` endpoint it speaks both MCP **2025-03-26** (`initialize` handshake, `Mcp-Session-Id` sessions) and the stateless MCP **2026-07-28** revision (per-request `_meta`, `server/discover`, multi round-trip requests). Each request is routed according to the protocol version it declares, so existing clients keep working while modern clients get the new protocol.
+
 ## Table of Contents
 
 - [How It Works](#how-it-works)
@@ -20,6 +22,9 @@ This module builds on the [MCP Java](https://github.com/mcp-java) project, using
   - [Prompts](#prompts)
   - [Resources](#resources)
   - [Framework Types (Logging, Progress, Cancellation…)](#framework-types)
+  - [Protocol Versions & Compatibility](#protocol-versions--compatibility)
+  - [Client Interactions with MCP 2026-07-28](#client-interactions-with-mcp-2026-07-28)
+  - [Server Configuration](#server-configuration)
 - [Runtime Support](#runtime-support)
 - [Module Structure](#module-structure)
 
@@ -115,7 +120,20 @@ http://localhost:8080/mcp
 
 > The exact URL depends on your application's context root. For example, on WildFly with context root `/my-app`, the URL would be `http://localhost:8080/my-app/mcp`.
 
-To test with `curl`:
+To test with `curl` using MCP 2026-07-28 (no session needed):
+
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/list" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{
+        "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+        "io.modelcontextprotocol/clientInfo":{"name":"curl","version":"1.0"},
+        "io.modelcontextprotocol/clientCapabilities":{}}}}'
+```
+
+Or with the legacy 2025-03-26 handshake:
 
 ```bash
 # Initialize a session
@@ -242,15 +260,102 @@ public String importData(
 
 | Type | Description |
 |------|-------------|
-| `McpLog` | Send log messages (`debug`, `info`, `warning`, `error`) to the client |
+| `McpLog` | Send log messages (`debug`, `info`, `warning`, `error`) to the client (MCP 2026-07-28: only when the request sets a log level) |
 | `Progress` | Report progress for long-running operations |
 | `Cancellation` | Check if the client has cancelled the current request |
-| `McpConnection` | Access session and connection information |
+| `McpConnection` | Access session (legacy) or per-request client information (MCP 2026-07-28) |
 | `Roots` | Access the client's file system roots |
 | `Sampling` | Request LLM completions from the client |
 | `Elicitation` | Request user input from the client |
 
 All types are from the `org.mcpjava.server` package.
+
+### Protocol Versions & Compatibility
+
+| | MCP 2025-03-26 (legacy) | MCP 2026-07-28 (modern) |
+|---|---|---|
+| Detection | no `_meta.io.modelcontextprotocol/protocolVersion` in the request | `_meta` version + matching `MCP-Protocol-Version` header |
+| Handshake | `initialize` → `Mcp-Session-Id` | none; `server/discover` is optional |
+| Required headers | `Mcp-Session-Id` | `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` (`tools/call`, `prompts/get`, `resources/read`) |
+| Change notifications | `GET /mcp` SSE stream + `resources/subscribe` | `subscriptions/listen` |
+| Elicitation / sampling / roots | server-initiated requests on the GET stream | multi round-trip requests (`input_required` results) |
+| Logging | `logging/setLevel` (global) | `io.modelcontextprotocol/logLevel` per request |
+| Errors | HTTP 200 + JSON-RPC error | HTTP 400 for `HeaderMismatch` (-32020), `MissingRequiredClientCapability` (-32021), `UnsupportedProtocolVersion` (-32022); HTTP 404 for unknown methods |
+
+`server/discover` advertises `supportedVersions: ["2026-07-28", "2025-03-26"]`. A modern request with another version is rejected with `UnsupportedProtocolVersion` listing these versions, and dual-era clients (such as `langchain4j-mcp` 1.19+) fall back automatically.
+
+The server validates the `Origin` header on every request (DNS rebinding protection): requests without `Origin`, from loopback origins or from the same host are accepted; other origins get HTTP 403 unless listed in `allowedOrigins` (see [Server Configuration](#server-configuration)).
+
+#### Known limitations
+
+- **Request-scoped notifications may be batched on some runtimes.** Progress (`Progress`) and log (`McpLog`) notifications emitted during a modern `tools/call`, `prompts/get` or `resources/read` streamed reply are sent on that request's SSE stream, but Helidon (Jersey output buffering, ~8 KB) and Open Liberty (~32 KB) may hold them until the final result is written. `subscriptions/listen` streams and the legacy `GET /mcp` stream use the Jakarta REST `SseEventSink` API and are delivered immediately on every runtime.
+- **Quarkus SSE framing/headers on sink streams.** On Quarkus, the `subscriptions/listen` and legacy `GET /mcp` streams are written as `data:{...}` (no space, valid SSE) and do not carry the `Cache-Control`, `X-Accel-Buffering` and `Mcp-Session-Id` response headers. If a reverse proxy buffers SSE, configure it to disable buffering for `/mcp`.
+- **Deprecated spec features still supported.** MCP 2026-07-28 deprecates Roots, Sampling and Logging: they keep working but new servers should prefer tool arguments, direct LLM calls and OpenTelemetry.
+
+### Client Interactions with MCP 2026-07-28
+
+`Elicitation`, `Sampling` and `Roots` keep the same blocking Java API (`sendAndAwait()`, `listAndAwait()`) in both eras. With modern clients, the server cannot send its own requests: it answers `input_required`, and the client retries the call with the answers (*multi round-trip requests*). Two strategies are available through `McpServerConfig.mrtrMode`:
+
+| Mode | How it works | Constraints |
+|---|---|---|
+| `REPLAY` (default) | The method is **re-executed from the beginning** on each retry. Answers already given are replayed in call order; they travel in a signed, expiring `requestState`. | Code executed before an interaction must be idempotent, and interactions must happen in a deterministic order. Stateless: works behind any load balancer if all instances share `requestStateSecret`. |
+| `CONTINUATION` | The first call starts the method on a worker thread which waits for the answer; retries resume it. | In-memory state: requires sticky routing in a cluster. `@RequestScoped` beans are not active on the worker thread. Each round must complete within `continuationTimeout`. A round that exceeds `continuationTimeout` fails the request, but a compute-bound method is not interrupted (it keeps its worker thread until it returns). Worker threads come from an unbounded cached pool: size `continuationTimeout` accordingly and prefer `REPLAY` for public-facing servers. The log-level threshold of the first round applies to all rounds (progress tokens, cancellation and whether logs are sent at all follow each round). |
+
+```java
+@Tool(description = "Book a car after confirming the dates")
+public String book(@ToolArg(description = "Car id") String carId, Elicitation elicitation) {
+    // REPLAY mode: this line runs again on the retry, keep it side-effect free
+    Car car = catalog.find(carId);
+    ElicitationResponse answer = elicitation.requestBuilder()
+            .setMessage("Rent " + car.name() + "? Enter the start date")
+            .addSchemaProperty("startDate", () -> Map.of("type", "string", "format", "date"))
+            .build()
+            .sendAndAwait();
+    if (answer.action() != ElicitationResponse.Action.ACCEPT) {
+        return "Booking cancelled";
+    }
+    // side effects after the last interaction run exactly once
+    return bookings.create(car, answer.content().getString("startDate"));
+}
+```
+
+If the client did not declare the needed capability (`elicitation`, `sampling`, `roots`) in `_meta.io.modelcontextprotocol/clientCapabilities`, the call fails with `MissingRequiredClientCapability`; check `elicitation.isSupported()` first to degrade gracefully. Note that MCP 2026-07-28 deprecates Roots, Sampling and Logging: they keep working but new servers should prefer tool arguments, direct LLM calls and OpenTelemetry.
+
+With modern clients, `McpLog` messages and `Progress` notifications are sent on the SSE response stream of the current request only, and log messages only when the request carried `io.modelcontextprotocol/logLevel`.
+
+### Server Configuration
+
+Provide an optional `McpServerConfig` bean named `mcp-server`:
+
+```java
+@ApplicationScoped
+public class McpConfigProducer {
+
+    @Produces
+    @Named("mcp-server")
+    @ApplicationScoped
+    McpServerConfig mcpServerConfig() {
+        return McpServerConfig.builder()
+                .serverName("car-booking")
+                .serverVersion("1.0.0")
+                .allowedOrigins(List.of("https://app.example.com"))
+                .mrtrMode(McpMrtrMode.REPLAY)
+                .requestStateSecret(System.getenv("MCP_REQUEST_STATE_SECRET")) // >= 32 characters
+                .requestStateTtl(Duration.ofMinutes(10))
+                .continuationTimeout(Duration.ofMinutes(5))
+                .build();
+    }
+}
+```
+
+| Property | Default | Description |
+|---|---|---|
+| `serverName` / `serverVersion` | `langchain4j-cdi` / `unknown` | Returned in `initialize` and in `_meta.io.modelcontextprotocol/serverInfo` |
+| `allowedOrigins` | empty (loopback and same host only) | Accepted `Origin` values; `*` accepts all |
+| `mrtrMode` | `REPLAY` | Strategy for client interactions with MCP 2026-07-28 clients |
+| `requestStateSecret` | random per JVM | HMAC key protecting `requestState`; **set it when running several instances** |
+| `requestStateTtl` | 10 minutes | Validity of a `requestState` |
+| `continuationTimeout` | 5 minutes | `CONTINUATION` mode: maximum wait for a client answer or for the method to finish |
 
 ---
 
@@ -311,8 +416,12 @@ langchain4j-cdi-mcp/
 
 ### Key Components
 
-- **`McpEndpoint`** — The JAX-RS resource at `/mcp` that handles all MCP protocol messages.
+- **`McpEndpoint`** — JAX-RS resource at `/mcp`: validates `Origin`, detects the protocol era of each request and routes it.
+- **`McpEraDetector`** — Reads `_meta` and the `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name` headers to classify a request as legacy or modern.
+- **`McpLegacyProtocolHandler`** — MCP 2025-03-26: `initialize`, sessions, GET notification stream, server-initiated requests.
+- **`McpModernProtocolHandler`** — MCP 2026-07-28: `server/discover`, `resultType`, request-scoped SSE, `subscriptions/listen`, multi round-trip requests.
+- **`McpFeatureService`** — Era-independent execution of tools, prompts, resources and completions.
 - **`McpToolRegistry` / `McpPromptRegistry` / `McpResourceRegistry`** — Thread-safe registries where discovered beans are stored.
 - **`JsonSchemaGenerator`** — Generates JSON Schema from Java method signatures for tool parameter descriptions.
-- **`McpSessionManager`** — Manages client sessions with automatic expiration (30 min default).
-- **`McpNotificationBroadcaster`** — Sends SSE notifications (tool list changes, resource updates, log messages) to connected clients.
+- **`McpSessionManager`** — Manages legacy client sessions with automatic expiration (30 min default).
+- **`McpNotificationBroadcaster` / `McpSubscriptionRegistry`** — Deliver change notifications to legacy GET streams and modern `subscriptions/listen` streams.
