@@ -561,7 +561,7 @@ With the context root set to `/`, the endpoint is then reachable at `http://<hos
 
 ## Reflection-Free Invocation (CDI 4.1)
 
-By default, every `@Tool`/`@Prompt`/`@Resource` method call goes through `Method.invoke` after the target CDI bean is resolved from the `BeanManager`. On a CDI 4.1 host, the optional `langchain4j-cdi-mcp-invoker-cdi41` module replaces that with the standard [CDI 4.1 invoker API](https://jakarta.ee/specifications/cdi/4.1/) (`jakarta.enterprise.invoke.Invoker`), so the container builds and resolves the call site itself — no reflective invocation, no `setAccessible`, and no CDI bean lookup on the server's side.
+By default, every `@Tool`/`@Prompt`/`@Resource` method call goes through `Method.invoke` after the target CDI bean is resolved from the `BeanManager`. On a CDI 4.1 host, the optional `langchain4j-cdi-mcp-invoker-cdi41` module replaces that with the standard [CDI 4.1 invoker API](https://jakarta.ee/specifications/cdi/4.1/) (`jakarta.enterprise.invoke.Invoker`), so the container builds and resolves the call site itself — no reflective invocation, no `setAccessible`, and no CDI bean lookup on the server's side. Because the call site is known at build time, this also keeps tool invocation free of reflection metadata for ahead-of-time compilation (GraalVM native image, Project Leyden) — note, however, that native image is listed under *Known untested areas* below: the benefit is structural, not measured here.
 
 ```mermaid
 flowchart TD
@@ -571,7 +571,7 @@ flowchart TD
     D --> E["Method.invoke(instance, args)"]
 ```
 
-**How it works:** `langchain4j-cdi-mcp-server` defines two container-agnostic SPI types (package `dev.langchain4j.cdi.mcp.server.registry`, CDI 4.0.1, no `jakarta.enterprise.invoke` reference): `McpMethodInvoker` (the call) and `McpInvokerProvider` (the lookup). `McpBeanInvoker` injects every `McpInvokerProvider` bean present, caches the lookup per `java.lang.reflect.Method`, and falls back to reflection whenever no provider is present or none has an invoker for that method. The `langchain4j-cdi-mcp-invoker-cdi41` module implements that SPI: its Build Compatible Extension (`McpInvokerBuildCompatibleExtension`) asks the container's `InvokerFactory` for an `Invoker` built with `withInstanceLookup()` for every annotated method, in the `@Registration` phase, and registers a synthetic `@ApplicationScoped` bean (`McpCdi41InvokerProvider`) that exposes them under the `McpInvokerProvider` type, in the `@Synthesis` phase.
+**How it works:** `langchain4j-cdi-mcp-server` defines two container-agnostic SPI types (package `dev.langchain4j.cdi.mcp.server.registry`, CDI 4.0.1, no `jakarta.enterprise.invoke` import — the type is named only in Javadoc prose): `McpMethodInvoker` (the call) and `McpInvokerProvider` (the lookup). `McpBeanInvoker` injects every `McpInvokerProvider` bean present, caches the lookup per `java.lang.reflect.Method`, and falls back to reflection whenever no provider is present or none has an invoker for that method. The `langchain4j-cdi-mcp-invoker-cdi41` module implements that SPI: its Build Compatible Extension (`McpInvokerBuildCompatibleExtension`) asks the container's `InvokerFactory` for an `Invoker` built with `withInstanceLookup()` for every annotated method, in the `@Registration` phase, and registers a synthetic `@ApplicationScoped` bean (`McpCdi41InvokerProvider`) that exposes them under the `McpInvokerProvider` type, in the `@Synthesis` phase.
 
 **How to use it:** add the dependency next to `langchain4j-cdi-mcp-server` — nothing else to configure:
 
