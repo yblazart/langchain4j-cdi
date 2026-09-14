@@ -21,6 +21,8 @@ import jakarta.json.JsonValue;
 import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +46,8 @@ class McpModernProtocolHandlerTest {
                         McpServerCapabilities.LoggingCapability.INSTANCE,
                         McpServerCapabilities.CompletionsCapability.INSTANCE));
         registry = new McpSubscriptionRegistry();
-        handler = new McpModernProtocolHandler(features, new McpServerConfigResolver(new McpServerConfig()), registry);
+        McpServerConfigResolver resolver = new McpServerConfigResolver(new McpServerConfig());
+        handler = new McpModernProtocolHandler(features, resolver, registry, new McpMrtrSupport(resolver));
     }
 
     @AfterEach
@@ -212,5 +215,132 @@ class McpModernProtocolHandlerTest {
         assertThat(reply.isStream()).isTrue();
         assertThat(sse).contains("notifications/subscriptions/acknowledged").contains("\"resultType\":\"complete\"");
         assertThat(writer.isAlive()).isFalse();
+    }
+
+    /** Simulates a tool asking the client for input {@code count} times before answering. */
+    private void toolAsking(int count) {
+        when(features.callTool(any(), any(), any(), isNull())).thenAnswer(invocation -> {
+            McpRequestContext ctx = invocation.getArgument(2);
+            StringBuilder names = new StringBuilder();
+            for (int i = 0; i < count; i++) {
+                ctx.clientRequester().requireCapability("elicitation");
+                JsonObject answer = ctx.clientRequester()
+                        .request("elicitation/create", Map.of("message", "Name " + i + "?"), Duration.ofSeconds(1));
+                names.append(answer.getJsonObject("content").getString("name"));
+            }
+            return Json.createObjectBuilder()
+                    .add(
+                            "content",
+                            Json.createArrayBuilder()
+                                    .add(Json.createObjectBuilder()
+                                            .add("type", "text")
+                                            .add("text", "Hello " + names)))
+                    .build();
+        });
+    }
+
+    private static JsonObject callParams(String requestState, String key, String name, int x) {
+        var params = Json.createObjectBuilder()
+                .add("name", "ask")
+                .add("arguments", Json.createObjectBuilder().add("x", x));
+        if (requestState != null) {
+            params.add("requestState", requestState);
+        }
+        if (key != null) {
+            params.add(
+                    "inputResponses",
+                    Json.createObjectBuilder()
+                            .add(
+                                    key,
+                                    Json.createObjectBuilder()
+                                            .add("action", "accept")
+                                            .add(
+                                                    "content",
+                                                    Json.createObjectBuilder().add("name", name))));
+        }
+        return params.build();
+    }
+
+    private JsonObject call(Object id, JsonObject params) {
+        McpReply reply =
+                handler.handle(new JsonRpcRequest(id, "tools/call", params), modern(null, "elicitation"), false);
+        return parse(reply.body());
+    }
+
+    @Test
+    void replayReturnsInputRequiredThenCompletesOnRetry() {
+        toolAsking(1);
+
+        JsonObject first = call(10, callParams(null, null, null, 1)).getJsonObject("result");
+        assertThat(first.getString("resultType")).isEqualTo("input_required");
+        JsonObject inputRequest = first.getJsonObject("inputRequests").getJsonObject("input-0");
+        assertThat(inputRequest.getString("method")).isEqualTo("elicitation/create");
+        assertThat(inputRequest.getJsonObject("params").getString("message")).isEqualTo("Name 0?");
+        assertThat(first.getString("requestState")).isNotBlank();
+        assertThat(first.getJsonObject("_meta").containsKey("io.modelcontextprotocol/serverInfo"))
+                .isTrue();
+
+        JsonObject second = call(11, callParams(first.getString("requestState"), "input-0", "Ada", 1))
+                .getJsonObject("result");
+        assertThat(second.getString("resultType")).isEqualTo("complete");
+        assertThat(second.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("Hello Ada");
+    }
+
+    @Test
+    void replayCarriesPreviousAnswersAcrossRounds() {
+        toolAsking(2);
+
+        String state1 = call(20, callParams(null, null, null, 1))
+                .getJsonObject("result")
+                .getString("requestState");
+        JsonObject round2 = call(21, callParams(state1, "input-0", "Ada", 1)).getJsonObject("result");
+        assertThat(round2.getString("resultType")).isEqualTo("input_required");
+        assertThat(round2.getJsonObject("inputRequests").containsKey("input-1")).isTrue();
+
+        JsonObject round3 = call(22, callParams(round2.getString("requestState"), "input-1", "Bob", 1))
+                .getJsonObject("result");
+        assertThat(round3.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("Hello AdaBob");
+    }
+
+    @Test
+    void replayWithoutAnswerAsksAgain() {
+        toolAsking(1);
+        String state = call(30, callParams(null, null, null, 1))
+                .getJsonObject("result")
+                .getString("requestState");
+
+        JsonObject again = call(31, callParams(state, null, null, 1)).getJsonObject("result");
+
+        assertThat(again.getString("resultType")).isEqualTo("input_required");
+        assertThat(again.getJsonObject("inputRequests").containsKey("input-0")).isTrue();
+    }
+
+    @Test
+    void replayRejectsStateReusedWithOtherArguments() {
+        toolAsking(1);
+        String state = call(40, callParams(null, null, null, 1))
+                .getJsonObject("result")
+                .getString("requestState");
+
+        McpReply reply = handler.handle(
+                new JsonRpcRequest(41, "tools/call", callParams(state, "input-0", "Ada", 2)),
+                modern(null, "elicitation"),
+                false);
+
+        assertThat(reply.status()).isEqualTo(400);
+        assertThat(parse(reply.body()).getJsonObject("error").getInt("code")).isEqualTo(-32602);
+    }
+
+    @Test
+    void replayFailsWhenClientLacksCapability() {
+        toolAsking(1);
+
+        McpReply reply = handler.handle(
+                new JsonRpcRequest(50, "tools/call", callParams(null, null, null, 1)), modern(null), false);
+
+        assertThat(reply.status()).isEqualTo(400);
+        assertThat(parse(reply.body()).getJsonObject("error").getInt("code")).isEqualTo(-32021);
     }
 }

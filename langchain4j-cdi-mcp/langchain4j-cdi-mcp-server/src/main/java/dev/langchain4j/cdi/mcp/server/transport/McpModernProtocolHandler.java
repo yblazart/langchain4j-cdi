@@ -1,7 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
-import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
@@ -15,7 +14,7 @@ import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
-import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -28,23 +27,30 @@ public class McpModernProtocolHandler {
     protected McpFeatureService features;
     protected McpServerConfigResolver config;
     protected McpSubscriptionRegistry subscriptions;
+    protected McpMrtrSupport mrtr;
 
     /** No-arg constructor required by CDI proxying. */
     public McpModernProtocolHandler() {}
 
     /**
-     * Creates a handler backed by the given feature service, server configuration and subscription registry.
+     * Creates a handler backed by the given feature service, server configuration, subscription registry and MRTR
+     * support.
      *
      * @param features the shared business logic for tool/resource/prompt listing and invocation
      * @param config resolves the server configuration
      * @param subscriptions the registry of open {@code subscriptions/listen} streams
+     * @param mrtr the shared MRTR configuration and helpers
      */
     @Inject
     public McpModernProtocolHandler(
-            McpFeatureService features, McpServerConfigResolver config, McpSubscriptionRegistry subscriptions) {
+            McpFeatureService features,
+            McpServerConfigResolver config,
+            McpSubscriptionRegistry subscriptions,
+            McpMrtrSupport mrtr) {
         this.features = features;
         this.config = config;
         this.subscriptions = subscriptions;
+        this.mrtr = mrtr;
     }
 
     /**
@@ -128,8 +134,8 @@ public class McpModernProtocolHandler {
     }
 
     /**
-     * Executes an invocation method and returns its decorated result. Overridden behaviour for MRTR is added in the
-     * MRTR tasks.
+     * Executes an invocation method and returns its decorated result, replaying previously collected client-input
+     * responses (MRTR {@code REPLAY} mode, the default).
      *
      * @param request the JSON-RPC request being invoked
      * @param protocol the protocol context for this request
@@ -139,15 +145,99 @@ public class McpModernProtocolHandler {
      */
     protected JsonObject execute(
             JsonRpcRequest request, McpProtocolContext protocol, McpResponseChannel channel, AtomicBoolean cancelled) {
+        return executeWithReplay(request, protocol, channel, cancelled);
+    }
+
+    /**
+     * Executes an invocation, re-running the method from the start and replaying any client-input responses collected
+     * on earlier rounds. If the method raises {@link McpInputRequiredSignal}, a signed {@code requestState} carrying
+     * the responses collected so far is returned to the client instead of propagating the exception.
+     *
+     * @param request the JSON-RPC request being invoked
+     * @param protocol the protocol context for this request
+     * @param channel the channel for request-scoped notifications (progress, logs)
+     * @param cancelled flag set to {@code true} when the request is cancelled
+     * @return the decorated invocation result, either {@code complete} or {@code input_required}
+     */
+    JsonObject executeWithReplay(
+            JsonRpcRequest request, McpProtocolContext protocol, McpResponseChannel channel, AtomicBoolean cancelled) {
+        Object id = request.getId();
+        String method = request.getMethod();
+        JsonObject params = request.getParams() != null ? request.getParams() : JsonValue.EMPTY_JSON_OBJECT;
+        String name = McpMrtrSupport.mrtrName(method, params);
+        String digest = McpMrtrSupport.argumentsDigest(method, params);
+
+        JsonObject stateResponses = JsonValue.EMPTY_JSON_OBJECT;
+        String token = params.getString("requestState", null);
+        if (token != null) {
+            stateResponses =
+                    mrtr.codec().decode(id, token, method, name, digest).responses();
+        }
+        Map<String, JsonObject> collected = collectResponses(stateResponses, params);
+
         McpRequestContext ctx = new McpRequestContext(
                 null,
-                request.getId(),
+                id,
                 request.getProgressToken(),
                 cancelled,
                 protocol,
-                unavailableRequester(protocol),
+                new McpReplayClientRequester(protocol, collected),
                 channel);
-        return complete(dispatchInvocation(request, ctx));
+        try {
+            return complete(dispatchInvocation(request, ctx));
+        } catch (McpInputRequiredSignal signal) {
+            JsonObjectBuilder responses = Json.createObjectBuilder();
+            collected.forEach(responses::add);
+            McpRequestStateCodec codec = mrtr.codec();
+            String state = codec.encode(new McpRequestStateCodec.State(
+                    method, name, digest, codec.expiresAt(mrtr.stateTtl()), responses.build(), null));
+            return inputRequired(signal, state);
+        }
+    }
+
+    /**
+     * Merges the input responses carried by a decoded {@code requestState} with those supplied on this round's
+     * {@code inputResponses} parameter, the latter taking precedence.
+     *
+     * @param stateResponses input responses previously collected, from the decoded {@code requestState}
+     * @param params the request parameters, which may carry an {@code inputResponses} object for this round
+     * @return the merged responses, keyed by call order ({@code input-0}, {@code input-1}, …)
+     */
+    static Map<String, JsonObject> collectResponses(JsonObject stateResponses, JsonObject params) {
+        Map<String, JsonObject> collected = new LinkedHashMap<>();
+        stateResponses.forEach((key, value) -> {
+            if (value instanceof JsonObject o) {
+                collected.put(key, o);
+            }
+        });
+        if (params.get("inputResponses") instanceof JsonObject inputs) {
+            inputs.forEach((key, value) -> {
+                if (value instanceof JsonObject o) {
+                    collected.put(key, o);
+                }
+            });
+        }
+        return collected;
+    }
+
+    /**
+     * Builds an {@code input_required} result for a single pending client request.
+     *
+     * @param signal the signal raised by the interrupted method, carrying the pending request's key/method/params
+     * @param requestState the signed state to hand back to the client so it can retry with the missing answer
+     * @return the decorated {@code input_required} result
+     */
+    public JsonObject inputRequired(McpInputRequiredSignal signal, String requestState) {
+        JsonObject inputRequest = Json.createObjectBuilder()
+                .add("method", signal.method())
+                .add("params", McpJsonSerializer.toJsonObject(signal.params() != null ? signal.params() : Map.of()))
+                .build();
+        return decorate(
+                Json.createObjectBuilder()
+                        .add("resultType", "input_required")
+                        .add("inputRequests", Json.createObjectBuilder().add(signal.key(), inputRequest))
+                        .add("requestState", requestState),
+                null);
     }
 
     /**
@@ -165,32 +255,6 @@ public class McpModernProtocolHandler {
             case "tools/call" -> features.callTool(id, params, ctx, null);
             case "prompts/get" -> features.getPrompt(id, params, ctx, null);
             default -> features.readResource(id, params, ctx, null);
-        };
-    }
-
-    static McpClientRequester unavailableRequester(McpProtocolContext protocol) {
-        return new McpClientRequester() {
-            @Override
-            public boolean supports(String capability) {
-                return protocol.hasClientCapability(capability);
-            }
-
-            @Override
-            public JsonObject request(String method, Map<String, Object> params, Duration timeout) {
-                throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Client requests are not enabled");
-            }
-
-            @Override
-            public boolean isModern() {
-                return true;
-            }
-
-            @Override
-            public void requireCapability(String capability) {
-                if (!supports(capability)) {
-                    throw McpProtocolErrors.missingClientCapability(null, capability);
-                }
-            }
         };
     }
 
