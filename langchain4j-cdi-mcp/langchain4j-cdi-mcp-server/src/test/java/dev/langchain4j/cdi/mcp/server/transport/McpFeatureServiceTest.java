@@ -55,6 +55,15 @@ class McpFeatureServiceTest {
     }
 
     @Test
+    void featureResultsCarryNoCachingHints() {
+        // SEP-2549 ttlMs/cacheScope are added by McpModernProtocolHandler.cacheable(); the legacy era serialises
+        // these results verbatim, so legacy list results must stay free of them
+        when(toolRegistry.listTools()).thenReturn(List.of());
+
+        assertThat(service.listTools(null)).doesNotContainKey("ttlMs").doesNotContainKey("cacheScope");
+    }
+
+    @Test
     void callUnknownToolFails() {
         when(toolRegistry.findTool("nope")).thenReturn(Optional.empty());
         JsonObject params = Json.createObjectBuilder().add("name", "nope").build();
@@ -146,6 +155,70 @@ class McpFeatureServiceTest {
                     assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
                     assertThat(e.getMessage()).contains("unknown://x");
                     assertThat(e.getData()).isEqualTo(Map.of("uri", "unknown://x"));
+                });
+    }
+
+    /**
+     * Builds a feature service over a real {@link McpResourceRegistry} holding the given templates, so that URI
+     * matching really runs instead of being stubbed.
+     */
+    private McpFeatureService withTemplates(String... uriTemplates) throws Exception {
+        McpResourceRegistry realRegistry = new McpResourceRegistry();
+        for (String uriTemplate : uriTemplates) {
+            realRegistry.registerTemplate(new McpResourceTemplateDescriptor(
+                    uriTemplate,
+                    uriTemplate,
+                    "d",
+                    "application/json",
+                    TemplateBean.class,
+                    TemplateBean.class.getMethod("data", String.class)));
+        }
+        return new McpFeatureService(
+                toolRegistry,
+                realRegistry,
+                mock(McpPromptRegistry.class),
+                toolInvoker,
+                beanInvoker,
+                new McpCancellationManager(),
+                new McpServerConfigResolver(new McpServerConfig("srv", "1.2")));
+    }
+
+    @Test
+    void malformedPercentEncodingInAMatchingUriIsReadWithTheRawValue() throws Exception {
+        McpFeatureService service = withTemplates("test://template/{id}/data");
+        when(beanInvoker.invoke(any(), any(), any(), any(), any(), any())).thenReturn("body");
+
+        JsonObject result = service.readResource(1, readRequest("test://template/100%/data"), ctx(), null);
+
+        ArgumentCaptor<JsonObject> arguments = ArgumentCaptor.forClass(JsonObject.class);
+        verify(beanInvoker).invoke(eq(1), eq(TemplateBean.class), any(), arguments.capture(), any(), any());
+        assertThat(arguments.getValue().getString("id")).isEqualTo("100%");
+        assertThat(result.getJsonArray("contents").getJsonObject(0).getString("uri"))
+                .isEqualTo("test://template/100%/data");
+    }
+
+    @Test
+    void illegalHexCharactersInAMatchingUriAreReadWithTheRawValue() throws Exception {
+        McpFeatureService service = withTemplates("test://template/{id}/data");
+        when(beanInvoker.invoke(any(), any(), any(), any(), any(), any())).thenReturn("body");
+
+        service.readResource(1, readRequest("test://template/a%zzb/data"), ctx(), null);
+
+        ArgumentCaptor<JsonObject> arguments = ArgumentCaptor.forClass(JsonObject.class);
+        verify(beanInvoker).invoke(eq(1), eq(TemplateBean.class), any(), arguments.capture(), any(), any());
+        assertThat(arguments.getValue().getString("id")).isEqualTo("a%zzb");
+    }
+
+    @Test
+    void aMalformedUriMatchingNoTemplateIsAPlainResourceNotFound() throws Exception {
+        McpFeatureService service = withTemplates("test://other/{id}");
+
+        // never an IllegalArgumentException escaping to the container as a 500, never -32603
+        assertThatThrownBy(() -> service.readResource(1, readRequest("test://template/100%/data"), ctx(), null))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
+                    assertThat(e.getMessage()).contains("Resource not found");
+                    assertThat(e.getData()).isEqualTo(Map.of("uri", "test://template/100%/data"));
                 });
     }
 

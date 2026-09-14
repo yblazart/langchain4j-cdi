@@ -100,12 +100,26 @@ public class McpResourceTemplateDescriptor {
         return Optional.of(variables);
     }
 
+    /**
+     * Percent-decodes a captured variable, tolerating a malformed escape. A client is free to send any string as a
+     * resource URI, and {@code URLDecoder} throws {@link IllegalArgumentException} on an incomplete trailing escape
+     * ({@code 100%}) or on illegal hex characters ({@code a%zz}); letting that escape would leave the transport with a
+     * container HTTP 500 carrying no JSON-RPC body. A value that cannot be decoded is passed through raw, so the match
+     * still succeeds and the request is answered normally.
+     *
+     * @param value the raw captured value
+     * @return the decoded value, or the raw value when it is not valid percent-encoding
+     */
     private static String decode(String value) {
         if (value.indexOf('%') < 0) {
             return value;
         }
-        // URLDecoder also maps '+' to a space, which is a form-encoding rule and not a URI one
-        return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
+        try {
+            // URLDecoder also maps '+' to a space, which is a form-encoding rule and not a URI one
+            return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return value;
+        }
     }
 
     /**

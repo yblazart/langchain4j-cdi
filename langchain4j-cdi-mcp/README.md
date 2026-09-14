@@ -247,6 +247,8 @@ public String userProfile(@ResourceTemplateArg(name = "userId") String userId) {
 
 `resources/read` resolves an exactly registered `@Resource` URI first and falls back to the templates; when several templates match, the most specific one wins (fewest variables, then the longest template). A variable in the middle of the template matches one path segment, a variable ending it matches the rest of the URI.
 
+> **Caveat:** a variable that *ends* the template deliberately captures the rest of the URI, slashes included, so `file:///{path}` matches `file:///a/b/c.txt` with `path = "a/b/c.txt"`. Strict RFC 6570 level-1 expansion percent-encodes `/` and would never produce such a URI, so this is a deliberate convenience: a template ending in a variable is greedy, and one that should only match a single segment must be written with something after it (`file:///{name}/content`). Variable values are percent-decoded; a value that is not valid percent-encoding (`100%`, `a%zz`) is passed through unchanged rather than rejected.
+
 > Without `@ResourceTemplateArg(name = …)` — and likewise without `@ToolArg(name = …)` / `@PromptArg(name = …)` — arguments are named after the Java parameter, which requires the module holding your beans to be **compiled with `-parameters`**; otherwise they are advertised and bound as `arg0`, `arg1`, … Set `<maven.compiler.parameters>true</maven.compiler.parameters>` in your application's POM.
 
 ### Framework Types

@@ -97,6 +97,20 @@ class McpResourceTemplateDescriptorTest {
     }
 
     @Test
+    void shouldFallBackToTheRawValueOnAnIncompleteEscape() {
+        McpResourceTemplateDescriptor descriptor = template("test://template/{id}/data");
+
+        assertThat(descriptor.match("test://template/100%/data")).hasValue(Map.of("id", "100%"));
+    }
+
+    @Test
+    void shouldFallBackToTheRawValueOnIllegalHexCharacters() {
+        McpResourceTemplateDescriptor descriptor = template("test://template/{id}/data");
+
+        assertThat(descriptor.match("test://template/a%zzb/data")).hasValue(Map.of("id", "a%zzb"));
+    }
+
+    @Test
     void aTemplateWithoutVariablesOnlyMatchesItself() {
         McpResourceTemplateDescriptor descriptor = template("test://plain");
 
