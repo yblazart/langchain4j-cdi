@@ -189,6 +189,23 @@ public class McpHelidonIntegrationTest {
     }
 
     @Test
+    void shouldRejectInitializeSentAsNotification() {
+        // an id-less `initialize` must not orphan a session: no Mcp-Session-Id header, and a proper JSON-RPC error
+        McpHttpResponse response = transport().post("/mcp", McpTestRequests.initializeNotification(), Map.of());
+
+        assertThat(response.header(MCP_SESSION_ID))
+                .as("no session should be created for an id-less initialize")
+                .isNull();
+        JsonRpcAssertions.assertJsonRpcError(
+                response, null, -32600, "initialize must be a request, not a notification");
+
+        // the (nonexistent) session cannot be reached: any follow-up request needs a session id (unlike `ping`,
+        // which does not require one), and none was issued
+        McpHttpResponse followUp = transport().post("/mcp", McpTestRequests.toolsListRequest(2), Map.of());
+        assertThat(followUp.statusCode()).as("no usable session should remain").isEqualTo(400);
+    }
+
+    @Test
     void shouldHandlePing() {
         String sessionId = initializeSession();
         McpHttpResponse response = postMcp(sessionId, McpTestRequests.pingRequest(99));

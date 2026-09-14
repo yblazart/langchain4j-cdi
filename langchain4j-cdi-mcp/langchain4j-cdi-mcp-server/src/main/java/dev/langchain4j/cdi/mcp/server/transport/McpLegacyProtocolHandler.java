@@ -74,7 +74,8 @@ public class McpLegacyProtocolHandler {
      * is a notification, and the Streamable HTTP transport requires a POST whose body is only notifications to be
      * answered {@code 202 Accepted} with no body whatever the method is. The method is still dispatched first, so its
      * side effects (marking a session initialized, cancelling a request, refreshing the client's roots) happen as
-     * before; only the response is replaced.
+     * before; only the response is replaced. {@code initialize} is the one exception: an id-less {@code initialize} is
+     * rejected as {@code -32600 Invalid Request} instead of silently creating a session nothing can ever reach.
      *
      * @param request the parsed JSON-RPC request
      * @param sessionId the {@code Mcp-Session-Id} header value, or {@code null}
@@ -90,7 +91,15 @@ public class McpLegacyProtocolHandler {
         Object id = request.getId();
         JsonObject params = request.getParams();
         return switch (request.getMethod()) {
-            case "initialize" -> initialize(request, wantsSse);
+            case "initialize" -> {
+                if (id == null) {
+                    // A conformant client always expects a reply to `initialize`; answering an id-less one with a
+                    // silent 202 would hide the client's bug and, worse, orphan a session nothing can ever reach.
+                    throw new McpException(
+                            null, McpErrorCode.INVALID_REQUEST, "initialize must be a request, not a notification");
+                }
+                yield initialize(request, wantsSse);
+            }
             case "notifications/initialized" -> {
                 sessionManager.requireSession(id, sessionId).markInitialized();
                 yield accepted();

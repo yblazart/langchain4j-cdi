@@ -3,10 +3,12 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpSessionException;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
 import jakarta.json.JsonValue;
 import java.lang.reflect.Field;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,6 +78,26 @@ class McpLegacyProtocolHandlerStatusTest {
                 .isInstanceOfSatisfying(
                         McpSessionException.class,
                         e -> assertThat(e.getErrorCode().getCode()).isEqualTo(-32001));
+    }
+
+    @Test
+    void idLessInitializeIsRejectedAsInvalidRequest() throws Exception {
+        assertThatThrownBy(() -> handler.handle(request(null, "initialize"), null, false))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32600);
+                    assertThat(e.getRequestId()).isNull();
+                });
+
+        assertThat(sessionCount())
+                .as("no session should have been created for an id-less initialize")
+                .isZero();
+    }
+
+    @SuppressWarnings("unchecked")
+    private int sessionCount() throws Exception {
+        Field field = McpSessionManager.class.getDeclaredField("sessions");
+        field.setAccessible(true);
+        return ((Map<String, ?>) field.get(sessionManager)).size();
     }
 
     private static JsonRpcRequest request(Object id, String method) {

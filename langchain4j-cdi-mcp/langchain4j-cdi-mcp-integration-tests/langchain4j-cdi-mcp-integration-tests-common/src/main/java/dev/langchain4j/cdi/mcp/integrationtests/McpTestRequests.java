@@ -29,6 +29,17 @@ public final class McpTestRequests {
     }
 
     /**
+     * Builds an {@code initialize} sent without a JSON-RPC {@code id}, i.e. as a notification. A conformant client
+     * never sends this; the server must reject it rather than silently create an unreachable session.
+     *
+     * @return the request body
+     */
+    @SuppressWarnings("java:S3400")
+    public static String initializeNotification() {
+        return "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test-client\",\"version\":\"1.0\"}}}";
+    }
+
+    /**
      * Builds a {@code ping} request.
      *
      * @param id the JSON-RPC request id
