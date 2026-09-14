@@ -115,29 +115,39 @@ public class McpEndpoint {
         McpSseEventSinkChannel channel = new McpSseEventSinkChannel(sink, sse, new AtomicBoolean());
         try {
             modern.listen(request, channel);
-        } catch (RuntimeException e) {
+        } catch (McpException e) {
             channel.close();
             throw e;
+        } catch (RuntimeException e) {
+            channel.close();
+            throw McpModernProtocolHandler.internalError(request.getId(), request.getMethod(), e);
         }
     }
 
     private JsonRpcRequest validateListen(String body, HttpHeaders headers) {
-        Response forbidden = rejectInvalidOrigin(headers);
-        if (forbidden != null) {
-            throw new WebApplicationException(forbidden);
+        try {
+            Response forbidden = rejectInvalidOrigin(headers);
+            if (forbidden != null) {
+                throw new WebApplicationException(forbidden);
+            }
+            JsonRpcRequest request =
+                    McpJsonRpcParser.isJsonRpcResponse(body) ? null : McpJsonRpcParser.parseRequest(body);
+            if (request == null || request.getMethod() == null || request.getId() == null) {
+                throw new McpException(
+                        request != null ? request.getId() : null,
+                        McpErrorCode.INVALID_REQUEST,
+                        McpListenRoutingFilter.LISTEN_METHOD + " must be a JSON-RPC request with an id");
+            }
+            McpProtocolContext protocol = McpEraDetector.detect(request, headers::getHeaderString);
+            if (!protocol.isModern() || !McpListenRoutingFilter.LISTEN_METHOD.equals(request.getMethod())) {
+                throw McpProtocolErrors.methodNotFound(request.getId(), request.getMethod());
+            }
+            return request;
+        } catch (McpException | WebApplicationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw McpModernProtocolHandler.internalError(null, McpListenRoutingFilter.LISTEN_METHOD, e);
         }
-        JsonRpcRequest request = McpJsonRpcParser.isJsonRpcResponse(body) ? null : McpJsonRpcParser.parseRequest(body);
-        if (request == null || request.getMethod() == null || request.getId() == null) {
-            throw new McpException(
-                    request != null ? request.getId() : null,
-                    McpErrorCode.INVALID_REQUEST,
-                    McpListenRoutingFilter.LISTEN_METHOD + " must be a JSON-RPC request with an id");
-        }
-        McpProtocolContext protocol = McpEraDetector.detect(request, headers::getHeaderString);
-        if (!protocol.isModern() || !McpListenRoutingFilter.LISTEN_METHOD.equals(request.getMethod())) {
-            throw McpProtocolErrors.methodNotFound(request.getId(), request.getMethod());
-        }
-        return request;
     }
 
     private static Response toResponse(McpReply reply) {

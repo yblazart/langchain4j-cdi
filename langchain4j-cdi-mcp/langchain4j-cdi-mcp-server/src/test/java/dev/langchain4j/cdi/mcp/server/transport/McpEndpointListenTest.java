@@ -118,6 +118,29 @@ class McpEndpointListenTest {
     }
 
     @Test
+    void unexpectedFailureOpeningTheSubscriptionBecomesAJsonRpcInternalError() {
+        McpServerConfigResolver resolver = endpoint.config;
+        endpoint.modern =
+                new McpModernProtocolHandler(
+                        mock(McpFeatureService.class), resolver, registry, new McpMrtrSupport(resolver), store) {
+                    @Override
+                    public McpListenSubscription listen(
+                            dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest request, McpSseChannel channel) {
+                        throw new IllegalStateException("boom");
+                    }
+                };
+        String body = modernBody(11, "subscriptions/listen", listenParams());
+
+        assertThatThrownBy(() -> endpoint.handleListen(
+                        body, headers(modernHeaders("subscriptions/listen", "2026-07-28")), sink, sse))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32603);
+                    assertThat(e.getRequestId()).isEqualTo(11L);
+                });
+        assertThat(sink.isClosed()).isTrue();
+    }
+
+    @Test
     void returnsAfterAcknowledgingAndKeepsTheSinkOpenUntilServerShutdown() {
         String body = modernBody(10, "subscriptions/listen", listenParams());
         HttpHeaders headers = headers(modernHeaders("subscriptions/listen", "2026-07-28"));

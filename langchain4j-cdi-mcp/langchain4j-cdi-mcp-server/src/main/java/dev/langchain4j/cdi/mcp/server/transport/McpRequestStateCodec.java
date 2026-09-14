@@ -3,10 +3,12 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import jakarta.json.Json;
+import jakarta.json.JsonArray;
 import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonReader;
+import jakarta.json.JsonString;
 import jakarta.json.JsonValue;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +16,9 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -34,6 +38,8 @@ public final class McpRequestStateCodec {
      * @param expiresAtMillis expiry, epoch millis
      * @param responses input responses collected so far (REPLAY mode)
      * @param continuationId continuation identifier (CONTINUATION mode)
+     * @param pendingKeys input request keys issued with this state and awaiting an answer (REPLAY mode); never
+     *     {@code null}
      */
     public record State(
             String method,
@@ -41,7 +47,34 @@ public final class McpRequestStateCodec {
             String argumentsDigest,
             long expiresAtMillis,
             JsonObject responses,
-            String continuationId) {}
+            String continuationId,
+            List<String> pendingKeys) {
+
+        /** Normalizes {@code pendingKeys} to an immutable, non-null list. */
+        public State {
+            pendingKeys = pendingKeys == null ? List.of() : List.copyOf(pendingKeys);
+        }
+
+        /**
+         * Creates a state without pending input request keys.
+         *
+         * @param method originating JSON-RPC method
+         * @param name tool/prompt name or resource URI
+         * @param argumentsDigest digest of the arguments (or URI)
+         * @param expiresAtMillis expiry, epoch millis
+         * @param responses input responses collected so far (REPLAY mode)
+         * @param continuationId continuation identifier (CONTINUATION mode)
+         */
+        public State(
+                String method,
+                String name,
+                String argumentsDigest,
+                long expiresAtMillis,
+                JsonObject responses,
+                String continuationId) {
+            this(method, name, argumentsDigest, expiresAtMillis, responses, continuationId, List.of());
+        }
+    }
 
     private final byte[] secret;
     private final Clock clock;
@@ -70,6 +103,9 @@ public final class McpRequestStateCodec {
         }
         if (state.continuationId() != null) {
             json.add("c", state.continuationId());
+        }
+        if (!state.pendingKeys().isEmpty()) {
+            json.add("p", Json.createArrayBuilder(state.pendingKeys()));
         }
         byte[] payload = json.build().toString().getBytes(StandardCharsets.UTF_8);
         return ENCODER.encodeToString(payload) + "." + ENCODER.encodeToString(sign(payload));
@@ -105,13 +141,22 @@ public final class McpRequestStateCodec {
         if (clock.millis() > expiry.longValue()) {
             throw McpProtocolErrors.invalidParams(requestId, "Expired requestState");
         }
+        List<String> pendingKeys = new ArrayList<>();
+        if (json.get("p") instanceof JsonArray pending) {
+            pending.forEach(value -> {
+                if (value instanceof JsonString key) {
+                    pendingKeys.add(key.getString());
+                }
+            });
+        }
         return new State(
                 method,
                 name,
                 argumentsDigest,
                 expiry.longValue(),
                 json.get("r") instanceof JsonObject r ? r : JsonValue.EMPTY_JSON_OBJECT,
-                json.getString("c", null));
+                json.getString("c", null),
+                pendingKeys);
     }
 
     private byte[] sign(byte[] payload) {

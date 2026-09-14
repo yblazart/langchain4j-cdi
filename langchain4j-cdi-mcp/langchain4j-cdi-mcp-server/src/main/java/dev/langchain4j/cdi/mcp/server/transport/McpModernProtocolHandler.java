@@ -16,12 +16,18 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Handles requests using MCP revision 2026-07-28 (stateless, per-request metadata). */
 @ApplicationScoped
 public class McpModernProtocolHandler {
+
+    private static final Logger LOGGER = Logger.getLogger(McpModernProtocolHandler.class.getName());
 
     static final long DISCOVER_TTL_MS = 60_000L;
 
@@ -68,7 +74,11 @@ public class McpModernProtocolHandler {
     }
 
     /**
-     * Handles a single modern (2026-07-28) JSON-RPC request.
+     * Handles a single modern (2026-07-28) JSON-RPC request. Every failure is answered as a JSON-RPC error: malformed
+     * parameters as {@code -32602 Invalid params} (HTTP 400), unexpected exceptions as {@code -32603 Internal error}
+     * (HTTP 200). {@code subscriptions/listen} is not served here: it needs the {@code SseEventSink}-based route of
+     * {@link McpEndpoint} selected by {@link McpListenRoutingFilter}, so a listen request reaching this method is
+     * answered with {@code -32600 Invalid Request} (HTTP 400).
      *
      * @param request the parsed JSON-RPC request
      * @param protocol the protocol context detected for this request
@@ -79,6 +89,7 @@ public class McpModernProtocolHandler {
         Object id = request.getId();
         JsonObject params = request.getParams() != null ? request.getParams() : JsonValue.EMPTY_JSON_OBJECT;
         try {
+            validateParams(id, request.getMethod(), params);
             return switch (request.getMethod()) {
                 case "server/discover" -> ok(id, discover());
                 case "tools/list" -> ok(id, complete(features.listTools(McpFeatureService.cursor(params))));
@@ -88,11 +99,94 @@ public class McpModernProtocolHandler {
                 case "prompts/list" -> ok(id, complete(features.listPrompts(McpFeatureService.cursor(params))));
                 case "completion/complete" -> ok(id, complete(features.complete(id, params)));
                 case "tools/call", "prompts/get", "resources/read" -> invoke(request, protocol, acceptsSse);
-                case "subscriptions/listen" -> listen(request, params);
+                case McpListenRoutingFilter.LISTEN_METHOD -> throw listenNotRouted(id);
                 default -> throw McpProtocolErrors.methodNotFound(id, request.getMethod());
             };
         } catch (McpException e) {
             return McpReply.json(e.getHttpStatus(), rpcError(id, e));
+        } catch (McpInputRequiredSignal signal) {
+            // handled inside execute(); never turned into an error response
+            throw signal;
+        } catch (RuntimeException e) {
+            McpException error = internalError(id, request.getMethod(), e);
+            return McpReply.json(error.getHttpStatus(), rpcError(id, error));
+        }
+    }
+
+    private static McpException listenNotRouted(Object id) {
+        return new McpException(
+                id,
+                McpErrorCode.INVALID_REQUEST,
+                McpListenRoutingFilter.LISTEN_METHOD
+                        + " must be sent as POST /mcp with matching Mcp-Method and MCP-Protocol-Version headers",
+                400,
+                null);
+    }
+
+    /**
+     * Builds the {@code -32603 Internal error} answered for an unexpected exception, logging the exception.
+     *
+     * @param id the request id
+     * @param method the JSON-RPC method being handled
+     * @param e the unexpected exception
+     * @return the JSON-RPC error to answer
+     */
+    static McpException internalError(Object id, String method, RuntimeException e) {
+        LOGGER.log(Level.WARNING, "MCP: unexpected error handling " + method, e);
+        return new McpException(id, McpErrorCode.INTERNAL_ERROR, "Internal error", 200, null);
+    }
+
+    /**
+     * Rejects parameters whose JSON types do not match what the method expects, so that malformed requests are answered
+     * with {@code -32602 Invalid params} instead of failing while the parameters are read.
+     *
+     * @param id the request id
+     * @param method the JSON-RPC method
+     * @param params the request parameters
+     */
+    static void validateParams(Object id, String method, JsonObject params) {
+        switch (method) {
+            case "tools/call", "prompts/get" -> {
+                requireType(id, params, "name", JsonValue.ValueType.STRING);
+                requireType(id, params, "arguments", JsonValue.ValueType.OBJECT);
+                requireInvocationStateTypes(id, params);
+            }
+            case "resources/read" -> {
+                requireType(id, params, "uri", JsonValue.ValueType.STRING);
+                requireInvocationStateTypes(id, params);
+            }
+            case "tools/list", "resources/list", "resources/templates/list", "prompts/list" ->
+                requireType(id, params, "cursor", JsonValue.ValueType.STRING);
+            case "completion/complete" -> {
+                requireType(id, params, "ref", JsonValue.ValueType.OBJECT);
+                requireType(id, params, "argument", JsonValue.ValueType.OBJECT);
+                if (params.get("ref") instanceof JsonObject ref) {
+                    requireType(id, ref, "type", JsonValue.ValueType.STRING);
+                    requireType(id, ref, "name", JsonValue.ValueType.STRING);
+                }
+                if (params.get("argument") instanceof JsonObject argument) {
+                    requireType(id, argument, "name", JsonValue.ValueType.STRING);
+                    requireType(id, argument, "value", JsonValue.ValueType.STRING);
+                }
+            }
+            default -> {
+                // no parameters read by this handler
+            }
+        }
+    }
+
+    private static void requireInvocationStateTypes(Object id, JsonObject params) {
+        requireType(id, params, "requestState", JsonValue.ValueType.STRING);
+        requireType(id, params, "inputResponses", JsonValue.ValueType.OBJECT);
+    }
+
+    private static void requireType(Object id, JsonObject object, String key, JsonValue.ValueType expected) {
+        JsonValue value = object.get(key);
+        if (value != null && value.getValueType() != expected) {
+            throw McpProtocolErrors.invalidParams(
+                    id,
+                    "Invalid params: '" + key + "' must be a JSON "
+                            + expected.name().toLowerCase(Locale.ROOT));
         }
     }
 
@@ -118,33 +212,14 @@ public class McpModernProtocolHandler {
                 message = rpcResult(request.getId(), execute(request, protocol, channel, cancelled));
             } catch (McpException e) {
                 message = rpcError(request.getId(), e);
+            } catch (McpInputRequiredSignal signal) {
+                // handled inside execute(); never turned into an error response
+                throw signal;
+            } catch (RuntimeException e) {
+                // the stream must always end with a final JSON-RPC response
+                message = rpcError(request.getId(), internalError(request.getId(), request.getMethod(), e));
             }
             channel.send(message);
-        });
-    }
-
-    /**
-     * Opens a {@code subscriptions/listen} SSE stream on the raw response stream. The HTTP endpoint serves listen
-     * requests through {@link #listen(JsonRpcRequest, McpSseChannel)} instead, so that events are not held in a runtime
-     * output buffer.
-     *
-     * @param request the JSON-RPC request
-     * @param params the request parameters
-     * @return the SSE reply
-     */
-    private McpReply listen(JsonRpcRequest request, JsonObject params) {
-        McpNotificationFilter filter = listenFilter(params);
-        return McpReply.sse(out -> {
-            McpListenSubscription subscription =
-                    subscriptions.open(request.getId(), filter, new McpSseResponseChannel(out, new AtomicBoolean()));
-            try {
-                // a streaming entity ends its response when it returns, so it must wait for the subscription to end
-                subscription.awaitClose();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } finally {
-                subscriptions.remove(subscription);
-            }
         });
     }
 
@@ -296,12 +371,14 @@ public class McpModernProtocolHandler {
         String digest = McpMrtrSupport.argumentsDigest(method, params);
 
         JsonObject stateResponses = JsonValue.EMPTY_JSON_OBJECT;
+        List<String> pendingKeys = List.of();
         String token = params.getString("requestState", null);
         if (token != null) {
-            stateResponses =
-                    mrtr.codec().decode(id, token, method, name, digest).responses();
+            McpRequestStateCodec.State state = mrtr.codec().decode(id, token, method, name, digest);
+            stateResponses = state.responses();
+            pendingKeys = state.pendingKeys();
         }
-        Map<String, JsonObject> collected = collectResponses(stateResponses, params);
+        Map<String, JsonObject> collected = collectResponses(stateResponses, pendingKeys, params);
 
         McpRequestContext ctx = new McpRequestContext(
                 null,
@@ -318,20 +395,30 @@ public class McpModernProtocolHandler {
             collected.forEach(responses::add);
             McpRequestStateCodec codec = mrtr.codec();
             String state = codec.encode(new McpRequestStateCodec.State(
-                    method, name, digest, codec.expiresAt(mrtr.stateTtl()), responses.build(), null));
+                    method,
+                    name,
+                    digest,
+                    codec.expiresAt(mrtr.stateTtl()),
+                    responses.build(),
+                    null,
+                    List.of(signal.key())));
             return inputRequired(signal, state);
         }
     }
 
     /**
      * Merges the input responses carried by a decoded {@code requestState} with those supplied on this round's
-     * {@code inputResponses} parameter, the latter taking precedence.
+     * {@code inputResponses} parameter. Responses from the signed state are authoritative and never overridden; a
+     * response supplied on this round is accepted only for a key the state issued as pending. Without a
+     * {@code requestState} there are no pending keys, so {@code inputResponses} are ignored.
      *
      * @param stateResponses input responses previously collected, from the decoded {@code requestState}
+     * @param pendingKeys input request keys the decoded {@code requestState} is waiting for
      * @param params the request parameters, which may carry an {@code inputResponses} object for this round
      * @return the merged responses, keyed by call order ({@code input-0}, {@code input-1}, …)
      */
-    static Map<String, JsonObject> collectResponses(JsonObject stateResponses, JsonObject params) {
+    static Map<String, JsonObject> collectResponses(
+            JsonObject stateResponses, List<String> pendingKeys, JsonObject params) {
         Map<String, JsonObject> collected = new LinkedHashMap<>();
         stateResponses.forEach((key, value) -> {
             if (value instanceof JsonObject o) {
@@ -340,7 +427,7 @@ public class McpModernProtocolHandler {
         });
         if (params.get("inputResponses") instanceof JsonObject inputs) {
             inputs.forEach((key, value) -> {
-                if (value instanceof JsonObject o) {
+                if (value instanceof JsonObject o && pendingKeys.contains(key) && !collected.containsKey(key)) {
                     collected.put(key, o);
                 }
             });

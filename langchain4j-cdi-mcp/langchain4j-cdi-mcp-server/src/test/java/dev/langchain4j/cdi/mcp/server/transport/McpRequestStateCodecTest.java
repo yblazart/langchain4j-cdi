@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class McpRequestStateCodecTest {
@@ -36,6 +37,62 @@ class McpRequestStateCodecTest {
                 .isEqualTo("accept");
         assertThat(state.continuationId()).isNull();
         assertThat(state.expiresAtMillis()).isEqualTo(NOW.toEpochMilli() + 600_000);
+    }
+
+    @Test
+    void pendingKeysRoundTrip() {
+        String token = codec.encode(new McpRequestStateCodec.State(
+                "tools/call",
+                "askName",
+                "d1",
+                codec.expiresAt(Duration.ofMinutes(10)),
+                null,
+                null,
+                List.of("input-1")));
+
+        McpRequestStateCodec.State state = codec.decode(1, token, "tools/call", "askName", "d1");
+
+        assertThat(state.pendingKeys()).containsExactly("input-1");
+        assertThat(state.responses()).isEmpty();
+    }
+
+    @Test
+    void stateWithoutPendingKeysDecodesWithNoPendingKeys() {
+        McpRequestStateCodec.State state = codec.decode(1, token(), "tools/call", "askName", "d1");
+
+        assertThat(state.pendingKeys()).isEmpty();
+    }
+
+    @Test
+    void legacyPayloadWithoutPendingKeysIsStillDecoded() {
+        byte[] payload = Json.createObjectBuilder()
+                .add("v", 1)
+                .add("m", "tools/call")
+                .add("n", "askName")
+                .add("d", "d1")
+                .add("e", NOW.toEpochMilli() + 60_000)
+                .add("r", Json.createObjectBuilder().add("input-0", Json.createObjectBuilder()))
+                .build()
+                .toString()
+                .getBytes(StandardCharsets.UTF_8);
+        // a payload written before pending keys existed, signed with the codec's secret and token format
+        String token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload) + "."
+                + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(hmac(payload));
+
+        McpRequestStateCodec.State state = codec.decode(1, token, "tools/call", "askName", "d1");
+
+        assertThat(state.pendingKeys()).isEmpty();
+        assertThat(state.responses().containsKey("input-0")).isTrue();
+    }
+
+    static byte[] hmac(byte[] payload) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(SECRET, "HmacSHA256"));
+            return mac.doFinal(payload);
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

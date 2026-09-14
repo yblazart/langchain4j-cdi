@@ -193,32 +193,85 @@ class McpModernProtocolHandlerTest {
     }
 
     @Test
-    void listenStreamsAcknowledgementUntilServerShutdown() throws Exception {
+    void listenWithoutTheListenRouteIsAJsonRpcErrorNotAStream() {
         JsonObject params = Json.createObjectBuilder()
                 .add("notifications", Json.createObjectBuilder().add("toolsListChanged", true))
                 .build();
+
         McpReply reply = handler.handle(new JsonRpcRequest(9, "subscriptions/listen", params), modern(null), true);
+
+        assertThat(reply.isStream()).isFalse();
+        assertThat(reply.status()).isEqualTo(400);
+        JsonObject error = parse(reply.body()).getJsonObject("error");
+        assertThat(error.getInt("code")).isEqualTo(-32600);
+        assertThat(error.getString("message")).contains("subscriptions/listen");
+        assertThat(registry.size()).isZero();
+    }
+
+    @Test
+    void runtimeExceptionOnJsonPathBecomesInternalError() {
+        when(features.callTool(eq(90), any(), any(), isNull())).thenThrow(new IllegalStateException("boom"));
+        JsonObject params = Json.createObjectBuilder().add("name", "greet").build();
+
+        McpReply reply = handler.handle(new JsonRpcRequest(90, "tools/call", params), modern(null), false);
+
+        assertThat(reply.isStream()).isFalse();
+        assertThat(reply.status()).isEqualTo(200);
+        JsonObject body = parse(reply.body());
+        assertThat(body.getInt("id")).isEqualTo(90);
+        assertThat(body.getJsonObject("error").getInt("code")).isEqualTo(-32603);
+    }
+
+    @Test
+    void runtimeExceptionOnSsePathEndsTheStreamWithAJsonRpcError() throws Exception {
+        when(features.callTool(eq(91), any(), any(), isNull())).thenThrow(new IllegalStateException("boom"));
+        JsonObject params = Json.createObjectBuilder().add("name", "greet").build();
+
+        McpReply reply = handler.handle(new JsonRpcRequest(91, "tools/call", params), modern(McpLogLevel.info), true);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
+        reply.stream().write(out);
 
-        Thread writer = new Thread(() -> {
-            try {
-                reply.stream().write(out);
-            } catch (java.io.IOException e) {
-                throw new java.io.UncheckedIOException(e);
-            }
-        });
-        writer.start();
-        long deadline = System.currentTimeMillis() + 5_000;
-        while (registry.size() == 0 && System.currentTimeMillis() < deadline) {
-            Thread.onSpinWait();
-        }
-        registry.shutdown();
-        writer.join(5_000);
-
-        String sse = out.toString(StandardCharsets.UTF_8);
         assertThat(reply.isStream()).isTrue();
-        assertThat(sse).contains("notifications/subscriptions/acknowledged").contains("\"resultType\":\"complete\"");
-        assertThat(writer.isAlive()).isFalse();
+        String sse = out.toString(StandardCharsets.UTF_8).trim();
+        String lastData = sse.substring(sse.lastIndexOf("data: ") + "data: ".length());
+        JsonObject last = parse(lastData);
+        assertThat(last.getInt("id")).isEqualTo(91);
+        assertThat(last.getJsonObject("error").getInt("code")).isEqualTo(-32603);
+    }
+
+    @Test
+    void malformedPromptArgumentsAreInvalidParams() {
+        JsonObject params = Json.createObjectBuilder()
+                .add("name", "summarize")
+                .add("arguments", 5)
+                .build();
+
+        McpReply reply = handler.handle(new JsonRpcRequest(92, "prompts/get", params), modern(null), false);
+
+        assertThat(reply.status()).isEqualTo(400);
+        assertThat(parse(reply.body()).getJsonObject("error").getInt("code")).isEqualTo(-32602);
+        verify(features, never()).getPrompt(any(), any(), any(), any());
+    }
+
+    @Test
+    void malformedCompletionRefIsInvalidParams() {
+        JsonObject params = Json.createObjectBuilder()
+                .add("ref", Json.createObjectBuilder().add("type", 7))
+                .build();
+
+        McpReply reply = handler.handle(new JsonRpcRequest(93, "completion/complete", params), modern(null), false);
+
+        assertThat(reply.status()).isEqualTo(400);
+        assertThat(parse(reply.body()).getJsonObject("error").getInt("code")).isEqualTo(-32602);
+    }
+
+    @Test
+    void inputRequiredSignalEscapingTheInvocationIsNotConvertedToAnError() {
+        toolAsking(1);
+
+        JsonObject result = call(94, callParams(null, null, null, 1)).getJsonObject("result");
+
+        assertThat(result.getString("resultType")).isEqualTo("input_required");
     }
 
     /** Simulates a tool asking the client for input {@code count} times before answering. */
@@ -304,6 +357,74 @@ class McpModernProtocolHandlerTest {
 
         JsonObject round3 = call(22, callParams(round2.getString("requestState"), "input-1", "Bob", 1))
                 .getJsonObject("result");
+        assertThat(round3.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("Hello AdaBob");
+    }
+
+    private static JsonObject elicitationAnswer(String name) {
+        return Json.createObjectBuilder()
+                .add("action", "accept")
+                .add("content", Json.createObjectBuilder().add("name", name))
+                .build();
+    }
+
+    private static JsonObject callParamsWithAnswers(String requestState, Map<String, String> answers) {
+        var inputs = Json.createObjectBuilder();
+        answers.forEach((key, name) -> inputs.add(key, elicitationAnswer(name)));
+        var params = Json.createObjectBuilder()
+                .add("name", "ask")
+                .add("arguments", Json.createObjectBuilder().add("x", 1))
+                .add("inputResponses", inputs);
+        if (requestState != null) {
+            params.add("requestState", requestState);
+        }
+        return params.build();
+    }
+
+    @Test
+    void replayIgnoresInputResponsesWithoutRequestState() {
+        toolAsking(1);
+
+        JsonObject result = call(23, callParamsWithAnswers(null, Map.of("input-0", "Mallory")))
+                .getJsonObject("result");
+
+        assertThat(result.getString("resultType")).isEqualTo("input_required");
+        assertThat(result.getJsonObject("inputRequests").containsKey("input-0")).isTrue();
+    }
+
+    @Test
+    void replayIgnoresAnswersForKeysThatWereNotRequested() {
+        toolAsking(2);
+        String state1 = call(24, callParams(null, null, null, 1))
+                .getJsonObject("result")
+                .getString("requestState");
+
+        // input-1 was never requested: it must not be accepted early
+        JsonObject round2 = call(25, callParamsWithAnswers(state1, Map.of("input-0", "Ada", "input-1", "Mallory")))
+                .getJsonObject("result");
+        assertThat(round2.getString("resultType")).isEqualTo("input_required");
+        assertThat(round2.getJsonObject("inputRequests").containsKey("input-1")).isTrue();
+
+        JsonObject round3 = call(26, callParamsWithAnswers(round2.getString("requestState"), Map.of("input-1", "Bob")))
+                .getJsonObject("result");
+        assertThat(round3.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("Hello AdaBob");
+    }
+
+    @Test
+    void replayNeverOverridesAnswersCarriedBySignedState() {
+        toolAsking(2);
+        String state1 = call(27, callParams(null, null, null, 1))
+                .getJsonObject("result")
+                .getString("requestState");
+        String state2 = call(28, callParams(state1, "input-0", "Ada", 1))
+                .getJsonObject("result")
+                .getString("requestState");
+
+        JsonObject round3 = call(29, callParamsWithAnswers(state2, Map.of("input-0", "Mallory", "input-1", "Bob")))
+                .getJsonObject("result");
+
+        assertThat(round3.getString("resultType")).isEqualTo("complete");
         assertThat(round3.getJsonArray("content").getJsonObject(0).getString("text"))
                 .isEqualTo("Hello AdaBob");
     }
