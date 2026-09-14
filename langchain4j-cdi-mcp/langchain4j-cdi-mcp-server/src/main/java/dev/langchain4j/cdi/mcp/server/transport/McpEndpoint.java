@@ -2,9 +2,9 @@ package dev.langchain4j.cdi.mcp.server.transport;
 
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
-import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
 import dev.langchain4j.cdi.mcp.server.protocol.McpHttpHeaders;
+import dev.langchain4j.cdi.mcp.server.protocol.McpProtocolVersions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -17,12 +17,12 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.StreamingOutput;
 
 /**
  * JAX-RS resource that implements the MCP Streamable HTTP transport at the {@code /mcp} endpoint. Validates the
  * {@code Origin} header, detects the protocol era of each request, and routes legacy (2025-03-26) requests to
- * {@link McpLegacyProtocolHandler}. Modern (2026-07-28) requests are rejected with {@code 404}/{@code -32601} until the
- * modern handler is introduced.
+ * {@link McpLegacyProtocolHandler} and modern (2026-07-28) requests to {@link McpModernProtocolHandler}.
  */
 @Path("/mcp")
 @ApplicationScoped
@@ -33,6 +33,9 @@ public class McpEndpoint {
 
     @Inject
     McpLegacyProtocolHandler legacy;
+
+    @Inject
+    McpModernProtocolHandler modern;
 
     @Inject
     McpServerConfigResolver config;
@@ -66,11 +69,31 @@ public class McpEndpoint {
         String accept = headers.getHeaderString(HttpHeaders.ACCEPT);
         boolean wantsSse = accept != null && accept.contains(MediaType.SERVER_SENT_EVENTS);
 
+        if (request.getId() == null
+                && sessionId == null
+                && McpProtocolVersions.isModernEra(headers.getHeaderString(McpHttpHeaders.PROTOCOL_VERSION))) {
+            return toResponse(McpReply.accepted());
+        }
         McpProtocolContext protocol = McpEraDetector.detect(request, headers::getHeaderString);
         if (protocol.isModern()) {
-            throw McpProtocolErrors.methodNotFound(request.getId(), request.getMethod());
+            return toResponse(modern.handle(request, protocol, wantsSse));
         }
         return legacy.handle(request, sessionId, wantsSse);
+    }
+
+    private static Response toResponse(McpReply reply) {
+        if (reply.isStream()) {
+            StreamingOutput output = reply.stream()::write;
+            return Response.ok(output, MediaType.SERVER_SENT_EVENTS)
+                    .header("Cache-Control", "no-cache")
+                    .header("X-Accel-Buffering", "no")
+                    .build();
+        }
+        Response.ResponseBuilder builder = Response.status(reply.status());
+        if (reply.body() != null) {
+            builder.entity(reply.body()).type(reply.contentType());
+        }
+        return builder.build();
     }
 
     /**
