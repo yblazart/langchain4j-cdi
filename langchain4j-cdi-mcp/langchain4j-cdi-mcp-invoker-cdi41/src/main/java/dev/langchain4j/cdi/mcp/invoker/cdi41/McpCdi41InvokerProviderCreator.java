@@ -42,8 +42,10 @@ public class McpCdi41InvokerProviderCreator implements SyntheticBeanCreator<McpC
         String[] keys = params.get(PARAM_INVOKER_KEYS, String[].class);
         Invoker<?, ?>[] invokers = params.get(PARAM_INVOKERS, Invoker[].class);
         McpCdi41InvokerProvider provider = new McpCdi41InvokerProvider(keys, invokers);
-        LOGGER.info(() -> "MCP: CDI 4.1 invoker provider ready for " + provider.size()
-                + " method(s); those methods are invoked without reflection");
+        // Deliberately says "registered", not "invoked without reflection": at this point nothing has been
+        // looked up yet, so whether the invokers ever match is unknown. McpCdi41InvokerProvider.matchCount()
+        // is what answers that, and lookups are logged at FINE.
+        LOGGER.info(() -> "MCP: CDI 4.1 invoker provider ready: " + provider.size() + " method invoker(s) registered");
         return provider;
     }
 }

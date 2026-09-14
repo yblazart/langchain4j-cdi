@@ -135,6 +135,51 @@ class McpCdi41InvokerProviderTest {
     }
 
     @Test
+    void countersDistinguishRegisteredFromActuallyMatched() {
+        McpCdi41InvokerProvider provider =
+                new McpCdi41InvokerProvider(new String[] {HELLO_KEY}, new Invoker<?, ?>[] {new RecordingInvoker("x")});
+
+        assertThat(provider.size()).isEqualTo(1);
+        assertThat(provider.matchCount()).isZero();
+        assertThat(provider.missCount()).isZero();
+
+        provider.lookup(Greeter.class, "hello", new Class<?>[] {String.class});
+        provider.lookup(Greeter.class, "hello", new Class<?>[] {String.class});
+        provider.lookup(Greeter.class, "goodbye", new Class<?>[] {String.class});
+
+        assertThat(provider.matchCount()).isEqualTo(2);
+        assertThat(provider.missCount()).isEqualTo(1);
+    }
+
+    @Test
+    void aProviderWhoseKeysNeverMatchReportsRegistrationsButNoMatches() {
+        // The failure Task 3 must be able to see: invokers were built, but the build-time and runtime keys
+        // disagree, so every call silently falls back to reflection. size() alone cannot show this.
+        McpCdi41InvokerProvider provider = new McpCdi41InvokerProvider(
+                new String[] {"com.acme.Other#hello(java.lang.String)"},
+                new Invoker<?, ?>[] {new RecordingInvoker("x")});
+
+        assertThat(provider.lookup(Greeter.class, "hello", new Class<?>[] {String.class}))
+                .isEmpty();
+
+        assertThat(provider.size()).isEqualTo(1);
+        assertThat(provider.matchCount()).isZero();
+        assertThat(provider.missCount()).isEqualTo(1);
+    }
+
+    @Test
+    void lookupsWithoutEnoughInformationToFormAKeyAreNotCounted() {
+        McpCdi41InvokerProvider provider =
+                new McpCdi41InvokerProvider(new String[] {HELLO_KEY}, new Invoker<?, ?>[] {new RecordingInvoker("x")});
+
+        assertThat(provider.lookup(null, "hello", new Class<?>[0])).isEmpty();
+        assertThat(provider.lookup(Greeter.class, null, new Class<?>[0])).isEmpty();
+
+        assertThat(provider.matchCount()).isZero();
+        assertThat(provider.missCount()).isZero();
+    }
+
+    @Test
     void emptyOrAbsentParametersYieldAnEmptyProvider() {
         assertThat(new McpCdi41InvokerProvider(null, null).size()).isZero();
         assertThat(new McpCdi41InvokerProvider(new String[0], new Invoker<?, ?>[0]).size())

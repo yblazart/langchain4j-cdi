@@ -6,6 +6,8 @@ import jakarta.enterprise.invoke.Invoker;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.logging.Logger;
 
 /**
  * {@link McpInvokerProvider} backed by the CDI 4.1 {@code jakarta.enterprise.invoke} API.
@@ -24,7 +26,11 @@ import java.util.Optional;
  */
 public class McpCdi41InvokerProvider implements McpInvokerProvider {
 
+    private static final Logger LOGGER = Logger.getLogger(McpCdi41InvokerProvider.class.getName());
+
     private final Map<McpInvokerKey, McpMethodInvoker> invokersByKey;
+    private final LongAdder matchCount = new LongAdder();
+    private final LongAdder missCount = new LongAdder();
 
     /**
      * Rebuilds the lookup table from the synthetic bean's parallel parameter arrays.
@@ -42,7 +48,7 @@ public class McpCdi41InvokerProvider implements McpInvokerProvider {
             throw new IllegalArgumentException("MCP invoker keys and invokers must be parallel arrays, got "
                     + keys.length + " key(s) and " + values.length + " invoker(s)");
         }
-        Map<McpInvokerKey, McpMethodInvoker> table = new HashMap<>(Math.max(4, keys.length * 2));
+        Map<McpInvokerKey, McpMethodInvoker> table = new HashMap<>();
         for (int i = 0; i < keys.length; i++) {
             table.put(McpInvokerKey.decode(keys[i]), new Cdi41MethodInvoker(values[i]));
         }
@@ -51,19 +57,64 @@ public class McpCdi41InvokerProvider implements McpInvokerProvider {
 
     @Override
     public Optional<McpMethodInvoker> lookup(Class<?> beanType, String methodName, Class<?>[] parameterTypes) {
-        if (invokersByKey.isEmpty() || beanType == null || methodName == null) {
+        if (beanType == null || methodName == null) {
+            // Not enough to even compute a key; not counted, since it is not a real lookup.
             return Optional.empty();
         }
-        return Optional.ofNullable(invokersByKey.get(McpInvokerKey.of(beanType, methodName, parameterTypes)));
+        McpInvokerKey key = McpInvokerKey.of(beanType, methodName, parameterTypes);
+        McpMethodInvoker invoker = invokersByKey.get(key);
+        if (invoker == null) {
+            missCount.increment();
+            // A total miss is otherwise invisible: McpBeanInvoker just falls back to reflection and
+            // everything keeps working, so name the key that failed to match.
+            LOGGER.fine(() -> "MCP: No CDI 4.1 invoker for " + key + "; falling back to reflection");
+            return Optional.empty();
+        }
+        matchCount.increment();
+        LOGGER.fine(() -> "MCP: Using the CDI 4.1 invoker for " + key);
+        return Optional.of(invoker);
     }
 
     /**
-     * Returns how many methods this provider can invoke without reflection.
+     * Returns how many methods this provider <em>could</em> invoke without reflection, i.e. how many invokers the
+     * build-compatible extension registered.
+     *
+     * <p>This says nothing about whether any of them ever matched a lookup — see {@link #matchCount()} for that.
      *
      * @return the number of registered invokers, never negative
      */
     public int size() {
         return invokersByKey.size();
+    }
+
+    /**
+     * Diagnostic counter: how many lookups matched a registered invoker, i.e. how many MCP methods are actually invoked
+     * without reflection.
+     *
+     * <p>This is the number that matters. {@link #size()} only counts what was registered at build time; a build-time
+     * and a runtime key that disagree would leave {@code size()} high and this counter at zero, with every call
+     * silently falling back to reflection. A test proving the invoker path is live should assert {@code matchCount() >
+     * 0}.
+     *
+     * <p>{@code McpBeanInvoker} caches its lookup per {@code Method}, so these counters count distinct methods
+     * resolved, not individual tool calls.
+     *
+     * @return the number of lookups that found an invoker, never negative
+     */
+    public long matchCount() {
+        return matchCount.sum();
+    }
+
+    /**
+     * Diagnostic counter: how many lookups found no invoker and therefore fell back to reflection.
+     *
+     * <p>A non-zero value is not by itself a fault — the MCP server also invokes methods this extension never saw — but
+     * a zero {@link #matchCount()} together with a non-zero value here means the key mapping is broken.
+     *
+     * @return the number of lookups that found no invoker, never negative
+     */
+    public long missCount() {
+        return missCount.sum();
     }
 
     /**

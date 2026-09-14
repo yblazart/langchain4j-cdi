@@ -101,6 +101,9 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
             }
             String key = McpInvokerKey.of(beanClass.name(), method.name(), parameterTypeNames)
                     .encode();
+            // First seen wins. ClassInfo.methods() may return several MethodInfos sharing a signature (an
+            // override and the method it overrides), and they all collapse onto the one key McpBeanInvoker
+            // will ask with; the container dispatches virtually anyway, so either invoker is correct.
             if (COLLECTED_INVOKERS.containsKey(key)) {
                 continue;
             }
@@ -140,8 +143,10 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
             COLLECTED_INVOKERS.clear();
         }
 
-        LOGGER.info(() -> "MCP: Registering a CDI 4.1 invoker provider for " + keys.length
-                + " MCP method(s); those methods are invoked without reflection");
+        // "built", not "invoked without reflection": whether these invokers are ever matched at runtime is
+        // decided by McpCdi41InvokerProvider.lookup, which logs each hit and miss at FINE and counts both.
+        LOGGER.info(() -> "MCP: Registering a CDI 4.1 invoker provider with " + keys.length
+                + " invoker(s) built for MCP method(s)");
 
         syntheticComponents
                 .addBean(McpCdi41InvokerProvider.class)
@@ -171,11 +176,14 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
     /**
      * Maps the method's parameter types to the canonical names {@link McpInvokerKey} matches on.
      *
+     * <p>Package-private rather than private so {@code McpInvokerTypeNameTest} can pin it against
+     * {@link McpInvokerKey#typeName(Class)}: a disagreement between the two would make every lookup miss silently.
+     *
      * @param method the method to describe
      * @return the canonical parameter type names in declaration order, or {@code null} if any parameter has a type this
      *     module cannot name unambiguously (a type variable or a wildcard), in which case no invoker is built
      */
-    private static List<String> parameterTypeNames(MethodInfo method) {
+    static List<String> parameterTypeNames(MethodInfo method) {
         List<ParameterInfo> parameters = method.parameters();
         List<String> names = new ArrayList<>(parameters.size());
         for (ParameterInfo parameter : parameters) {
@@ -192,11 +200,14 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
      * Returns the canonical name of a language-model type, spelled exactly like {@link McpInvokerKey#typeName(Class)}
      * spells the corresponding runtime {@link Class}.
      *
+     * <p>Package-private rather than private so it can be tested directly: this is the single point where the
+     * build-time vocabulary is translated into the runtime one, and a mismatch here is invisible at runtime.
+     *
      * @param type the language-model type
      * @return its canonical name, or {@code null} for a type variable or wildcard, which has no runtime erasure this
      *     module can determine
      */
-    private static String typeName(Type type) {
+    static String typeName(Type type) {
         return switch (type.kind()) {
             case VOID -> "void";
             case PRIMITIVE -> primitiveName(type.asPrimitive().primitiveKind());
