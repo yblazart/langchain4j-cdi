@@ -21,5 +21,14 @@ public final class McpTestConstants {
     /** Prompt name for the summarize prompt. */
     public static final String SUMMARIZE = "summarize";
 
+    /** Tool name for the elicitation tool. */
+    public static final String ASK_NAME = "askName";
+
+    /** MCP 2026-07-28 protocol version. */
+    public static final String MODERN_VERSION = "2026-07-28";
+
+    /** MCP legacy protocol version recognized by the langchain4j client. */
+    public static final String LEGACY_CLIENT_VERSION = "2025-11-25";
+
     private McpTestConstants() {}
 }

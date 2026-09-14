@@ -8,13 +8,16 @@ import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.cdi.mcp.integrationtests.ArquillianDeploymentHelper;
 import dev.langchain4j.cdi.mcp.integrationtests.ConfigResource;
+import dev.langchain4j.cdi.mcp.integrationtests.ElicitationTool;
 import dev.langchain4j.cdi.mcp.integrationtests.GreetingTool;
 import dev.langchain4j.cdi.mcp.integrationtests.JaxRsApplication;
 import dev.langchain4j.cdi.mcp.integrationtests.JdkHttpClientTransport;
 import dev.langchain4j.cdi.mcp.integrationtests.JsonRpcAssertions;
 import dev.langchain4j.cdi.mcp.integrationtests.McpHttpResponse;
 import dev.langchain4j.cdi.mcp.integrationtests.McpHttpTransport;
+import dev.langchain4j.cdi.mcp.integrationtests.McpModernTestRequests;
 import dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants;
+import dev.langchain4j.cdi.mcp.integrationtests.McpTestJerseyBufferingFeature;
 import dev.langchain4j.cdi.mcp.integrationtests.McpTestRequests;
 import dev.langchain4j.cdi.mcp.integrationtests.SummarizePrompt;
 import dev.langchain4j.cdi.mcp.integrationtests.WeatherTool;
@@ -22,11 +25,21 @@ import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.service.tool.ToolExecutionResult;
+import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
+import jakarta.json.JsonString;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
+import java.net.URI;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -77,6 +90,7 @@ public class McpOpenLibertyArquillianTest {
                         McpOpenLibertyArquillianTest.class,
                         WeatherTool.class,
                         GreetingTool.class,
+                        ElicitationTool.class,
                         ConfigResource.class,
                         SummarizePrompt.class,
                         JaxRsApplication.class,
@@ -84,6 +98,8 @@ public class McpOpenLibertyArquillianTest {
                         McpHttpTransport.class,
                         McpHttpResponse.class,
                         McpTestRequests.class,
+                        McpModernTestRequests.class,
+                        McpTestJerseyBufferingFeature.class,
                         McpTestConstants.class,
                         JsonRpcAssertions.class)
                 .addAsLibraries(fixedDeps)
@@ -188,6 +204,45 @@ public class McpOpenLibertyArquillianTest {
         }
     }
 
+    @Test
+    public void shouldDetectModernProtocolAutomatically() throws Exception {
+        try (McpClient client = buildClient()) {
+            client.listTools();
+            assertThat(((DefaultMcpClient) client).isModernProtocol()).isTrue();
+        }
+    }
+
+    @Test
+    public void shouldCallToolViaLegacyClient() throws Exception {
+        try (McpClient client = buildClient(LEGACY_CLIENT_VERSION)) {
+            ToolExecutionResult result = client.executeTool(ToolExecutionRequest.builder()
+                    .name(GREET)
+                    .arguments("{\"name\":\"Ada\"}")
+                    .build());
+            assertThat(((DefaultMcpClient) client).isModernProtocol()).isFalse();
+            assertThat(result.resultText()).contains("Hello, Ada!");
+        }
+    }
+
+    @Test
+    public void shouldCallToolViaModernClient() throws Exception {
+        try (McpClient client = buildClient(MODERN_VERSION)) {
+            ToolExecutionResult result = client.executeTool(ToolExecutionRequest.builder()
+                    .name(GREET)
+                    .arguments("{\"name\":\"Ada\"}")
+                    .build());
+            assertThat(((DefaultMcpClient) client).isModernProtocol()).isTrue();
+            assertThat(result.resultText()).contains("Hello, Ada!");
+        }
+    }
+
+    @Test
+    public void shouldListToolsViaLegacyClient() throws Exception {
+        try (McpClient client = buildClient(LEGACY_CLIENT_VERSION)) {
+            assertThat(client.listTools()).extracting(ToolSpecification::name).contains(GET_WEATHER, GREET, ASK_NAME);
+        }
+    }
+
     // --- Session & HTTP ---
 
     @Test
@@ -238,6 +293,18 @@ public class McpOpenLibertyArquillianTest {
         String sessionId = initializeSession();
         McpHttpResponse response = postMcp(sessionId, McpTestRequests.unknownMethodRequest("5", "unknown/method"));
         JsonRpcAssertions.assertJsonRpcError(response, "5", -32601, "Unknown method");
+    }
+
+    @Test
+    public void shouldReturnParseErrorForMalformedBody() {
+        McpHttpResponse response = transport().post("/mcp", "{not json", Map.of());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        JsonObject json;
+        try (JsonReader reader = Json.createReader(new StringReader(response.body()))) {
+            json = reader.readObject();
+        }
+        assertThat(json.getJsonObject("error").getInt("code")).isEqualTo(-32700);
     }
 
     // --- Resources ---
@@ -420,6 +487,146 @@ public class McpOpenLibertyArquillianTest {
         JsonRpcAssertions.assertJsonRpcError(response, 70, -32001, "Invalid or missing Mcp-Session-Id");
     }
 
+    @Test
+    public void shouldRejectForeignOrigin() {
+        McpHttpResponse response = transport()
+                .post("/mcp", McpTestRequests.initializeRequest(71), Map.of("Origin", "https://evil.example"));
+
+        assertThat(response.statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    public void shouldAcceptLocalhostOrigin() {
+        McpHttpResponse response = transport()
+                .post("/mcp", McpTestRequests.initializeRequest(72), Map.of("Origin", "http://localhost:3000"));
+
+        JsonRpcAssertions.assertJsonRpcSuccess(response, 72);
+    }
+
+    // --- Modern protocol (2026-07-28) ---
+
+    private McpHttpResponse postModern(Object id, String method, String name, String paramsJson, String caps) {
+        return transport()
+                .post(
+                        "/mcp",
+                        McpModernTestRequests.body(id, method, paramsJson, caps),
+                        McpModernTestRequests.headers(method, name));
+    }
+
+    @Test
+    public void shouldDiscoverSupportedVersions() {
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(postModern(100, "server/discover", null, "", "{}"), 100);
+
+        assertThat(result.getString("resultType")).isEqualTo("complete");
+        assertThat(result.getJsonArray("supportedVersions").getValuesAs(JsonString::getString))
+                .containsExactly(MODERN_VERSION, "2025-03-26");
+        assertThat(result.getJsonObject("capabilities")).containsKey("tools");
+    }
+
+    @Test
+    public void shouldServeModernRequestsWithoutSession() {
+        McpHttpResponse response = postModern(101, "tools/list", null, "", "{}");
+
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(response, 101);
+        assertThat(response.header(MCP_SESSION_ID)).isNull();
+        assertThat(result.getString("resultType")).isEqualTo("complete");
+        assertThat(result.getJsonArray("tools").getValuesAs(JsonObject.class))
+                .extracting(t -> t.getString("name"))
+                .contains(GREET, ASK_NAME);
+    }
+
+    @Test
+    public void shouldCallToolWithModernRequest() {
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(
+                postModern(102, "tools/call", GREET, "\"name\":\"greet\",\"arguments\":{\"name\":\"Ada\"}", "{}"), 102);
+
+        assertThat(result.getJsonArray("content").getJsonObject(0).getString("text")).isEqualTo("Hello, Ada!");
+    }
+
+    @Test
+    public void shouldRejectMismatchedNameHeader() {
+        McpHttpResponse response =
+                postModern(103, "tools/call", "other", "\"name\":\"greet\",\"arguments\":{\"name\":\"Ada\"}", "{}");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 103, -32020);
+    }
+
+    @Test
+    public void shouldRejectUnsupportedProtocolVersion() {
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":104,\"method\":\"tools/list\",\"params\":{"
+                + McpModernTestRequests.meta("2099-01-01", "{}") + "}}";
+        Map<String, String> headers = new HashMap<>(McpModernTestRequests.headers("tools/list", null));
+        headers.put("MCP-Protocol-Version", "2099-01-01");
+
+        JsonObject error = JsonRpcAssertions.assertHttpJsonRpcError(transport().post("/mcp", body, headers), 400, 104, -32022);
+
+        assertThat(error.getJsonObject("data").getJsonArray("supported").getString(0)).isEqualTo(MODERN_VERSION);
+    }
+
+    @Test
+    public void shouldReturn404ForLegacyOnlyMethodInModernEra() {
+        JsonRpcAssertions.assertHttpJsonRpcError(postModern(105, "ping", null, "", "{}"), 404, 105, -32601);
+    }
+
+    @Test
+    public void shouldAcceptModernNotificationWith202() {
+        McpHttpResponse response = postModern(null, "notifications/cancelled", null, "\"requestId\":1", "{}");
+
+        assertThat(response.statusCode()).isEqualTo(202);
+    }
+
+    @Test
+    public void shouldRoundTripElicitationWithMrtr() {
+        String caps = "{\"elicitation\":{}}";
+        JsonObject first = JsonRpcAssertions.assertJsonRpcSuccess(
+                postModern(106, "tools/call", ASK_NAME, "\"name\":\"askName\",\"arguments\":{}", caps), 106);
+        assertThat(first.getString("resultType")).isEqualTo("input_required");
+        JsonObject inputRequest = first.getJsonObject("inputRequests").getJsonObject("input-0");
+        assertThat(inputRequest.getString("method")).isEqualTo("elicitation/create");
+        assertThat(inputRequest.getJsonObject("params").getString("mode")).isEqualTo("form");
+
+        String retryParams = "\"name\":\"askName\",\"arguments\":{},\"requestState\":\"" + first.getString("requestState")
+                + "\",\"inputResponses\":{\"input-0\":{\"action\":\"accept\",\"content\":{\"name\":\"Ada\"}}}";
+        JsonObject second = JsonRpcAssertions.assertJsonRpcSuccess(
+                postModern(107, "tools/call", ASK_NAME, retryParams, caps), 107);
+
+        assertThat(second.getString("resultType")).isEqualTo("complete");
+        assertThat(second.getJsonArray("content").getJsonObject(0).getString("text")).isEqualTo("Hello, Ada!");
+    }
+
+    @Test
+    public void shouldRequireDeclaredElicitationCapability() {
+        McpHttpResponse response = postModern(108, "tools/call", ASK_NAME, "\"name\":\"askName\",\"arguments\":{}", "{}");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 108, -32021);
+    }
+
+    @Test
+    public void shouldAcknowledgeListenSubscription() throws Exception {
+        String body = McpModernTestRequests.body(
+                109, "subscriptions/listen", "\"notifications\":{\"toolsListChanged\":true}", "{}");
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(transport().baseUrl() + "/mcp"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(10))
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        McpModernTestRequests.headers("subscriptions/listen", null).forEach(request::header);
+        request.setHeader("Accept", "text/event-stream");
+
+        // HTTP/1.1 and no response buffering: some containers (e.g. Helidon's Jersey integration) otherwise hold SSE
+        // bytes in an internal content-length auto-detection buffer until it fills up or the response closes, which
+        // never happens for a deliberately long-lived subscriptions/listen stream. See McpTestJerseyBufferingFeature.
+        HttpResponse<Stream<String>> response = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build()
+                .send(request.build(), HttpResponse.BodyHandlers.ofLines());
+
+        try (Stream<String> lines = response.body()) {
+            String firstEvent = lines.filter(line -> line.startsWith("data: ")).findFirst().orElseThrow();
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(firstEvent).contains("notifications/subscriptions/acknowledged").contains("\"toolsListChanged\":true");
+        }
+    }
+
     // --- Helpers ---
 
     private String initializeSession() {
@@ -435,10 +642,17 @@ public class McpOpenLibertyArquillianTest {
     }
 
     private McpClient buildClient() {
-        return DefaultMcpClient.builder()
+        return buildClient(null);
+    }
+
+    private McpClient buildClient(String protocolVersion) {
+        DefaultMcpClient.Builder builder = DefaultMcpClient.builder()
                 .transport(StreamableHttpMcpTransport.builder()
                         .url(transport().baseUrl() + "/mcp")
-                        .build())
-                .build();
+                        .build());
+        if (protocolVersion != null) {
+            builder.protocolVersion(protocolVersion);
+        }
+        return builder.build();
     }
 }

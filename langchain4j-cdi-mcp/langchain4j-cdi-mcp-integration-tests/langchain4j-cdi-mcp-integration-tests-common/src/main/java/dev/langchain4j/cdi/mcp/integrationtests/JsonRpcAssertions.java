@@ -27,8 +27,18 @@ public final class JsonRpcAssertions {
      */
     public static JsonObject parseJson(McpHttpResponse response) {
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).isNotNull().isNotBlank();
-        try (JsonReader reader = Json.createReader(new StringReader(response.body()))) {
+        return readJson(response.body());
+    }
+
+    /**
+     * Parses a JSON body as a {@link JsonObject}.
+     *
+     * @param body the JSON body
+     * @return the parsed JSON object
+     */
+    public static JsonObject readJson(String body) {
+        assertThat(body).isNotNull().isNotBlank();
+        try (JsonReader reader = Json.createReader(new StringReader(body))) {
             return reader.readObject();
         }
     }
@@ -89,6 +99,26 @@ public final class JsonRpcAssertions {
      */
     public static void assertNotificationAccepted(McpHttpResponse response) {
         assertThat(response.statusCode()).isEqualTo(200);
+    }
+
+    /**
+     * Asserts an HTTP-level JSON-RPC error response with the given status code and returns its {@code error} object.
+     *
+     * @param response the HTTP response
+     * @param expectedStatus the expected HTTP status code
+     * @param expectedId the expected JSON-RPC id
+     * @param expectedCode the expected JSON-RPC error code
+     * @return the {@code error} JSON object
+     */
+    public static JsonObject assertHttpJsonRpcError(
+            McpHttpResponse response, int expectedStatus, Object expectedId, int expectedCode) {
+        assertThat(response.statusCode()).as("HTTP status, body: %s", response.body()).isEqualTo(expectedStatus);
+        JsonObject json = readJson(response.body());
+        assertJsonRpcIdMatches(json, expectedId);
+        assertThat(json).as("Expected 'error' in %s", response.body()).containsKey(FIELD_ERROR);
+        JsonObject error = json.getJsonObject(FIELD_ERROR);
+        assertThat(error.getInt("code")).isEqualTo(expectedCode);
+        return error;
     }
 
     private static void assertJsonRpcIdMatches(JsonObject json, Object expectedId) {
