@@ -5,6 +5,7 @@ import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
+import dev.langchain4j.cdi.mcp.server.transport.McpInputRequiredSignal;
 import dev.langchain4j.cdi.mcp.server.transport.McpSession;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -73,6 +74,9 @@ public class McpBeanInvoker {
             Object[] args = resolveArguments(method, arguments, ctx, session, beanType);
             return method.invoke(instance, args);
         } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof McpInputRequiredSignal signal) {
+                throw signal;
+            }
             if (e.getCause() instanceof McpException mcpException) {
                 throw mcpException;
             }
