@@ -13,21 +13,45 @@ class McpOriginValidatorTest {
     }
 
     @Test
-    void loopbackOriginIsAllowedByDefault() {
+    void loopbackOriginOnLoopbackHostIsAllowedByDefault() {
         assertThat(McpOriginValidator.isAllowed("http://localhost:3000", "localhost:8080", List.of()))
                 .isTrue();
-        assertThat(McpOriginValidator.isAllowed("http://127.0.0.1", "api:8080", List.of()))
+        assertThat(McpOriginValidator.isAllowed("http://127.0.0.1", "localhost", List.of()))
                 .isTrue();
-        assertThat(McpOriginValidator.isAllowed("http://[::1]:5173", "api:8080", List.of()))
+        assertThat(McpOriginValidator.isAllowed("http://[::1]:5173", "[::1]:8080", List.of()))
+                .isTrue();
+        assertThat(McpOriginValidator.isAllowed("http://localhost:3000", "127.0.0.1:8080", List.of()))
                 .isTrue();
     }
 
     @Test
-    void sameHostOriginIsAllowedByDefault() {
+    void loopbackComparisonIsCaseInsensitive() {
+        assertThat(McpOriginValidator.isAllowed("http://LOCALHOST:3000", "LocalHost:8080", List.of()))
+                .isTrue();
+    }
+
+    @Test
+    void sameHostOriginIsRejectedByDefault() {
         assertThat(McpOriginValidator.isAllowed("https://mcp.example.com", "mcp.example.com", List.of()))
-                .isTrue();
+                .isFalse();
         assertThat(McpOriginValidator.isAllowed("http://mcp.example.com:8080", "mcp.example.com:8080", List.of()))
-                .isTrue();
+                .isFalse();
+    }
+
+    @Test
+    void dnsRebindingIsRejectedByDefault() {
+        assertThat(McpOriginValidator.isAllowed("http://evil.com:8080", "evil.com:8080", List.of()))
+                .isFalse();
+    }
+
+    @Test
+    void loopbackOriginWithNonLoopbackHostIsRejectedByDefault() {
+        assertThat(McpOriginValidator.isAllowed("http://localhost:3000", "api:8080", List.of()))
+                .isFalse();
+        assertThat(McpOriginValidator.isAllowed("http://127.0.0.1", "mcp.example.com", List.of()))
+                .isFalse();
+        assertThat(McpOriginValidator.isAllowed("http://[::1]:5173", null, List.of()))
+                .isFalse();
     }
 
     @Test

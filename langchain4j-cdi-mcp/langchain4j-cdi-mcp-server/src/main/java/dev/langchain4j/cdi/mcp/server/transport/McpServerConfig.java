@@ -12,7 +12,11 @@ public class McpServerConfig {
     /** The server version advertised to clients. Defaults to {@code "unknown"}. */
     private String serverVersion = "unknown";
 
-    /** The allowed origins for CORS validation. Defaults to empty list. */
+    /**
+     * The {@code Origin} header values accepted by the DNS rebinding protection ({@code *} accepts all). Defaults to an
+     * empty list, which accepts a present {@code Origin} only when both its host and the {@code Host} header's host are
+     * loopback.
+     */
     private List<String> allowedOrigins = List.of();
 
     /** The MRTR mode for handling client interactions. Defaults to {@code REPLAY}. */
@@ -87,7 +91,9 @@ public class McpServerConfig {
     }
 
     /**
-     * Returns the allowed origins.
+     * Returns the {@code Origin} header values accepted by the DNS rebinding protection. An empty list accepts a
+     * present {@code Origin} only when both its host and the {@code Host} header's host are loopback; {@code *} accepts
+     * all.
      *
      * @return the allowed origins
      */
@@ -96,7 +102,7 @@ public class McpServerConfig {
     }
 
     /**
-     * Sets the allowed origins.
+     * Sets the {@code Origin} header values accepted by the DNS rebinding protection ({@code *} accepts all).
      *
      * @param origins the allowed origins
      */
@@ -213,7 +219,7 @@ public class McpServerConfig {
         }
 
         /**
-         * Sets the allowed origins.
+         * Sets the {@code Origin} header values accepted by the DNS rebinding protection ({@code *} accepts all).
          *
          * @param allowedOrigins the allowed origins
          * @return this builder
