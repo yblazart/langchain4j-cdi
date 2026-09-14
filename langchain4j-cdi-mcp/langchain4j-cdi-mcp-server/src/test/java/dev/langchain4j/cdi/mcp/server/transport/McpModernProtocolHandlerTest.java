@@ -33,6 +33,7 @@ class McpModernProtocolHandlerTest {
     McpFeatureService features;
     McpModernProtocolHandler handler;
     McpSubscriptionRegistry registry;
+    McpContinuationStore store;
 
     @BeforeEach
     void setup() {
@@ -47,12 +48,15 @@ class McpModernProtocolHandlerTest {
                         McpServerCapabilities.CompletionsCapability.INSTANCE));
         registry = new McpSubscriptionRegistry();
         McpServerConfigResolver resolver = new McpServerConfigResolver(new McpServerConfig());
-        handler = new McpModernProtocolHandler(features, resolver, registry, new McpMrtrSupport(resolver));
+        McpMrtrSupport support = new McpMrtrSupport(resolver);
+        store = new McpContinuationStore(support);
+        handler = new McpModernProtocolHandler(features, resolver, registry, support, store);
     }
 
     @AfterEach
     void tearDown() {
         registry.shutdown();
+        store.shutdown();
     }
 
     static McpProtocolContext modern(McpLogLevel level, String... capabilities) {
@@ -342,5 +346,105 @@ class McpModernProtocolHandlerTest {
 
         assertThat(reply.status()).isEqualTo(400);
         assertThat(parse(reply.body()).getJsonObject("error").getInt("code")).isEqualTo(-32021);
+    }
+
+    private McpModernProtocolHandler continuationHandler(McpContinuationStore[] storeHolder) {
+        McpServerConfigResolver resolver = new McpServerConfigResolver(McpServerConfig.builder()
+                .mrtrMode(McpMrtrMode.CONTINUATION)
+                .continuationTimeout(Duration.ofSeconds(5))
+                .build());
+        McpMrtrSupport support = new McpMrtrSupport(resolver);
+        storeHolder[0] = new McpContinuationStore(support);
+        return new McpModernProtocolHandler(features, resolver, registry, support, storeHolder[0]);
+    }
+
+    @Test
+    void continuationResumesTheSameInvocation() {
+        toolAsking(1);
+        McpContinuationStore[] holder = new McpContinuationStore[1];
+        McpModernProtocolHandler continuation = continuationHandler(holder);
+        try {
+            JsonObject first = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(60, "tools/call", callParams(null, null, null, 1)),
+                                    modern(null, "elicitation"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+            assertThat(first.getString("resultType")).isEqualTo("input_required");
+
+            JsonObject second = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(
+                                            61,
+                                            "tools/call",
+                                            callParams(first.getString("requestState"), "input-0", "Ada", 1)),
+                                    modern(null, "elicitation"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            assertThat(second.getString("resultType")).isEqualTo("complete");
+            assertThat(second.getJsonArray("content").getJsonObject(0).getString("text"))
+                    .isEqualTo("Hello Ada");
+            verify(features, times(1)).callTool(any(), any(), any(), isNull());
+        } finally {
+            holder[0].shutdown();
+        }
+    }
+
+    @Test
+    void continuationRetryWithoutAnswerRepeatsTheRequest() {
+        toolAsking(1);
+        McpContinuationStore[] holder = new McpContinuationStore[1];
+        McpModernProtocolHandler continuation = continuationHandler(holder);
+        try {
+            String state = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(70, "tools/call", callParams(null, null, null, 1)),
+                                    modern(null, "elicitation"),
+                                    false)
+                            .body())
+                    .getJsonObject("result")
+                    .getString("requestState");
+
+            JsonObject again = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(71, "tools/call", callParams(state, null, null, 1)),
+                                    modern(null, "elicitation"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            assertThat(again.getString("resultType")).isEqualTo("input_required");
+            assertThat(again.getJsonObject("inputRequests").containsKey("input-0"))
+                    .isTrue();
+        } finally {
+            holder[0].shutdown();
+        }
+    }
+
+    @Test
+    void continuationWithUnknownIdIsRejected() {
+        McpContinuationStore[] holder = new McpContinuationStore[1];
+        McpModernProtocolHandler continuation = continuationHandler(holder);
+        try {
+            McpRequestStateCodec codec = continuation.mrtrSupport().codec();
+            String digest = McpMrtrSupport.argumentsDigest("tools/call", callParams(null, null, null, 1));
+            String token = codec.encode(new McpRequestStateCodec.State(
+                    "tools/call", "ask", digest, codec.expiresAt(Duration.ofMinutes(1)), null, "missing"));
+
+            McpReply reply = continuation.handle(
+                    new JsonRpcRequest(80, "tools/call", callParams(token, null, null, 1)),
+                    modern(null, "elicitation"),
+                    false);
+
+            assertThat(reply.status()).isEqualTo(400);
+            JsonObject error = parse(reply.body()).getJsonObject("error");
+            assertThat(error.getInt("code")).isEqualTo(-32602);
+            assertThat(error.getString("message")).contains("Unknown or expired requestState");
+        } finally {
+            holder[0].shutdown();
+        }
     }
 }

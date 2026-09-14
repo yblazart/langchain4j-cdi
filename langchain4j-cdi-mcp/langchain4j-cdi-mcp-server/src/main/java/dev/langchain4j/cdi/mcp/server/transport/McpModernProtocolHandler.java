@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
+import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
@@ -28,29 +29,42 @@ public class McpModernProtocolHandler {
     protected McpServerConfigResolver config;
     protected McpSubscriptionRegistry subscriptions;
     protected McpMrtrSupport mrtr;
+    protected McpContinuationStore continuations;
 
     /** No-arg constructor required by CDI proxying. */
     public McpModernProtocolHandler() {}
 
     /**
-     * Creates a handler backed by the given feature service, server configuration, subscription registry and MRTR
-     * support.
+     * Creates a handler backed by the given feature service, server configuration, subscription registry, MRTR support
+     * and continuation store.
      *
      * @param features the shared business logic for tool/resource/prompt listing and invocation
      * @param config resolves the server configuration
      * @param subscriptions the registry of open {@code subscriptions/listen} streams
      * @param mrtr the shared MRTR configuration and helpers
+     * @param continuations the registry of suspended invocations (MRTR {@code CONTINUATION} mode)
      */
     @Inject
     public McpModernProtocolHandler(
             McpFeatureService features,
             McpServerConfigResolver config,
             McpSubscriptionRegistry subscriptions,
-            McpMrtrSupport mrtr) {
+            McpMrtrSupport mrtr,
+            McpContinuationStore continuations) {
         this.features = features;
         this.config = config;
         this.subscriptions = subscriptions;
         this.mrtr = mrtr;
+        this.continuations = continuations;
+    }
+
+    /**
+     * Returns the shared MRTR configuration and helpers.
+     *
+     * @return the MRTR support
+     */
+    McpMrtrSupport mrtrSupport() {
+        return mrtr;
     }
 
     /**
@@ -145,7 +159,90 @@ public class McpModernProtocolHandler {
      */
     protected JsonObject execute(
             JsonRpcRequest request, McpProtocolContext protocol, McpResponseChannel channel, AtomicBoolean cancelled) {
-        return executeWithReplay(request, protocol, channel, cancelled);
+        return mrtr.mode() == McpMrtrMode.CONTINUATION
+                ? executeWithContinuation(request, protocol, channel, cancelled)
+                : executeWithReplay(request, protocol, channel, cancelled);
+    }
+
+    /**
+     * Executes an invocation, running it on a worker thread that blocks when it needs client input (MRTR
+     * {@code CONTINUATION} mode). The first request (no {@code requestState}) starts the invocation; a retry with a
+     * {@code requestState} supplies the pending answer and waits for the next event.
+     *
+     * @param request the JSON-RPC request being invoked
+     * @param protocol the protocol context for this request
+     * @param channel the channel for request-scoped notifications (progress, logs)
+     * @param cancelled flag set to {@code true} when the request is cancelled
+     * @return the decorated invocation result, either {@code complete} or {@code input_required}
+     */
+    JsonObject executeWithContinuation(
+            JsonRpcRequest request, McpProtocolContext protocol, McpResponseChannel channel, AtomicBoolean cancelled) {
+        Object id = request.getId();
+        String method = request.getMethod();
+        JsonObject params = request.getParams() != null ? request.getParams() : JsonValue.EMPTY_JSON_OBJECT;
+        String name = McpMrtrSupport.mrtrName(method, params);
+        String digest = McpMrtrSupport.argumentsDigest(method, params);
+        String token = params.getString("requestState", null);
+
+        McpContinuation continuation;
+        if (token == null) {
+            continuation = continuations.start(started -> {
+                McpRequestContext ctx = new McpRequestContext(
+                        null,
+                        id,
+                        request.getProgressToken(),
+                        cancelled,
+                        protocol,
+                        new McpContinuationClientRequester(protocol, started),
+                        started.channel());
+                return dispatchInvocation(request, ctx);
+            });
+            continuation.useChannel(channel);
+        } else {
+            String continuationId =
+                    mrtr.codec().decode(id, token, method, name, digest).continuationId();
+            continuation = continuations
+                    .find(continuationId)
+                    .orElseThrow(() -> McpProtocolErrors.invalidParams(id, "Unknown or expired requestState"));
+            continuation.useChannel(channel);
+            McpInputRequiredSignal pendingInput = continuation.lastInput();
+            JsonObject inputs = params.get("inputResponses") instanceof JsonObject o ? o : JsonValue.EMPTY_JSON_OBJECT;
+            if (pendingInput != null
+                    && continuation.isWaitingFor(pendingInput.key())
+                    && continuation.supply(inputs) == 0) {
+                return inputRequired(pendingInput, continuationState(method, name, digest, continuation));
+            }
+        }
+        return awaitContinuation(id, method, name, digest, continuation);
+    }
+
+    private JsonObject awaitContinuation(
+            Object id, String method, String name, String digest, McpContinuation continuation) {
+        McpContinuation.Event event;
+        try {
+            event = continuation.nextEvent(mrtr.continuationTimeout());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new McpException(id, McpErrorCode.INTERNAL_ERROR, "Interrupted while waiting for the invocation");
+        }
+        if (event instanceof McpContinuation.Input input) {
+            return inputRequired(input.request(), continuationState(method, name, digest, continuation));
+        }
+        continuations.remove(continuation.id());
+        if (event instanceof McpContinuation.Done done) {
+            return complete(done.result());
+        }
+        if (event instanceof McpContinuation.Failed failed) {
+            throw failed.error();
+        }
+        continuation.cancel();
+        throw new McpException(id, McpErrorCode.INTERNAL_ERROR, "Invocation timed out");
+    }
+
+    private String continuationState(String method, String name, String digest, McpContinuation continuation) {
+        McpRequestStateCodec codec = mrtr.codec();
+        return codec.encode(new McpRequestStateCodec.State(
+                method, name, digest, codec.expiresAt(mrtr.stateTtl()), null, continuation.id()));
     }
 
     /**
