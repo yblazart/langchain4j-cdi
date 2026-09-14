@@ -9,6 +9,58 @@ import org.junit.jupiter.api.Test;
 class McpNotificationBroadcasterTest {
 
     @Test
+    void shouldBroadcastToRegisteredChannelsWithSseFraming() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(sink, new FakeSse(), null));
+        broadcaster.broadcast(JsonRpcNotification.toolsListChanged());
+
+        assertThat(sink.rendered())
+                .isEqualTo("event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}"
+                        + "\n\n");
+    }
+
+    @Test
+    void shouldRemoveAndCloseChannelsWhoseSendFails() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        McpSseEventSinkChannel channel = new McpSseEventSinkChannel(sink, new FakeSse(), null);
+        broadcaster.registerStream("s1", channel);
+        sink.failSends(new java.io.IOException("disconnected"));
+
+        broadcaster.sendToSession("s1", JsonRpcNotification.toolsListChanged());
+
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+        assertThat(channel.isOpen()).isFalse();
+    }
+
+    @Test
+    void shouldOnlyUnregisterTheGivenChannel() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        McpSseEventSinkChannel first = new McpSseEventSinkChannel(new FakeSseEventSink(), new FakeSse(), null);
+        McpSseEventSinkChannel second = new McpSseEventSinkChannel(new FakeSseEventSink(), new FakeSse(), null);
+        broadcaster.registerStream("s1", first);
+        broadcaster.registerStream("s1", second);
+
+        broadcaster.unregisterStream("s1", first);
+
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+    }
+
+    @Test
+    void shutdownClosesRegisteredChannels() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(sink, new FakeSse(), null));
+
+        broadcaster.shutdown();
+
+        assertThat(sink.isClosed()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+    }
+
+    @Test
     void shouldBroadcastToRegisteredStreams() {
         McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
         ByteArrayOutputStream out1 = new ByteArrayOutputStream();

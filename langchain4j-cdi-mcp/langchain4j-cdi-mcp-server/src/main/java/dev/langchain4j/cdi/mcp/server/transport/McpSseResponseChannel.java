@@ -1,6 +1,5 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
-import dev.langchain4j.cdi.mcp.server.protocol.McpJsonSerializer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -9,7 +8,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /** Writes messages as SSE events on the response stream of one request; a write failure cancels the request. */
-public class McpSseResponseChannel implements McpResponseChannel {
+public class McpSseResponseChannel implements McpSseChannel {
 
     private static final Logger LOGGER = Logger.getLogger(McpSseResponseChannel.class.getName());
 
@@ -29,8 +28,8 @@ public class McpSseResponseChannel implements McpResponseChannel {
     }
 
     @Override
-    public void send(Object message) {
-        write("event: message\ndata: " + McpJsonSerializer.toJsonValue(message) + "\n\n");
+    public void sendData(String json) {
+        write("event: message\ndata: " + json + "\n\n");
     }
 
     /**
@@ -38,6 +37,7 @@ public class McpSseResponseChannel implements McpResponseChannel {
      *
      * @param comment the comment text
      */
+    @Override
     public void sendComment(String comment) {
         write(": " + comment + "\n\n");
     }
@@ -45,6 +45,15 @@ public class McpSseResponseChannel implements McpResponseChannel {
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    /**
+     * Stops writing to the stream. The output stream itself belongs to the Jakarta REST runtime, which ends the
+     * response when the streaming entity returns.
+     */
+    @Override
+    public void close() {
+        open = false;
     }
 
     private synchronized void write(String payload) {

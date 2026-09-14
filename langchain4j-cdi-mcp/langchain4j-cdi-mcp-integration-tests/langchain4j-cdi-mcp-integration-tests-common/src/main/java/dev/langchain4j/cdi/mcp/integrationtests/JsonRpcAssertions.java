@@ -112,7 +112,9 @@ public final class JsonRpcAssertions {
      */
     public static JsonObject assertHttpJsonRpcError(
             McpHttpResponse response, int expectedStatus, Object expectedId, int expectedCode) {
-        assertThat(response.statusCode()).as("HTTP status, body: %s", response.body()).isEqualTo(expectedStatus);
+        assertThat(response.statusCode())
+                .as("HTTP status, body: %s", response.body())
+                .isEqualTo(expectedStatus);
         JsonObject json = readJson(response.body());
         assertJsonRpcIdMatches(json, expectedId);
         assertThat(json).as("Expected 'error' in %s", response.body()).containsKey(FIELD_ERROR);

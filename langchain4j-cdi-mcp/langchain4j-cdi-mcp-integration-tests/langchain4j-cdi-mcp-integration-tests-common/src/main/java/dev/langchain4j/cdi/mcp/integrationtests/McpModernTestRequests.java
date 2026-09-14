@@ -17,7 +17,8 @@ public final class McpModernTestRequests {
     /**
      * @param id JSON-RPC id, {@code null} for a notification
      * @param method method name
-     * @param paramsJson params members without braces and without {@code _meta}, e.g. {@code "name":"greet"}; may be empty
+     * @param paramsJson params members without braces and without {@code _meta}, e.g. {@code "name":"greet"}; may be
+     *     empty
      * @param capabilitiesJson client capabilities object
      * @return the request body
      */

@@ -20,6 +20,7 @@ import jakarta.json.JsonValue;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
 import jakarta.json.bind.JsonbConfig;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.StreamingOutput;
@@ -116,32 +117,36 @@ public class McpLegacyProtocolHandler {
     }
 
     /**
-     * Opens an SSE stream for server-initiated notifications on an existing session.
+     * Validates a request opening the notification stream of a session, before any byte of the stream is produced.
      *
      * @param sessionId the MCP session identifier from the request header
-     * @return an SSE streaming response, or 400 if no session ID is provided
+     * @throws WebApplicationException with status 400 if no session ID is provided
+     * @throws McpException if the session does not exist
      */
-    public Response openStream(String sessionId) {
+    public void validateStream(String sessionId) {
         if (sessionId == null) {
-            return Response.status(Response.Status.BAD_REQUEST).build();
+            throw new WebApplicationException(
+                    Response.status(Response.Status.BAD_REQUEST).build());
         }
         sessionManager.requireSession(null, sessionId);
-        StreamingOutput stream = out -> {
-            broadcaster.registerStream(sessionId, out);
-            try {
-                out.write(": stream opened\n\n".getBytes(StandardCharsets.UTF_8));
-                out.flush();
-                Thread.currentThread().join();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } finally {
-                broadcaster.unregisterStream(sessionId);
-            }
-        };
-        return Response.ok(stream, MediaType.SERVER_SENT_EVENTS)
-                .header(HEADER_CACHE_CONTROL, HEADER_NO_CACHE)
-                .header(McpHttpHeaders.SESSION_ID, sessionId)
-                .build();
+    }
+
+    /**
+     * Opens the notification stream of a validated session on the given SSE channel: registers it, sends a
+     * {@code stream opened} comment and returns. The broadcaster then owns the channel: it delivers server-initiated
+     * notifications and requests for the session, and closes the channel when the client is found gone on a delivery or
+     * when the server shuts down. The calling thread is not held for the lifetime of the stream.
+     *
+     * @param sessionId the MCP session identifier
+     * @param channel the SSE channel of the response
+     */
+    public void openStream(String sessionId, McpSseChannel channel) {
+        broadcaster.registerStream(sessionId, channel);
+        channel.sendComment("stream opened");
+        if (!channel.isOpen()) {
+            broadcaster.unregisterStream(sessionId, channel);
+            channel.close();
+        }
     }
 
     /**

@@ -124,20 +124,21 @@ public class McpModernProtocolHandler {
     }
 
     /**
-     * Opens a {@code subscriptions/listen} SSE stream: acknowledges the requested notification types, then delivers
-     * matching change notifications until the server shuts down.
+     * Opens a {@code subscriptions/listen} SSE stream on the raw response stream. The HTTP endpoint serves listen
+     * requests through {@link #listen(JsonRpcRequest, McpSseChannel)} instead, so that events are not held in a runtime
+     * output buffer.
      *
      * @param request the JSON-RPC request
      * @param params the request parameters
      * @return the SSE reply
      */
     private McpReply listen(JsonRpcRequest request, JsonObject params) {
-        JsonObject requested = params.get("notifications") instanceof JsonObject n ? n : JsonValue.EMPTY_JSON_OBJECT;
-        McpNotificationFilter filter = McpNotificationFilter.from(requested);
+        McpNotificationFilter filter = listenFilter(params);
         return McpReply.sse(out -> {
-            McpSseResponseChannel channel = new McpSseResponseChannel(out, new AtomicBoolean());
-            McpListenSubscription subscription = subscriptions.open(request.getId(), filter, channel);
+            McpListenSubscription subscription =
+                    subscriptions.open(request.getId(), filter, new McpSseResponseChannel(out, new AtomicBoolean()));
             try {
+                // a streaming entity ends its response when it returns, so it must wait for the subscription to end
                 subscription.awaitClose();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -145,6 +146,26 @@ public class McpModernProtocolHandler {
                 subscriptions.remove(subscription);
             }
         });
+    }
+
+    /**
+     * Opens a validated {@code subscriptions/listen} request on the given SSE channel and returns once the requested
+     * notification types are acknowledged (the first message of the stream). The subscription then owns the channel: it
+     * delivers matching change notifications until the server shuts down or the client is found gone, and closes the
+     * channel when it ends. The calling thread is not held for the lifetime of the subscription.
+     *
+     * @param request the {@code subscriptions/listen} JSON-RPC request
+     * @param channel the SSE channel of the response
+     * @return the opened subscription, already closed if the acknowledgement could not be delivered
+     */
+    public McpListenSubscription listen(JsonRpcRequest request, McpSseChannel channel) {
+        JsonObject params = request.getParams() != null ? request.getParams() : JsonValue.EMPTY_JSON_OBJECT;
+        return subscriptions.open(request.getId(), listenFilter(params), channel);
+    }
+
+    private static McpNotificationFilter listenFilter(JsonObject params) {
+        JsonObject requested = params.get("notifications") instanceof JsonObject n ? n : JsonValue.EMPTY_JSON_OBJECT;
+        return McpNotificationFilter.from(requested);
     }
 
     /**

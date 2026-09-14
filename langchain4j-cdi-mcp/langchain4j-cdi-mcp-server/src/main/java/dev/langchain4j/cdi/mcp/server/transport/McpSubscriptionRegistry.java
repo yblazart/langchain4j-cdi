@@ -31,7 +31,7 @@ public class McpSubscriptionRegistry {
      * @param channel the SSE channel to deliver notifications on
      * @return the opened subscription
      */
-    public McpListenSubscription open(Object id, McpNotificationFilter filter, McpSseResponseChannel channel) {
+    public McpListenSubscription open(Object id, McpNotificationFilter filter, McpSseChannel channel) {
         McpListenSubscription subscription = new McpListenSubscription(id, filter, channel);
         subscription.acknowledge();
         if (!subscription.isClosed()) {

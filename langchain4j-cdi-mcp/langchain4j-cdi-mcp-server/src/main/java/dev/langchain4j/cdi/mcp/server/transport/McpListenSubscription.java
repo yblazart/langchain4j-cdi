@@ -11,7 +11,7 @@ public class McpListenSubscription {
 
     private final Object id;
     private final McpNotificationFilter filter;
-    private final McpSseResponseChannel channel;
+    private final McpSseChannel channel;
     private final CountDownLatch closed = new CountDownLatch(1);
 
     /**
@@ -21,7 +21,7 @@ public class McpListenSubscription {
      * @param filter the notification types the client opted in to
      * @param channel the SSE channel to deliver notifications on
      */
-    public McpListenSubscription(Object id, McpNotificationFilter filter, McpSseResponseChannel channel) {
+    public McpListenSubscription(Object id, McpNotificationFilter filter, McpSseChannel channel) {
         this.id = id;
         this.filter = filter;
         this.channel = channel;
@@ -74,9 +74,10 @@ public class McpListenSubscription {
         close();
     }
 
-    /** Closes the subscription without sending a completion result. */
+    /** Closes the subscription and its channel without sending a completion result. */
     public void close() {
         closed.countDown();
+        channel.close();
     }
 
     /**
