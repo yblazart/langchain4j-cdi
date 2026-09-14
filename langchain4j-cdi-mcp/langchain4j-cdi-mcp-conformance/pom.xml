@@ -69,6 +69,12 @@
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
         </dependency>
+        <!--
+            langchain4j-cdi-mcp-invoker-cdi41 cannot be added here: this fixture server runs on Helidon 4.3.4
+            (Weld 5.1.6 / CDI 4.0), whose weld-lite-extension-translator has no candidate for an InvokerFactory
+            build-compatible-extension parameter and aborts the deployment with LITE-EXTENSION-TRANSLATOR-000017.
+            See the note in langchain4j-cdi-mcp-integration-tests-helidon/pom.xml.
+        -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>

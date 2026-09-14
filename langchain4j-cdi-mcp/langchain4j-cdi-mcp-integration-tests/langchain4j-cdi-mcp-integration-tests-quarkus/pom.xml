@@ -63,9 +63,26 @@
             <groupId>dev.langchain4j.cdi.mcp</groupId>
             <artifactId>langchain4j-cdi-mcp-portable-ext</artifactId>
         </dependency>
+        <!--
+            Opt-in reflection-free invocation. The module is a build-compatible extension that builds a CDI 4.1
+            Invoker per @Tool/@Prompt/@Resource method; McpBeanInvoker picks it up through the McpInvokerProvider
+            SPI and skips Method.invoke entirely. Adding this artifact is the whole opt-in.
+        -->
+        <dependency>
+            <groupId>dev.langchain4j.cdi.mcp</groupId>
+            <artifactId>langchain4j-cdi-mcp-invoker-cdi41</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+            Explicit 4.1.0: the reactor parent manages jakarta.enterprise.cdi-api at 4.0.1 for the Jakarta EE 10
+            core, and that inherited entry wins over the imported Quarkus BOM. ArC 3.21 is a CDI 4.1 container and
+            jakarta.enterprise.invoke lives in the 4.1.0 API jar, so this module - and only this module - needs it.
+            Same treatment as langchain4j-cdi-integration-tests-quarkus, which already pins 4.1.0 this way.
+        -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>4.1.0</version>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
