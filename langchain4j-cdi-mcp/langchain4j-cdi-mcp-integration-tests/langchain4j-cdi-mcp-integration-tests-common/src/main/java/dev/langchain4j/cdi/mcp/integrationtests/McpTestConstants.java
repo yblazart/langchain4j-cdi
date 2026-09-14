@@ -9,6 +9,9 @@ public final class McpTestConstants {
     /** Tool name for the greeting tool. */
     public static final String GREET = "greet";
 
+    /** Tool name for the exotic-signature tool of {@link GreetingTool}. */
+    public static final String DESCRIBE_SIGNATURE = "describeSignature";
+
     /** HTTP header name for the MCP session identifier. */
     public static final String MCP_SESSION_ID = "Mcp-Session-Id";
 

@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.integrationtests.quarkus;
 
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.ASK_NAME;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.CONFIG_APP;
+import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.DESCRIBE_SIGNATURE;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.GET_WEATHER;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.GREET;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.MCP_SESSION_ID;
@@ -44,10 +45,11 @@ class McpQuarkusCdi41InvokerTest {
 
     /**
      * Number of {@code @Tool}/{@code @Prompt}/{@code @Resource} methods in the shared IT application:
-     * {@code getWeather}, {@code greet}, {@code askName}, {@code summarize}, {@code getConfig}, {@code getStatus}. This
-     * test invokes all six, so the match count is expected to reach exactly this number.
+     * {@code getWeather}, {@code greet}, {@code describeSignature}, {@code askName}, {@code summarize},
+     * {@code getConfig}, {@code getStatus}. This test invokes all seven, so the match count is expected to reach
+     * exactly this number.
      */
-    private static final int ANNOTATED_MCP_METHODS = 6;
+    private static final int ANNOTATED_MCP_METHODS = 7;
 
     /** URI of the second resource of {@code ConfigResource}, invoked here only to cover its invoker too. */
     private static final String STATUS_RESOURCE = "data://status";
@@ -85,6 +87,17 @@ class McpQuarkusCdi41InvokerTest {
                 200);
         JsonRpcAssertions.assertJsonRpcSuccess(
                 post(transport, sessionId, McpTestRequests.toolsCallRequest(201, GREET, "{\"name\":\"Ada\"}")), 201);
+
+        // describeSignature is the only MCP method of the deployment whose parameters are not all java.lang.String:
+        // it takes an int, a String[], a List<String> and a nested record. Those are exactly the shapes the build-time
+        // language model and the runtime Class could spell differently ("[Ljava.lang.String;", "GreetingTool.Style",
+        // an unerased List<String>), and any such disagreement shows up below as a miss.
+        JsonObject described = JsonRpcAssertions.assertJsonRpcSuccess(
+                post(transport, sessionId, McpTestRequests.toolsCallRequest(207, DESCRIBE_SIGNATURE, "{\"count\":3}")),
+                207);
+        assertThat(described.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("count=3 tags=none labels=none style=none");
+
         JsonRpcAssertions.assertJsonRpcSuccess(
                 post(
                         transport,
@@ -114,9 +127,9 @@ class McpQuarkusCdi41InvokerTest {
         LOG.info(() -> "MCP CDI 4.1 invoker counters on ArC: size=" + invokerProvider.size() + " matches="
                 + invokerProvider.matchCount() + " misses=" + invokerProvider.missCount());
 
-        // McpBeanInvoker caches the provider lookup per java.lang.reflect.Method, so one match per MCP method is all
-        // there is to count however many times a tool is called, and the count is stable whatever order test classes
-        // run in.
+        // McpBeanInvoker caches the provider lookup per (bean class, java.lang.reflect.Method) pair, so one match per
+        // MCP method is all there is to count however many times a tool is called, and the count is stable whatever
+        // order test classes run in.
         assertThat(invokerProvider.matchCount())
                 .as("McpBeanInvoker must have resolved a container invoker for every MCP method, not reflected")
                 .isEqualTo(ANNOTATED_MCP_METHODS);

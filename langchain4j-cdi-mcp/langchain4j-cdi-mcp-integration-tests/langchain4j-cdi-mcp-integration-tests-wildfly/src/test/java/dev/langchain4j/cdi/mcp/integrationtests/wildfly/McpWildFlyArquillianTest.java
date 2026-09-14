@@ -89,6 +89,9 @@ public class McpWildFlyArquillianTest {
                         McpWildFlyArquillianTest.class,
                         WeatherTool.class,
                         GreetingTool.class,
+                        // Nested types are not pulled in with their enclosing class, and describeSignature
+                        // takes one as a parameter.
+                        GreetingTool.Style.class,
                         ElicitationTool.class,
                         ConfigResource.class,
                         SummarizePrompt.class,
