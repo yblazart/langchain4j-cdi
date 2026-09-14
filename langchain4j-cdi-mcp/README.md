@@ -49,7 +49,7 @@ The server is **dual-era**: on the same `/mcp` endpoint it speaks both MCP **202
 
 #### Request Routing
 
-Every request lands on the same `/mcp` endpoint and passes through a fixed pipeline before your bean's code runs: the `Origin` header is checked first, then the body must parse as JSON-RPC, and a notification-shaped modern request is answered `202` immediately without reaching either era-specific handler. From there, `McpEraDetector` decides whether the legacy or the modern handler processes the request; both delegate the actual tool, prompt, resource and completion execution to the same `McpFeatureService`, which is why a feature behaves identically in both eras.
+Every request lands on the same `/mcp` endpoint and passes through a fixed pipeline before your bean's code runs: the `Origin` header is checked first, then the body must parse as JSON-RPC, and an id-less, session-less request carrying a modern `MCP-Protocol-Version` header is answered `202` immediately without reaching either era-specific handler. From there, `McpEraDetector` decides whether the legacy or the modern handler processes the request; both delegate the actual tool, prompt, resource and completion execution to the same `McpFeatureService`, which is why a feature behaves identically in both eras.
 
 ```mermaid
 flowchart TD
@@ -57,7 +57,7 @@ flowchart TD
     B -- "no" --> B1["403 Forbidden"]
     B -- "yes" --> C{"JSON-RPC parses?"}
     C -- "no" --> C1["400 / -32700 ParseError"]
-    C -- "yes" --> D{"id-less and modern header?"}
+    C -- "yes" --> D{"no id, no session id, modern header?"}
     D -- "yes" --> D1["202 Accepted"]
     D -- "no" --> E["McpEraDetector"]
     E -- "legacy" --> F["McpLegacyProtocolHandler"]
@@ -324,21 +324,28 @@ All types are from the `org.mcpjava.server` package.
 
 #### Era Detection
 
-`McpEraDetector` classifies each request by looking for a `protocolVersion` field inside `_meta.io.modelcontextprotocol`: its absence means the legacy 2025-03-26 era, its presence starts the modern-era validation chain. A modern request must then agree with itself — the `_meta` version has to match the `MCP-Protocol-Version` header and be one of the versions the server supports, or the request is rejected before any tool, prompt or resource code runs. A modern request naming a legacy-only method (`initialize`, `logging/setLevel`, …) is rejected too, but only once dispatch reaches the method switch, which is why it surfaces as `404` / `-32601` rather than a header-level error.
+`McpEraDetector` classifies each request by looking for a `protocolVersion` field inside `_meta.io.modelcontextprotocol`. Its absence sends the request to the legacy 2025-03-26 era, unless the `MCP-Protocol-Version` header itself claims a modern version — then the missing `_meta` is malformed input, not a fallback trigger, and the server answers `400` / `-32602` (SEP-2575). When `_meta.protocolVersion` is present, the checks run in a fixed order: the header must agree with it first (`-32020` on any mismatch), then the version must be one the server supports (`-32022`), then the `Mcp-Method` and `Mcp-Name` headers must match the request (`-32020`), and only last is `_meta.clientCapabilities` required (`-32602`) before the request reaches the modern handler. A modern request naming a legacy-only method (`initialize`, `logging/setLevel`, …) is rejected too, but only once dispatch reaches the method switch, which is why it surfaces as `404` / `-32601` rather than a header-level error.
 
 ```mermaid
 flowchart TD
     A["Request past Origin + JSON-RPC checks"] --> B{"_meta protocolVersion present?"}
-    B -- "no" --> B1["Legacy era: 2025-03-26"]
-    B -- "yes, but _meta incomplete" --> B2["400 / -32602 InvalidParams"]
-    B -- "yes, complete" --> C{"MCP-Protocol-Version header matches _meta?"}
+    B -- "no" --> B1{"MCP-Protocol-Version header is modern?"}
+    B1 -- "yes" --> B2["400 / -32602 InvalidParams: missing _meta, SEP-2575"]
+    B1 -- "no" --> B3["Legacy era: 2025-03-26"]
+    B -- "yes" --> C{"header matches _meta version?"}
     C -- "no" --> C1["400 / -32020 HeaderMismatch"]
     C -- "yes" --> D{"version is supported?"}
     D -- "no" --> D1["400 / -32022 UnsupportedProtocolVersion"]
-    D -- "yes" --> E["Modern era: 2026-07-28"]
-    E --> F{"method is legacy-only?"}
-    F -- "yes" --> F1["404 / -32601 MethodNotFound"]
-    F -- "no" --> G["dispatch to McpModernProtocolHandler"]
+    D -- "yes" --> E{"Mcp-Method header matches?"}
+    E -- "no" --> C1
+    E -- "yes" --> F{"Mcp-Name header matches, if required?"}
+    F -- "no" --> C1
+    F -- "yes" --> G{"_meta.clientCapabilities present?"}
+    G -- "no" --> G1["400 / -32602 InvalidParams: missing clientCapabilities"]
+    G -- "yes" --> H["Modern era: 2026-07-28"]
+    H --> I{"method is legacy-only?"}
+    I -- "yes" --> I1["404 / -32601 MethodNotFound"]
+    I -- "no" --> J["dispatch to McpModernProtocolHandler"]
 ```
 
 `server/discover` advertises `supportedVersions: ["2026-07-28", "2025-03-26"]`. A modern request with another version is rejected with `UnsupportedProtocolVersion` listing these versions, and dual-era clients (such as `langchain4j-mcp` 1.19+) fall back automatically.
