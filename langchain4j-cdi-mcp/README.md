@@ -47,6 +47,25 @@ The server is **dual-era**: on the same `/mcp` endpoint it speaks both MCP **202
 3. A JAX-RS endpoint (`/mcp`) is exposed automatically — it speaks the MCP protocol (JSON-RPC 2.0 over Streamable HTTP).
 4. Any MCP client can connect and discover/call your tools, read your resources, and get your prompts.
 
+#### Request Routing
+
+Every request lands on the same `/mcp` endpoint and passes through a fixed pipeline before your bean's code runs: the `Origin` header is checked first, then the body must parse as JSON-RPC, and a notification-shaped modern request is answered `202` immediately without reaching either era-specific handler. From there, `McpEraDetector` decides whether the legacy or the modern handler processes the request; both delegate the actual tool, prompt, resource and completion execution to the same `McpFeatureService`, which is why a feature behaves identically in both eras.
+
+```mermaid
+flowchart TD
+    A["POST /mcp"] --> B{"Origin valid?"}
+    B -- "no" --> B1["403 Forbidden"]
+    B -- "yes" --> C{"JSON-RPC parses?"}
+    C -- "no" --> C1["400 / -32700 ParseError"]
+    C -- "yes" --> D{"id-less and modern header?"}
+    D -- "yes" --> D1["202 Accepted"]
+    D -- "no" --> E["McpEraDetector"]
+    E -- "legacy" --> F["McpLegacyProtocolHandler"]
+    E -- "modern" --> G["McpModernProtocolHandler"]
+    F --> H["McpFeatureService: tools / prompts / resources / completion"]
+    G --> H
+```
+
 ---
 
 ## Getting Started
@@ -303,6 +322,25 @@ All types are from the `org.mcpjava.server` package.
 | Notification POSTs | HTTP 202 Accepted, empty body | HTTP 202 Accepted, empty body |
 | Caching hints | none | `ttlMs` / `cacheScope` (SEP-2549) on `server/discover` and on every cacheable result (`tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `resources/read`) |
 
+#### Era Detection
+
+`McpEraDetector` classifies each request by looking for a `protocolVersion` field inside `_meta.io.modelcontextprotocol`: its absence means the legacy 2025-03-26 era, its presence starts the modern-era validation chain. A modern request must then agree with itself — the `_meta` version has to match the `MCP-Protocol-Version` header and be one of the versions the server supports, or the request is rejected before any tool, prompt or resource code runs. A modern request naming a legacy-only method (`initialize`, `logging/setLevel`, …) is rejected too, but only once dispatch reaches the method switch, which is why it surfaces as `404` / `-32601` rather than a header-level error.
+
+```mermaid
+flowchart TD
+    A["Request past Origin + JSON-RPC checks"] --> B{"_meta protocolVersion present?"}
+    B -- "no" --> B1["Legacy era: 2025-03-26"]
+    B -- "yes, but _meta incomplete" --> B2["400 / -32602 InvalidParams"]
+    B -- "yes, complete" --> C{"MCP-Protocol-Version header matches _meta?"}
+    C -- "no" --> C1["400 / -32020 HeaderMismatch"]
+    C -- "yes" --> D{"version is supported?"}
+    D -- "no" --> D1["400 / -32022 UnsupportedProtocolVersion"]
+    D -- "yes" --> E["Modern era: 2026-07-28"]
+    E --> F{"method is legacy-only?"}
+    F -- "yes" --> F1["404 / -32601 MethodNotFound"]
+    F -- "no" --> G["dispatch to McpModernProtocolHandler"]
+```
+
 `server/discover` advertises `supportedVersions: ["2026-07-28", "2025-03-26"]`. A modern request with another version is rejected with `UnsupportedProtocolVersion` listing these versions, and dual-era clients (such as `langchain4j-mcp` 1.19+) fall back automatically.
 
 The server validates the `Origin` header on every request (DNS rebinding protection). Requests without `Origin` (non-browser clients) are accepted. With the default empty `allowedOrigins`, a request with an `Origin` is accepted only when both the `Origin` host and the `Host` header host are loopback (`localhost`, `127.0.0.1`, `::1`); any other origin — including one matching the `Host` header, which is exactly what a DNS rebinding attack sends — gets HTTP 403. When the server is reached from browsers through a real host name, list the accepted origins in `allowedOrigins` (see [Server Configuration](#server-configuration)).
@@ -316,7 +354,20 @@ The server validates the `Origin` header on every request (DNS rebinding protect
 
 #### Known limitations
 
-- **Request-scoped notifications may be batched on some runtimes.** Progress (`Progress`) and log (`McpLog`) notifications emitted during a modern `tools/call`, `prompts/get` or `resources/read` streamed reply are sent on that request's SSE stream, but Helidon (Jersey output buffering, ~8 KB) and Open Liberty (~32 KB) may hold them until the final result is written. `subscriptions/listen` streams and the legacy `GET /mcp` stream use the Jakarta REST `SseEventSink` API and are delivered immediately on every runtime.
+Not every server-to-client push travels the same way. The two long-lived streams — `subscriptions/listen` and the legacy `GET /mcp` notification stream — are written through the Jakarta REST `SseEventSink` API, which the runtime flushes after every event, so delivery is immediate everywhere. Request-scoped notifications emitted during a `tools/call`, `prompts/get` or `resources/read` reply instead go through a plain `StreamingOutput`, which some runtimes buffer.
+
+```mermaid
+flowchart TD
+    A["subscriptions/listen: modern"] --> S["SseEventSink"]
+    B["GET /mcp: legacy stream"] --> S
+    S --> S1["delivered immediately on every runtime"]
+    C["tools/call notifications"] --> O["StreamingOutput"]
+    D["prompts/get notifications"] --> O
+    E["resources/read notifications"] --> O
+    O --> O1["may be batched with the final result: Helidon, Open Liberty"]
+```
+
+- **Request-scoped notifications may be batched on some runtimes.** Progress (`Progress`) and log (`McpLog`) notifications emitted during a modern `tools/call`, `prompts/get` or `resources/read` streamed reply go through `StreamingOutput`, and Helidon (Jersey output buffering, ~8 KB) and Open Liberty (~32 KB) may hold them until the final result is written before the client sees any of it.
 - **Quarkus SSE framing/headers on sink streams.** On Quarkus, the `subscriptions/listen` and legacy `GET /mcp` streams are written as `data:{...}` (no space, valid SSE) and do not carry the `Cache-Control`, `X-Accel-Buffering` and `Mcp-Session-Id` response headers. If a reverse proxy buffers SSE, configure it to disable buffering for `/mcp`.
 - **Deprecated spec features still supported.** MCP 2026-07-28 deprecates Roots, Sampling and Logging: they keep working but new servers should prefer tool arguments, direct LLM calls and OpenTelemetry.
 
@@ -328,6 +379,42 @@ The server validates the `Origin` header on every request (DNS rebinding protect
 |---|---|---|
 | `REPLAY` (default) | The method is **re-executed from the beginning** on each retry. Answers already given are replayed in call order; they travel in a signed, expiring `requestState`. | Code executed before an interaction must be idempotent, and interactions must happen in a deterministic order. Stateless: works behind any load balancer if all instances share `requestStateSecret`. |
 | `CONTINUATION` | The first call starts the method on a worker thread which waits for the answer; retries resume it. | In-memory state: requires sticky routing in a cluster. `@RequestScoped` beans are not active on the worker thread. Each round must complete within `continuationTimeout`. A round that exceeds `continuationTimeout` fails the request, but a compute-bound method is not interrupted (it keeps its worker thread until it returns). Worker threads come from an unbounded cached pool: size `continuationTimeout` accordingly and prefer `REPLAY` for public-facing servers. The log-level threshold of the first round applies to all rounds (progress tokens, cancellation and whether logs are sent at all follow each round). |
+
+#### On The Wire
+
+**`REPLAY`** — the retry is not a continuation of the first call, it is a brand new invocation: the method body starts over at line one, and every previously answered interaction is satisfied from the replayed `requestState` before execution reaches the next one. This is the property to design for: any code before an interaction runs again on every round, so it must be safe to repeat.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    Client->>Server: tools/call, round 1
+    Note over Server: method executes from the start
+    Server-->>Client: input_required + signed requestState
+    Client->>Server: tools/call retry, inputResponses + requestState
+    Note over Server: method RE-EXECUTED from the start
+    Server->>Server: replay stored answers in call order
+    Server->>Server: reach the next unanswered interaction
+    Server-->>Client: final result
+```
+
+**`CONTINUATION`** — the opposite trade-off: the same worker thread stays parked at the exact point of the interaction, so the retry resumes execution rather than replaying it. Nothing runs twice, but the parked thread and its `@RequestScoped` state must survive until the client answers.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Worker as Worker Thread
+    Client->>Server: tools/call, round 1
+    Server->>Worker: start method
+    Worker->>Worker: park at the interaction, wait for an answer
+    Server-->>Client: input_required
+    Client->>Server: tools/call retry, inputResponses
+    Server->>Worker: resume the SAME parked invocation
+    Worker->>Worker: continue past the interaction
+    Worker-->>Server: final result
+    Server-->>Client: final result
+```
 
 ```java
 @Tool(description = "Book a car after confirming the dates")

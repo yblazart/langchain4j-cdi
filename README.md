@@ -28,6 +28,8 @@ Full documentation is available at **[langchain4j.github.io/langchain4j-cdi](htt
 - **Expression Language** — resolve `${...}` (MicroProfile Config) and `#{...}` (Jakarta EL) expressions in annotations
 - **Guardrails** — input and output validation for AI service interactions
 
+The MCP server is **dual-era**: on the same `/mcp` endpoint it speaks both the legacy MCP 2025-03-26 protocol (session handshake) and the stateless MCP 2026-07-28 revision, so existing and modern clients connect side by side. See [`langchain4j-cdi-mcp/README.md`](langchain4j-cdi-mcp/README.md) for the full guide, including protocol diagrams and conformance results.
+
 ## Supported Runtimes
 
 | Runtime | Extension Type |
