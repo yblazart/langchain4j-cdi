@@ -27,6 +27,7 @@ The server is **dual-era**: on the same `/mcp` endpoint it speaks both MCP **202
   - [Server Configuration](#server-configuration)
 - [Conformance](#conformance)
 - [Runtime Support](#runtime-support)
+- [Reflection-Free Invocation (CDI 4.1)](#reflection-free-invocation-cdi-41)
 - [Module Structure](#module-structure)
 
 ---
@@ -555,6 +556,62 @@ public class RestApplication extends Application {}
 ```
 
 With the context root set to `/`, the endpoint is then reachable at `http://<host>:<port>/mcp`. Use a different `@ApplicationPath` (or context root) to relocate it.
+
+---
+
+## Reflection-Free Invocation (CDI 4.1)
+
+By default, every `@Tool`/`@Prompt`/`@Resource` method call goes through `Method.invoke` after the target CDI bean is resolved from the `BeanManager`. On a CDI 4.1 host, the optional `langchain4j-cdi-mcp-invoker-cdi41` module replaces that with the standard [CDI 4.1 invoker API](https://jakarta.ee/specifications/cdi/4.1/) (`jakarta.enterprise.invoke.Invoker`), so the container builds and resolves the call site itself — no reflective invocation, no `setAccessible`, and no CDI bean lookup on the server's side.
+
+```mermaid
+flowchart TD
+    A["McpBeanInvoker.invoke(method, args)"] --> B{"McpInvokerProvider bean present\nand lookup() hits?"}
+    B -- "yes (CDI 4.1 host +\nlangchain4j-cdi-mcp-invoker-cdi41)" --> C["Invoker.invoke(null, args)\ncontainer resolves the bean instance"]
+    B -- "no (default: CDI 4.0.1 hosts,\nor module absent)" --> D["Resolve the bean via BeanManager"]
+    D --> E["Method.invoke(instance, args)"]
+```
+
+**How it works:** `langchain4j-cdi-mcp-server` defines two container-agnostic SPI types (package `dev.langchain4j.cdi.mcp.server.registry`, CDI 4.0.1, no `jakarta.enterprise.invoke` reference): `McpMethodInvoker` (the call) and `McpInvokerProvider` (the lookup). `McpBeanInvoker` injects every `McpInvokerProvider` bean present, caches the lookup per `java.lang.reflect.Method`, and falls back to reflection whenever no provider is present or none has an invoker for that method. The `langchain4j-cdi-mcp-invoker-cdi41` module implements that SPI: its Build Compatible Extension (`McpInvokerBuildCompatibleExtension`) asks the container's `InvokerFactory` for an `Invoker` built with `withInstanceLookup()` for every annotated method, in the `@Registration` phase, and registers a synthetic `@ApplicationScoped` bean (`McpCdi41InvokerProvider`) that exposes them under the `McpInvokerProvider` type, in the `@Synthesis` phase.
+
+**How to use it:** add the dependency next to `langchain4j-cdi-mcp-server` — nothing else to configure:
+
+```xml
+<dependency>
+    <groupId>dev.langchain4j.cdi.mcp</groupId>
+    <artifactId>langchain4j-cdi-mcp-server</artifactId>
+    <version>1.0.0-Beta1</version>
+</dependency>
+<dependency>
+    <groupId>dev.langchain4j.cdi.mcp</groupId>
+    <artifactId>langchain4j-cdi-mcp-invoker-cdi41</artifactId>
+    <version>1.0.0-Beta1</version>
+    <scope>runtime</scope>
+</dependency>
+```
+
+The core MCP modules keep `jakarta.enterprise.cdi-api` **4.0.1** (Jakarta EE 10); adding this module is your explicit opt-in to a CDI 4.1 host, and it changes nothing for anyone who does not add it.
+
+> ⚠️ **CDI 4.1 is a hard prerequisite, not a soft one.** On a CDI 4.0 host this module does not degrade to reflection — it breaks the deployment, because a CDI 4.0 container can neither load nor dispatch to a Build Compatible Extension that declares an `InvokerFactory` parameter. Two failure signatures were reproduced on Helidon 4.3.4 (Weld 5.1.6, CDI 4.0):
+>
+> - with the inherited `cdi-api` 4.0.1 still on the classpath: `NoClassDefFoundError: jakarta/enterprise/inject/build/compatible/spi/InvokerFactory`;
+> - with `cdi-api` forced to 4.1.0 on a Weld 5 host: `LITE-EXTENSION-TRANSLATOR-000017` during the `@Registration` phase, caused by a `NullPointerException` at `ExtensionMethodParameterType.of` (Weld 5's translator does not know the `InvokerFactory` parameter type).
+>
+> Only add this module on a runtime you have confirmed implements the CDI 4.1 invoker API.
+
+**Runtime matrix (as measured):**
+
+| Runtime | Result |
+|---|---|
+| **Quarkus 3.21.4 / ArC** (CDI 4.1) | Verified end to end: 6 invokers built, 6 matched, 0 misses; the full MCP integration suite is green both with and without the module. |
+| **Helidon 4.3.4** | **Not supported.** It ships Weld 5.1.6, i.e. CDI 4.0, not CDI 4.1 — the module is deliberately not added there; see the failure signatures above. |
+| **WildFly 39 / Open Liberty 25** (Jakarta EE 10) | The module must not be added; they keep the reflective path unchanged, suites green. |
+| **Vidocq / Vauban** | CDI 4.1 Lite, Jakarta EE Core Profile 11 certified, so it is the expected target — but it has **not been tested yet**. |
+
+**Diagnostics:** `McpCdi41InvokerProvider` exposes `size()` (invokers registered at build time), `matchCount()` and `missCount()` (lookups that did or did not find an invoker at runtime), and logs at `FINE` on every hit and miss with the computed key. The path is actually taken when `matchCount() > 0` and `missCount() == 0`; `size()` alone does not prove it, since a broken key mapping still registers invokers that never match.
+
+**Honest gap:** the "with vs without the module" comparison was never run against the `langchain4j-cdi-mcp-conformance` fixtures, because that fixture application is Helidon-based and Helidon does not support the module (above). The equivalence evidence instead comes from the Quarkus integration suite, which is identical with and without the module.
+
+**Known untested areas:** `@RequestScoped` tool beans through `withInstanceLookup()`, native image, and Quarkus dev-mode reload against the extension's static invoker map.
 
 ---
 
