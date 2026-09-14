@@ -36,17 +36,24 @@ public final class McpEraDetector {
 
         if (bodyVersion == null) {
             if (McpProtocolVersions.isModernEra(headerVersion)) {
-                throw McpProtocolErrors.headerMismatch(
-                        id, McpHttpHeaders.PROTOCOL_VERSION + " requires _meta." + McpMetaKeys.PROTOCOL_VERSION);
+                // SEP-2575: a missing _meta, or a _meta missing a required subfield, is malformed input, not a
+                // header/_meta disagreement - it must be answered -32602 Invalid params, not -32020 HeaderMismatch.
+                throw McpProtocolErrors.invalidParams(
+                        id,
+                        "Missing _meta." + McpMetaKeys.PROTOCOL_VERSION + " required by "
+                                + McpHttpHeaders.PROTOCOL_VERSION + ": " + headerVersion);
             }
             return McpProtocolContext.legacy(
                     headerVersion != null ? headerVersion : McpProtocolVersions.LEGACY_2025_03_26);
         }
-        if (!McpProtocolVersions.isSupportedModern(bodyVersion)) {
-            throw McpProtocolErrors.unsupportedProtocolVersion(id, bodyVersion);
-        }
+        // the header/_meta mismatch check runs first: a version the server does not support, announced consistently
+        // in both places, is an UnsupportedProtocolVersion error, but a disagreement between the two is a
+        // HeaderMismatch whatever the versions are.
         if (!bodyVersion.equals(headerVersion)) {
             throw McpProtocolErrors.headerMismatch(id, McpHttpHeaders.PROTOCOL_VERSION);
+        }
+        if (!McpProtocolVersions.isSupportedModern(bodyVersion)) {
+            throw McpProtocolErrors.unsupportedProtocolVersion(id, bodyVersion);
         }
         requireHeaderEquals(id, headers, McpHttpHeaders.METHOD, request.getMethod(), false);
 

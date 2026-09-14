@@ -74,11 +74,24 @@ class McpEraDetectorTest {
     }
 
     @Test
-    void modernHeaderWithoutMetaIsHeaderMismatch() {
+    void modernHeaderWithoutMetaIsInvalidParams() {
         assertThatThrownBy(() -> McpEraDetector.detect(toolCall(null), modernHeaders()::get))
-                .isInstanceOfSatisfying(
-                        McpException.class,
-                        e -> assertThat(e.getErrorCode().getCode()).isEqualTo(-32020));
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
+                    assertThat(e.getHttpStatus()).isEqualTo(400);
+                });
+    }
+
+    @Test
+    void metaWithoutProtocolVersionIsInvalidParams() {
+        JsonObjectBuilder meta = Json.createObjectBuilder()
+                .add("io.modelcontextprotocol/clientCapabilities", JsonValue.EMPTY_JSON_OBJECT);
+
+        assertThatThrownBy(() -> McpEraDetector.detect(toolCall(meta), modernHeaders()::get))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
+                    assertThat(e.getHttpStatus()).isEqualTo(400);
+                });
     }
 
     @Test
@@ -89,6 +102,17 @@ class McpEraDetectorTest {
         assertThatThrownBy(() -> McpEraDetector.detect(toolCall(modernMeta("2099-01-01")), headers::get))
                 .isInstanceOfSatisfying(McpException.class, e -> {
                     assertThat(e.getErrorCode().getCode()).isEqualTo(-32022);
+                    assertThat(e.getHttpStatus()).isEqualTo(400);
+                });
+    }
+
+    @Test
+    void unsupportedVersionInMetaContradictingTheHeaderIsHeaderMismatchFirst() {
+        // header says 2026-07-28, _meta says something the server does not support: the disagreement is detected
+        // before the version-support check, so this is -32020 HeaderMismatch and not -32022.
+        assertThatThrownBy(() -> McpEraDetector.detect(toolCall(modernMeta("v999.0.0")), modernHeaders()::get))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32020);
                     assertThat(e.getHttpStatus()).isEqualTo(400);
                 });
     }
