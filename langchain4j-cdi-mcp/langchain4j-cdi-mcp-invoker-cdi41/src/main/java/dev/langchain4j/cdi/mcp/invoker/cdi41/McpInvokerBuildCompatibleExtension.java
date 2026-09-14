@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.mcpjava.server.prompts.Prompt;
 import org.mcpjava.server.resources.Resource;
@@ -66,7 +67,9 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
      *
      * <p>{@code static} for the same reason as in the sibling {@code langchain4j-cdi-mcp-build-compatible-ext}
      * extension: some ahead-of-time containers instantiate the extension class once per phase, so instance state would
-     * not survive from {@code @Registration} to {@code @Synthesis}. The map is cleared once synthesis has consumed it.
+     * not survive from {@code @Registration} to {@code @Synthesis}. Synthesis always clears the map, successful or not,
+     * so a failed deployment cannot pin {@link InvokerInfo}s — and with them the deployment classloader — in a static
+     * field across a dev-mode reload.
      */
     private static final Map<String, InvokerInfo> COLLECTED_INVOKERS =
             Collections.synchronizedMap(new LinkedHashMap<>());
@@ -116,9 +119,12 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
                 LOGGER.fine(() -> "MCP: Built CDI 4.1 invoker for " + key);
             } catch (RuntimeException e) {
                 // The container refuses invokers for some methods (e.g. private or non-proxyable targets).
-                // Leaving the method out simply keeps it on the reflective path.
-                LOGGER.warning(
-                        () -> "MCP: Could not build an invoker for " + key + " (" + e + "); it keeps using reflection");
+                // Leaving the method out simply keeps it on the reflective path - but log the cause with its
+                // stack trace, since this is the only trace of a method silently dropping back to reflection.
+                LOGGER.log(
+                        Level.WARNING,
+                        e,
+                        () -> "MCP: Could not build an invoker for " + key + "; it keeps using reflection");
             }
         }
     }
@@ -131,31 +137,37 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
     @SuppressWarnings("unused")
     @Synthesis
     public void registerInvokerProvider(SyntheticComponents syntheticComponents) {
-        String[] keys;
-        InvokerInfo[] invokers;
-        synchronized (COLLECTED_INVOKERS) {
-            if (COLLECTED_INVOKERS.isEmpty()) {
-                LOGGER.info(() -> "MCP: No MCP method invoker could be built; the MCP server keeps using reflection");
-                return;
+        // The clear is in a finally so that an aborted synthesis cannot leave the static map pinning InvokerInfos -
+        // and through them the deployment's classloader - across a Quarkus dev-mode reload.
+        try {
+            String[] keys;
+            InvokerInfo[] invokers;
+            synchronized (COLLECTED_INVOKERS) {
+                if (COLLECTED_INVOKERS.isEmpty()) {
+                    LOGGER.info(
+                            () -> "MCP: No MCP method invoker could be built; the MCP server keeps using reflection");
+                    return;
+                }
+                keys = COLLECTED_INVOKERS.keySet().toArray(new String[0]);
+                invokers = COLLECTED_INVOKERS.values().toArray(new InvokerInfo[0]);
             }
-            keys = COLLECTED_INVOKERS.keySet().toArray(new String[0]);
-            invokers = COLLECTED_INVOKERS.values().toArray(new InvokerInfo[0]);
+
+            // "built", not "invoked without reflection": whether these invokers are ever matched at runtime is
+            // decided by McpCdi41InvokerProvider.lookup, which logs each hit and miss at FINE and counts both.
+            LOGGER.info(() -> "MCP: Registering a CDI 4.1 invoker provider with " + keys.length
+                    + " invoker(s) built for MCP method(s)");
+
+            syntheticComponents
+                    .addBean(McpCdi41InvokerProvider.class)
+                    .type(McpCdi41InvokerProvider.class)
+                    .type(McpInvokerProvider.class)
+                    .scope(ApplicationScoped.class)
+                    .createWith(McpCdi41InvokerProviderCreator.class)
+                    .withParam(McpCdi41InvokerProviderCreator.PARAM_INVOKER_KEYS, keys)
+                    .withParam(McpCdi41InvokerProviderCreator.PARAM_INVOKERS, invokers);
+        } finally {
             COLLECTED_INVOKERS.clear();
         }
-
-        // "built", not "invoked without reflection": whether these invokers are ever matched at runtime is
-        // decided by McpCdi41InvokerProvider.lookup, which logs each hit and miss at FINE and counts both.
-        LOGGER.info(() -> "MCP: Registering a CDI 4.1 invoker provider with " + keys.length
-                + " invoker(s) built for MCP method(s)");
-
-        syntheticComponents
-                .addBean(McpCdi41InvokerProvider.class)
-                .type(McpCdi41InvokerProvider.class)
-                .type(McpInvokerProvider.class)
-                .scope(ApplicationScoped.class)
-                .createWith(McpCdi41InvokerProviderCreator.class)
-                .withParam(McpCdi41InvokerProviderCreator.PARAM_INVOKER_KEYS, keys)
-                .withParam(McpCdi41InvokerProviderCreator.PARAM_INVOKERS, invokers);
     }
 
     /**
