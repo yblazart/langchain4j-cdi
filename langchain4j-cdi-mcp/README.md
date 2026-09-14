@@ -284,7 +284,9 @@ All types are from the `org.mcpjava.server` package.
 
 `server/discover` advertises `supportedVersions: ["2026-07-28", "2025-03-26"]`. A modern request with another version is rejected with `UnsupportedProtocolVersion` listing these versions, and dual-era clients (such as `langchain4j-mcp` 1.19+) fall back automatically.
 
-The server validates the `Origin` header on every request (DNS rebinding protection): requests without `Origin`, from loopback origins or from the same host are accepted; other origins get HTTP 403 unless listed in `allowedOrigins` (see [Server Configuration](#server-configuration)).
+The server validates the `Origin` header on every request (DNS rebinding protection). Requests without `Origin` (non-browser clients) are accepted. With the default empty `allowedOrigins`, a request with an `Origin` is accepted only when both the `Origin` host and the `Host` header host are loopback (`localhost`, `127.0.0.1`, `::1`); any other origin — including one matching the `Host` header, which is exactly what a DNS rebinding attack sends — gets HTTP 403. When the server is reached from browsers through a real host name, list the accepted origins in `allowedOrigins` (see [Server Configuration](#server-configuration)).
+
+> **Breaking change:** `McpEndpoint` is container-managed. Its public constructor and its resource method signatures (`handlePost`, `handleGet`, `handleDelete`) changed: code that subclassed `McpEndpoint` or invoked these methods directly must be updated.
 
 #### Known limitations
 
@@ -351,7 +353,7 @@ public class McpConfigProducer {
 | Property | Default | Description |
 |---|---|---|
 | `serverName` / `serverVersion` | `langchain4j-cdi` / `unknown` | Returned in `initialize` and in `_meta.io.modelcontextprotocol/serverInfo` |
-| `allowedOrigins` | empty (loopback and same host only) | Accepted `Origin` values; `*` accepts all |
+| `allowedOrigins` | empty (loopback `Origin` on a loopback `Host` only) | Accepted `Origin` values; `*` accepts all |
 | `mrtrMode` | `REPLAY` | Strategy for client interactions with MCP 2026-07-28 clients |
 | `requestStateSecret` | random per JVM | HMAC key protecting `requestState`; **set it when running several instances** |
 | `requestStateTtl` | 10 minutes | Validity of a `requestState` |

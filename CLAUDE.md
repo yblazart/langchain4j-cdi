@@ -96,7 +96,7 @@ A self-contained sub-tree that turns CDI beans into a **Model Context Protocol (
 - **langchain4j-cdi-mcp-integration-tests**: `...-common` (shared test beans/helpers), plus Quarkus, Helidon, WildFly, and OpenLiberty (Arquillian) suites
 - **langchain4j-cdi-mcp-example-helidon**: Standalone usage example
 
-Annotation API is from `org.mcp_java.annotations.*` (`@Tool`, `@ToolArg`, `@Prompt`, `@PromptArg`, `@Resource`). Methods may also take framework types from `org.mcp_java.server.*` (`McpLog`, `Progress`, `Cancellation`, `McpConnection`, `Roots`, `Sampling`, `Elicitation`) as parameters — these are injected at invocation time and excluded from the generated JSON Schema. See `langchain4j-cdi-mcp/README.md` for the full usage guide.
+Annotation API is from `org.mcpjava.server.*` (`org.mcpjava.server.tools.Tool`/`ToolArg`, `org.mcpjava.server.prompts.Prompt`/`PromptArg`, `org.mcpjava.server.resources.Resource`). Methods may also take framework types as parameters — `McpLog`, `McpConnection`, `Roots`, `Sampling`, `Elicitation` from `dev.langchain4j.cdi.mcp.server.api`, plus `org.mcpjava.server.progress.Progress` and `org.mcpjava.server.Cancellation` — these are injected at invocation time and excluded from the generated JSON Schema. See `langchain4j-cdi-mcp/README.md` for the full usage guide.
 
 ### MicroProfile Integration Modules (langchain4j-cdi-mp)
 
