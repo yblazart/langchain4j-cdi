@@ -1,0 +1,232 @@
+package dev.langchain4j.cdi.mcp.invoker.cdi41;
+
+import dev.langchain4j.cdi.mcp.server.registry.McpInvokerProvider;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
+import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.InvokerFactory;
+import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
+import jakarta.enterprise.inject.build.compatible.spi.Registration;
+import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.lang.model.declarations.MethodInfo;
+import jakarta.enterprise.lang.model.declarations.ParameterInfo;
+import jakarta.enterprise.lang.model.types.PrimitiveType;
+import jakarta.enterprise.lang.model.types.Type;
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Logger;
+import org.mcpjava.server.prompts.Prompt;
+import org.mcpjava.server.resources.Resource;
+import org.mcpjava.server.resources.ResourceTemplate;
+import org.mcpjava.server.tools.Tool;
+
+/**
+ * Build-compatible CDI extension that gives the MCP server reflection-free invocation on CDI 4.1 runtimes.
+ *
+ * <p>Two phases:
+ *
+ * <ol>
+ *   <li>{@link Registration} — called for every bean (every bean type set contains {@code Object}). For each method
+ *       carrying {@code @Tool}, {@code @Prompt}, {@code @Resource} or {@code @ResourceTemplate}, the extension asks the
+ *       container's {@link InvokerFactory} for an invoker built {@code withInstanceLookup()}, and keeps the resulting
+ *       {@link InvokerInfo} under the method's {@link McpInvokerKey}.
+ *   <li>{@link Synthesis} — registers {@link McpCdi41InvokerProvider} as a synthetic {@code @ApplicationScoped} bean
+ *       exposing the {@link McpInvokerProvider} SPI type, carrying the collected keys and invokers as two parallel
+ *       synthetic bean parameters.
+ * </ol>
+ *
+ * <p>At runtime {@code McpBeanInvoker} injects every {@code McpInvokerProvider} bean and consults it before falling
+ * back to {@link java.lang.reflect.Method#invoke}; a method for which no invoker could be built simply keeps the
+ * reflective path, so a partial failure degrades instead of breaking.
+ *
+ * <p>Nothing here is active on Jakarta EE 10 / CDI 4.0.1 runtimes: this extension ships in a separate, optional
+ * artifact and is only discovered when that artifact is on the classpath of a CDI 4.1 container.
+ */
+public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtension {
+
+    /** Creates a new instance. */
+    public McpInvokerBuildCompatibleExtension() {}
+
+    private static final Logger LOGGER = Logger.getLogger(McpInvokerBuildCompatibleExtension.class.getName());
+
+    /** The MCP method annotations whose methods are worth an invoker. */
+    private static final List<Class<? extends Annotation>> MCP_METHOD_ANNOTATIONS =
+            List.of(Tool.class, Prompt.class, Resource.class, ResourceTemplate.class);
+
+    /**
+     * Invokers collected during {@link Registration}, keyed by {@link McpInvokerKey#encode() encoded} key so a method
+     * seen twice (a bean with several bean types, or an inherited method) is only registered once, and iteration order
+     * is stable so the two arrays handed to the synthetic bean stay parallel.
+     *
+     * <p>{@code static} for the same reason as in the sibling {@code langchain4j-cdi-mcp-build-compatible-ext}
+     * extension: some ahead-of-time containers instantiate the extension class once per phase, so instance state would
+     * not survive from {@code @Registration} to {@code @Synthesis}. The map is cleared once synthesis has consumed it.
+     */
+    private static final Map<String, InvokerInfo> COLLECTED_INVOKERS =
+            Collections.synchronizedMap(new LinkedHashMap<>());
+
+    /**
+     * Builds a CDI 4.1 invoker for every MCP-annotated method of the given bean.
+     *
+     * @param bean the bean being registered
+     * @param invokerFactory the container's invoker factory
+     */
+    @SuppressWarnings("unused")
+    @Registration(types = Object.class)
+    public void buildInvokers(BeanInfo bean, InvokerFactory invokerFactory) {
+        // Only managed (class) beans can be invoker targets; @Registration also runs a second time, after
+        // synthesis, for synthetic beans - which have no invocable class of their own.
+        if (!bean.isClassBean() || bean.isSynthetic()) {
+            return;
+        }
+        ClassInfo beanClass = bean.declaringClass();
+        if (beanClass == null) {
+            return;
+        }
+        for (MethodInfo method : beanClass.methods()) {
+            if (method.isConstructor() || method.isStatic() || !isMcpMethod(method)) {
+                continue;
+            }
+            List<String> parameterTypeNames = parameterTypeNames(method);
+            if (parameterTypeNames == null) {
+                LOGGER.warning(() -> "MCP: Skipping invoker for " + beanClass.name() + "." + method.name()
+                        + ": unsupported parameter type; it keeps using reflection");
+                continue;
+            }
+            String key = McpInvokerKey.of(beanClass.name(), method.name(), parameterTypeNames)
+                    .encode();
+            if (COLLECTED_INVOKERS.containsKey(key)) {
+                continue;
+            }
+            try {
+                InvokerInfo invoker = invokerFactory
+                        .createInvoker(bean, method)
+                        .withInstanceLookup()
+                        .build();
+                COLLECTED_INVOKERS.put(key, invoker);
+                LOGGER.fine(() -> "MCP: Built CDI 4.1 invoker for " + key);
+            } catch (RuntimeException e) {
+                // The container refuses invokers for some methods (e.g. private or non-proxyable targets).
+                // Leaving the method out simply keeps it on the reflective path.
+                LOGGER.warning(
+                        () -> "MCP: Could not build an invoker for " + key + " (" + e + "); it keeps using reflection");
+            }
+        }
+    }
+
+    /**
+     * Registers the synthetic {@link McpCdi41InvokerProvider} bean holding every collected invoker.
+     *
+     * @param syntheticComponents the synthetic component registrar
+     */
+    @SuppressWarnings("unused")
+    @Synthesis
+    public void registerInvokerProvider(SyntheticComponents syntheticComponents) {
+        String[] keys;
+        InvokerInfo[] invokers;
+        synchronized (COLLECTED_INVOKERS) {
+            if (COLLECTED_INVOKERS.isEmpty()) {
+                LOGGER.info(() -> "MCP: No MCP method invoker could be built; the MCP server keeps using reflection");
+                return;
+            }
+            keys = COLLECTED_INVOKERS.keySet().toArray(new String[0]);
+            invokers = COLLECTED_INVOKERS.values().toArray(new InvokerInfo[0]);
+            COLLECTED_INVOKERS.clear();
+        }
+
+        LOGGER.info(() -> "MCP: Registering a CDI 4.1 invoker provider for " + keys.length
+                + " MCP method(s); those methods are invoked without reflection");
+
+        syntheticComponents
+                .addBean(McpCdi41InvokerProvider.class)
+                .type(McpCdi41InvokerProvider.class)
+                .type(McpInvokerProvider.class)
+                .scope(ApplicationScoped.class)
+                .createWith(McpCdi41InvokerProviderCreator.class)
+                .withParam(McpCdi41InvokerProviderCreator.PARAM_INVOKER_KEYS, keys)
+                .withParam(McpCdi41InvokerProviderCreator.PARAM_INVOKERS, invokers);
+    }
+
+    /**
+     * Whether the method is exposed over MCP and therefore worth an invoker.
+     *
+     * @param method the method to test
+     * @return {@code true} if it carries one of the MCP method annotations
+     */
+    private static boolean isMcpMethod(MethodInfo method) {
+        for (Class<? extends Annotation> annotation : MCP_METHOD_ANNOTATIONS) {
+            if (method.hasAnnotation(annotation)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Maps the method's parameter types to the canonical names {@link McpInvokerKey} matches on.
+     *
+     * @param method the method to describe
+     * @return the canonical parameter type names in declaration order, or {@code null} if any parameter has a type this
+     *     module cannot name unambiguously (a type variable or a wildcard), in which case no invoker is built
+     */
+    private static List<String> parameterTypeNames(MethodInfo method) {
+        List<ParameterInfo> parameters = method.parameters();
+        List<String> names = new ArrayList<>(parameters.size());
+        for (ParameterInfo parameter : parameters) {
+            String name = typeName(parameter.type());
+            if (name == null) {
+                return null;
+            }
+            names.add(name);
+        }
+        return names;
+    }
+
+    /**
+     * Returns the canonical name of a language-model type, spelled exactly like {@link McpInvokerKey#typeName(Class)}
+     * spells the corresponding runtime {@link Class}.
+     *
+     * @param type the language-model type
+     * @return its canonical name, or {@code null} for a type variable or wildcard, which has no runtime erasure this
+     *     module can determine
+     */
+    private static String typeName(Type type) {
+        return switch (type.kind()) {
+            case VOID -> "void";
+            case PRIMITIVE -> primitiveName(type.asPrimitive().primitiveKind());
+            case CLASS -> type.asClass().declaration().name();
+            case ARRAY -> {
+                String component = typeName(type.asArray().componentType());
+                yield component == null ? null : component + "[]";
+            }
+            // The runtime side only ever sees the erasure, so List<String> must be named java.util.List.
+            case PARAMETERIZED_TYPE -> type.asParameterizedType().declaration().name();
+            case TYPE_VARIABLE, WILDCARD_TYPE -> null;
+        };
+    }
+
+    /**
+     * Returns the Java keyword for a primitive kind, matching {@code int.class.getName()} and friends.
+     *
+     * @param kind the primitive kind
+     * @return the Java keyword naming that primitive
+     */
+    private static String primitiveName(PrimitiveType.PrimitiveKind kind) {
+        return switch (kind) {
+            case BOOLEAN -> "boolean";
+            case BYTE -> "byte";
+            case SHORT -> "short";
+            case INT -> "int";
+            case LONG -> "long";
+            case FLOAT -> "float";
+            case DOUBLE -> "double";
+            case CHAR -> "char";
+        };
+    }
+}

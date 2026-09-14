@@ -18,6 +18,7 @@
         <module>langchain4j-cdi-mcp-server</module>
         <module>langchain4j-cdi-mcp-build-compatible-ext</module>
         <module>langchain4j-cdi-mcp-portable-ext</module>
+        <module>langchain4j-cdi-mcp-invoker-cdi41</module>
     </modules>
 
     <properties>
