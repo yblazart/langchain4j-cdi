@@ -93,12 +93,16 @@ public final class JsonRpcAssertions {
     }
 
     /**
-     * Asserts that a notification was accepted (HTTP 200).
+     * Asserts that a notification-only POST was accepted with {@code 202 Accepted} and an empty body, as the Streamable
+     * HTTP transport requires. Clients gate opening the standalone notification stream on this status.
      *
      * @param response the HTTP response
      */
     public static void assertNotificationAccepted(McpHttpResponse response) {
-        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.statusCode())
+                .as("Expected 202 Accepted for a notification-only POST, body: %s", response.body())
+                .isEqualTo(202);
+        assertThat(response.body()).isNullOrEmpty();
     }
 
     /**

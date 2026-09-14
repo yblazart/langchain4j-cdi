@@ -393,7 +393,7 @@ public class McpHelidonIntegrationTest {
         String sessionId = initializeSession();
         McpHttpResponse response =
                 postMcp(sessionId, McpTestRequests.clientJsonRpcResponse("server-999", "{\"roots\":[]}"));
-        assertThat(response.statusCode()).isEqualTo(200);
+        JsonRpcAssertions.assertNotificationAccepted(response);
     }
 
     // --- Capabilities ---
@@ -421,7 +421,8 @@ public class McpHelidonIntegrationTest {
     @Test
     void shouldRejectRequestWithInvalidSessionId() {
         McpHttpResponse response = postMcp("bogus-session-id-12345", McpTestRequests.toolsListRequest(70));
-        JsonRpcAssertions.assertJsonRpcError(response, 70, -32001, "Invalid or missing Mcp-Session-Id");
+        JsonObject error = JsonRpcAssertions.assertHttpJsonRpcError(response, 404, 70, -32001);
+        assertThat(error.getString("message")).contains("Invalid or missing Mcp-Session-Id");
     }
 
     @Test

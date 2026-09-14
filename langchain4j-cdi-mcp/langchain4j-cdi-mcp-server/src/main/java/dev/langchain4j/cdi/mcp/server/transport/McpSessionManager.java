@@ -85,8 +85,13 @@ public class McpSessionManager {
      * @throws McpSessionException if the session does not exist
      */
     public McpSession requireSession(Object requestId, String sessionId) {
-        if (sessionId == null || !sessions.containsKey(sessionId)) {
-            throw new McpSessionException(requestId, "Invalid or missing Mcp-Session-Id");
+        if (sessionId == null) {
+            throw new McpSessionException(
+                    requestId, "Invalid or missing Mcp-Session-Id", McpSessionException.BAD_REQUEST);
+        }
+        if (!sessions.containsKey(sessionId)) {
+            throw new McpSessionException(
+                    requestId, "Invalid or missing Mcp-Session-Id", McpSessionException.NOT_FOUND);
         }
         McpSession session = sessions.get(sessionId);
         session.touch();

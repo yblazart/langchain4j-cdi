@@ -82,7 +82,7 @@ public class McpLegacyProtocolHandler {
             case "initialize" -> initialize(request, wantsSse);
             case "notifications/initialized" -> {
                 sessionManager.requireSession(id, sessionId).markInitialized();
-                yield Response.ok().build();
+                yield accepted();
             }
             case "tools/list" ->
                 listing(id, sessionId, wantsSse, () -> features.listTools(McpFeatureService.cursor(params)));
@@ -109,7 +109,7 @@ public class McpLegacyProtocolHandler {
                 if (sessionId != null) {
                     rootsManager.onRootsChanged(sessionId);
                 }
-                yield Response.ok().build();
+                yield accepted();
             }
             default ->
                 throw new McpException(id, McpErrorCode.METHOD_NOT_FOUND, "Unknown method: " + request.getMethod());
@@ -166,7 +166,7 @@ public class McpLegacyProtocolHandler {
      * Handles a JSON-RPC response sent by the client in reply to a server-initiated request.
      *
      * @param body the raw JSON-RPC response body
-     * @return an OK response
+     * @return an empty {@code 202 Accepted} response
      */
     public Response handleClientResponse(String body) {
         try (JsonReader reader = Json.createReader(new StringReader(body))) {
@@ -181,7 +181,7 @@ public class McpLegacyProtocolHandler {
                 serverRequestManager.handleErrorResponse(id, message);
             }
         }
-        return Response.ok().build();
+        return accepted();
     }
 
     private Response initialize(JsonRpcRequest request, boolean wantsSse) {
@@ -282,7 +282,18 @@ public class McpLegacyProtocolHandler {
                 cancellationManager.cancel(cancelledRequestId);
             }
         }
-        return Response.ok().build();
+        return accepted();
+    }
+
+    /**
+     * Builds the {@code 202 Accepted} answer the Streamable HTTP transport requires for a POST whose body consists
+     * solely of JSON-RPC notifications or responses. Clients gate opening the standalone {@code GET /mcp} notification
+     * stream on this exact status, so answering {@code 200} keeps server-initiated requests from ever being delivered.
+     *
+     * @return an empty {@code 202 Accepted} response
+     */
+    private static Response accepted() {
+        return Response.status(Response.Status.ACCEPTED).build();
     }
 
     private Response json(Object id, JsonObject result, boolean sse) {
