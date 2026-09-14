@@ -9,6 +9,7 @@ import dev.langchain4j.cdi.mcp.server.transport.McpInputRequiredSignal;
 import dev.langchain4j.cdi.mcp.server.transport.McpSession;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
@@ -19,6 +20,8 @@ import jakarta.json.JsonValue;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import org.mcpjava.server.prompts.PromptArg;
 import org.mcpjava.server.resources.ResourceTemplateArg;
 import org.mcpjava.server.tools.ToolArg;
@@ -37,6 +40,16 @@ public class McpBeanInvoker {
 
     @Inject
     McpApiFactory apiFactory;
+
+    /**
+     * Container-specific {@link McpMethodInvoker} providers, consulted before reflection. Empty (never {@code null}) on
+     * runtimes that do not ship an implementing module, e.g. Jakarta EE 10 / CDI 4.0.1 servers such as WildFly and
+     * OpenLiberty.
+     */
+    @Inject
+    Instance<McpInvokerProvider> invokerProviders;
+
+    private final ConcurrentHashMap<Method, Optional<McpMethodInvoker>> invokerCache = new ConcurrentHashMap<>();
 
     /**
      * Invokes a method without MCP framework context (backward compatible).
@@ -69,6 +82,65 @@ public class McpBeanInvoker {
             JsonObject arguments,
             McpRequestContext ctx,
             McpSession session) {
+        Optional<McpMethodInvoker> providedInvoker =
+                invokerCache.computeIfAbsent(method, m -> lookupInvoker(beanType, m));
+        if (providedInvoker.isPresent()) {
+            return invokeViaProvider(requestId, beanType, method, arguments, ctx, session, providedInvoker.get());
+        }
+        return invokeViaReflection(requestId, beanType, method, arguments, ctx, session);
+    }
+
+    /**
+     * Consults every registered {@link McpInvokerProvider}, in the order supplied by CDI, and returns the first invoker
+     * offered for the given method. Never returns {@code null}.
+     *
+     * @param beanType the CDI bean class declaring the method
+     * @param method the method to find an invoker for
+     * @return the first matching invoker, or {@link Optional#empty()} when no provider is present or none matches
+     */
+    private Optional<McpMethodInvoker> lookupInvoker(Class<?> beanType, Method method) {
+        if (invokerProviders == null || invokerProviders.isUnsatisfied()) {
+            return Optional.empty();
+        }
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        for (McpInvokerProvider provider : invokerProviders) {
+            Optional<McpMethodInvoker> found = provider.lookup(beanType, method.getName(), parameterTypes);
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Object invokeViaProvider(
+            Object requestId,
+            Class<?> beanType,
+            Method method,
+            JsonObject arguments,
+            McpRequestContext ctx,
+            McpSession session,
+            McpMethodInvoker methodInvoker) {
+        Object[] args = resolveArguments(method, arguments, ctx, session, beanType);
+        if (methodInvoker.resolvesInstance()) {
+            return invokeAndMapExceptions(requestId, method, () -> methodInvoker.invoke(null, args));
+        }
+        Bean<?> bean = resolveBean(requestId, beanType);
+        CreationalContext<?> creationalCtx = beanManager.createCreationalContext(bean);
+        try {
+            Object instance = beanManager.getReference(bean, beanType, creationalCtx);
+            return invokeAndMapExceptions(requestId, method, () -> methodInvoker.invoke(instance, args));
+        } finally {
+            creationalCtx.release();
+        }
+    }
+
+    private Object invokeViaReflection(
+            Object requestId,
+            Class<?> beanType,
+            Method method,
+            JsonObject arguments,
+            McpRequestContext ctx,
+            McpSession session) {
         Bean<?> bean = resolveBean(requestId, beanType);
         CreationalContext<?> creationalCtx = beanManager.createCreationalContext(bean);
         try {
@@ -76,22 +148,54 @@ public class McpBeanInvoker {
             Object[] args = resolveArguments(method, arguments, ctx, session, beanType);
             return method.invoke(instance, args);
         } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof McpInputRequiredSignal signal) {
-                throw signal;
-            }
-            if (e.getCause() instanceof McpException mcpException) {
-                throw mcpException;
-            }
-            throw new McpException(
-                    requestId,
-                    McpErrorCode.INTERNAL_ERROR,
-                    "Invocation failed: " + method.getName() + " - "
-                            + e.getCause().getMessage());
+            throw mapInvocationException(requestId, method, e.getCause());
         } catch (IllegalAccessException e) {
             throw new McpException(requestId, McpErrorCode.INTERNAL_ERROR, "Invocation failed: " + method.getName());
         } finally {
             creationalCtx.release();
         }
+    }
+
+    /**
+     * Invokes the given call and maps its failures the same way as the reflective path: {@link McpInputRequiredSignal}
+     * and {@link McpException} are rethrown unwrapped, {@link InvocationTargetException} is unwrapped before mapping,
+     * and any other exception — including the checked exceptions {@code jakarta.enterprise.invoke.Invoker#invoke} is
+     * declared to throw — is wrapped as {@link McpErrorCode#INTERNAL_ERROR}.
+     *
+     * @param requestId the JSON-RPC request ID for error reporting
+     * @param method the method being invoked, for error messages
+     * @param call the invocation to perform
+     * @return the call's result
+     */
+    private Object invokeAndMapExceptions(Object requestId, Method method, InvokerCall call) {
+        try {
+            return call.invoke();
+        } catch (InvocationTargetException e) {
+            throw mapInvocationException(requestId, method, e.getCause());
+        } catch (McpInputRequiredSignal | McpException e) {
+            throw e;
+        } catch (Exception e) {
+            throw mapInvocationException(requestId, method, e);
+        }
+    }
+
+    private RuntimeException mapInvocationException(Object requestId, Method method, Throwable cause) {
+        if (cause instanceof McpInputRequiredSignal signal) {
+            return signal;
+        }
+        if (cause instanceof McpException mcpException) {
+            return mcpException;
+        }
+        return new McpException(
+                requestId,
+                McpErrorCode.INTERNAL_ERROR,
+                "Invocation failed: " + method.getName() + " - " + cause.getMessage());
+    }
+
+    /** A single invocation to perform, abstracting over reflective and provider-supplied invokers. */
+    @FunctionalInterface
+    private interface InvokerCall {
+        Object invoke() throws Exception;
     }
 
     private Bean<?> resolveBean(Object requestId, Class<?> beanType) {
