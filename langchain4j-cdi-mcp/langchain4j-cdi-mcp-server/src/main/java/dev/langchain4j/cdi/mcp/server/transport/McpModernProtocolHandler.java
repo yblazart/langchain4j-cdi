@@ -27,20 +27,24 @@ public class McpModernProtocolHandler {
 
     protected McpFeatureService features;
     protected McpServerConfigResolver config;
+    protected McpSubscriptionRegistry subscriptions;
 
     /** No-arg constructor required by CDI proxying. */
     public McpModernProtocolHandler() {}
 
     /**
-     * Creates a handler backed by the given feature service and server configuration.
+     * Creates a handler backed by the given feature service, server configuration and subscription registry.
      *
      * @param features the shared business logic for tool/resource/prompt listing and invocation
      * @param config resolves the server configuration
+     * @param subscriptions the registry of open {@code subscriptions/listen} streams
      */
     @Inject
-    public McpModernProtocolHandler(McpFeatureService features, McpServerConfigResolver config) {
+    public McpModernProtocolHandler(
+            McpFeatureService features, McpServerConfigResolver config, McpSubscriptionRegistry subscriptions) {
         this.features = features;
         this.config = config;
+        this.subscriptions = subscriptions;
     }
 
     /**
@@ -64,6 +68,7 @@ public class McpModernProtocolHandler {
                 case "prompts/list" -> ok(id, complete(features.listPrompts(McpFeatureService.cursor(params))));
                 case "completion/complete" -> ok(id, complete(features.complete(id, params)));
                 case "tools/call", "prompts/get", "resources/read" -> invoke(request, protocol, acceptsSse);
+                case "subscriptions/listen" -> listen(request, params);
                 default -> throw McpProtocolErrors.methodNotFound(id, request.getMethod());
             };
         } catch (McpException e) {
@@ -95,6 +100,30 @@ public class McpModernProtocolHandler {
                 message = rpcError(request.getId(), e);
             }
             channel.send(message);
+        });
+    }
+
+    /**
+     * Opens a {@code subscriptions/listen} SSE stream: acknowledges the requested notification types, then delivers
+     * matching change notifications until the server shuts down.
+     *
+     * @param request the JSON-RPC request
+     * @param params the request parameters
+     * @return the SSE reply
+     */
+    private McpReply listen(JsonRpcRequest request, JsonObject params) {
+        JsonObject requested = params.get("notifications") instanceof JsonObject n ? n : JsonValue.EMPTY_JSON_OBJECT;
+        McpNotificationFilter filter = McpNotificationFilter.from(requested);
+        return McpReply.sse(out -> {
+            McpSseResponseChannel channel = new McpSseResponseChannel(out, new AtomicBoolean());
+            McpListenSubscription subscription = subscriptions.open(request.getId(), filter, channel);
+            try {
+                subscription.awaitClose();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                subscriptions.remove(subscription);
+            }
         });
     }
 

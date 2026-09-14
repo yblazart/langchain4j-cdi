@@ -81,6 +81,7 @@ public class McpResourceRegistry {
         for (String sessionId : subscriptionManager.getSubscribedSessions(uri)) {
             broadcaster.sendToSession(sessionId, notification);
         }
+        broadcaster.dispatchToSubscriptions(notification);
     }
 
     private void notifyListChanged() {

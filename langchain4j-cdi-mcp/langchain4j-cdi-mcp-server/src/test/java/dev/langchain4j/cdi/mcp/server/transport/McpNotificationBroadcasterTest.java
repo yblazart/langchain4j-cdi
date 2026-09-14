@@ -65,4 +65,26 @@ class McpNotificationBroadcasterTest {
         broadcaster.broadcast(JsonRpcNotification.toolsListChanged());
         assertThat(broadcaster.connectedStreamCount()).isEqualTo(0);
     }
+
+    @Test
+    void broadcastAlsoReachesModernSubscriptions() throws Exception {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        McpSubscriptionRegistry registry = new McpSubscriptionRegistry();
+        java.lang.reflect.Field field = McpNotificationBroadcaster.class.getDeclaredField("subscriptionRegistry");
+        field.setAccessible(true);
+        field.set(broadcaster, registry);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        registry.open(
+                1L,
+                McpNotificationFilter.from(jakarta.json.Json.createObjectBuilder()
+                        .add("toolsListChanged", true)
+                        .build()),
+                new McpSseResponseChannel(out, new java.util.concurrent.atomic.AtomicBoolean()));
+
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+        broadcaster.broadcast(dev.langchain4j.cdi.mcp.server.protocol.JsonRpcNotification.toolsListChanged());
+
+        assertThat(out.toString(java.nio.charset.StandardCharsets.UTF_8)).contains("notifications/tools/list_changed");
+        registry.shutdown();
+    }
 }

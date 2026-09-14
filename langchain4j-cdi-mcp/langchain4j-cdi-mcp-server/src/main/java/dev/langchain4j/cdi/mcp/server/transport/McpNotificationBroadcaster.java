@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
 import jakarta.json.bind.JsonbConfig;
@@ -22,6 +23,9 @@ public class McpNotificationBroadcaster {
     private static final Logger LOGGER = Logger.getLogger(McpNotificationBroadcaster.class.getName());
 
     private final Map<String, OutputStream> sseStreams = new ConcurrentHashMap<>();
+
+    @Inject
+    McpSubscriptionRegistry subscriptionRegistry;
 
     /** CDI-required default constructor. */
     public McpNotificationBroadcaster() {}
@@ -65,6 +69,18 @@ public class McpNotificationBroadcaster {
                 return true;
             }
         });
+        dispatchToSubscriptions(notification);
+    }
+
+    /**
+     * Delivers a change notification to modern {@code subscriptions/listen} streams that opted in to it.
+     *
+     * @param notification the notification
+     */
+    public void dispatchToSubscriptions(Object notification) {
+        if (subscriptionRegistry != null) {
+            subscriptionRegistry.dispatch(notification);
+        }
     }
 
     /**
@@ -95,7 +111,7 @@ public class McpNotificationBroadcaster {
      * @return the count of active SSE streams
      */
     public int connectedStreamCount() {
-        return sseStreams.size();
+        return sseStreams.size() + (subscriptionRegistry != null ? subscriptionRegistry.size() : 0);
     }
 
     private String serializeToJson(Object obj) {

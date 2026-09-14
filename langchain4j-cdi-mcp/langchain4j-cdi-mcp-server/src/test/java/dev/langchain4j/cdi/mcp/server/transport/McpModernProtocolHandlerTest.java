@@ -21,6 +21,7 @@ import jakarta.json.JsonValue;
 import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +30,7 @@ class McpModernProtocolHandlerTest {
 
     McpFeatureService features;
     McpModernProtocolHandler handler;
+    McpSubscriptionRegistry registry;
 
     @BeforeEach
     void setup() {
@@ -41,7 +43,13 @@ class McpModernProtocolHandlerTest {
                         new McpServerCapabilities.PromptsCapability(true),
                         McpServerCapabilities.LoggingCapability.INSTANCE,
                         McpServerCapabilities.CompletionsCapability.INSTANCE));
-        handler = new McpModernProtocolHandler(features, new McpServerConfigResolver(new McpServerConfig()));
+        registry = new McpSubscriptionRegistry();
+        handler = new McpModernProtocolHandler(features, new McpServerConfigResolver(new McpServerConfig()), registry);
+    }
+
+    @AfterEach
+    void tearDown() {
+        registry.shutdown();
     }
 
     static McpProtocolContext modern(McpLogLevel level, String... capabilities) {
@@ -175,5 +183,34 @@ class McpModernProtocolHandlerTest {
                 .isInstanceOfSatisfying(
                         McpException.class,
                         e -> assertThat(e.getErrorCode().getCode()).isEqualTo(-32021));
+    }
+
+    @Test
+    void listenStreamsAcknowledgementUntilServerShutdown() throws Exception {
+        JsonObject params = Json.createObjectBuilder()
+                .add("notifications", Json.createObjectBuilder().add("toolsListChanged", true))
+                .build();
+        McpReply reply = handler.handle(new JsonRpcRequest(9, "subscriptions/listen", params), modern(null), true);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        Thread writer = new Thread(() -> {
+            try {
+                reply.stream().write(out);
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        writer.start();
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (registry.size() == 0 && System.currentTimeMillis() < deadline) {
+            Thread.onSpinWait();
+        }
+        registry.shutdown();
+        writer.join(5_000);
+
+        String sse = out.toString(StandardCharsets.UTF_8);
+        assertThat(reply.isStream()).isTrue();
+        assertThat(sse).contains("notifications/subscriptions/acknowledged").contains("\"resultType\":\"complete\"");
+        assertThat(writer.isAlive()).isFalse();
     }
 }
