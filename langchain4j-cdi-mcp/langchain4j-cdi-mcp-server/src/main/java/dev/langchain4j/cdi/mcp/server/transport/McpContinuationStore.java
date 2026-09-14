@@ -1,5 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
+import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
+import dev.langchain4j.cdi.mcp.server.error.McpException;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -12,10 +14,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** In-memory registry of suspended invocations (MRTR CONTINUATION mode). */
 @ApplicationScoped
 public class McpContinuationStore {
+
+    private static final Logger LOGGER = Logger.getLogger(McpContinuationStore.class.getName());
 
     private final Map<String, McpContinuation> continuations = new ConcurrentHashMap<>();
     private final AtomicInteger threadCounter = new AtomicInteger();
@@ -37,23 +43,41 @@ public class McpContinuationStore {
     }
 
     /**
-     * Starts a new continuation, running {@code work} on a worker thread.
+     * Creates and tracks a new continuation, without starting its worker thread yet. Callers must set the
+     * continuation's round-1 state via {@link McpContinuation#useRound} before calling {@link #run} so that early
+     * notifications are not attributed to a stale (absent) round.
      *
-     * @param work the invocation to run, given the continuation it can suspend on
-     * @return the newly started continuation
+     * @return the newly created continuation
      */
-    public McpContinuation start(Function<McpContinuation, JsonObject> work) {
+    public McpContinuation create() {
         String id = UUID.randomUUID().toString();
         McpContinuation continuation = new McpContinuation(id, mrtr.continuationTimeout(), () -> remove(id));
         continuations.put(id, continuation);
+        return continuation;
+    }
+
+    /**
+     * Runs {@code work} on a worker thread for a continuation previously returned by {@link #create()}. Any
+     * {@link RuntimeException} raised by {@code work} is delivered as a {@link McpContinuation.Failed} event; any other
+     * {@link Throwable} (an {@link Error}, or a sneaky-thrown checked exception) is wrapped into an
+     * {@link McpException} and delivered the same way, so the handler is never left waiting for an event that will
+     * never come. Failures that are not already an {@link McpException} are logged at {@code WARNING}.
+     *
+     * @param continuation the continuation to run the work under
+     * @param work the invocation to run, given the continuation it can suspend on
+     */
+    public void run(McpContinuation continuation, Function<McpContinuation, JsonObject> work) {
         executor().submit(() -> {
             try {
                 continuation.complete(work.apply(continuation));
             } catch (RuntimeException e) {
+                logIfUnexpected(e);
                 continuation.fail(e);
+            } catch (Throwable t) {
+                logIfUnexpected(t);
+                continuation.fail(new McpException(null, McpErrorCode.INTERNAL_ERROR, "Invocation failed: " + t));
             }
         });
-        return continuation;
     }
 
     /**
@@ -85,6 +109,12 @@ public class McpContinuationStore {
         ExecutorService current = executor;
         if (current != null) {
             current.shutdownNow();
+        }
+    }
+
+    private static void logIfUnexpected(Throwable t) {
+        if (!(t instanceof McpException)) {
+            LOGGER.log(Level.WARNING, "MCP: continuation worker failed", t);
         }
     }
 

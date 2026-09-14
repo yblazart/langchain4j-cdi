@@ -2,16 +2,21 @@ package dev.langchain4j.cdi.mcp.server.transport;
 
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
+import dev.langchain4j.cdi.mcp.server.protocol.McpJsonSerializer;
+import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonObjectBuilder;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -30,13 +35,22 @@ public final class McpContinuation {
     /** The invocation raised an exception. */
     public record Failed(RuntimeException error) implements Event {}
 
+    /**
+     * Per-round request state: the transport the current round answers on, the progress token the current round's
+     * client expects (or {@code null}), and whether the current round asked for log notifications.
+     */
+    private record Round(McpResponseChannel channel, Object progressToken, boolean logsRequested) {}
+
+    private static final Round INITIAL_ROUND = new Round(McpNoopResponseChannel.INSTANCE, null, false);
+
     private final String id;
     private final Duration inputTimeout;
     private final Runnable onAbandon;
     private final BlockingQueue<Event> events = new LinkedBlockingQueue<>();
     private final Map<String, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
     private final AtomicInteger next = new AtomicInteger();
-    private final AtomicReference<McpResponseChannel> channel = new AtomicReference<>(McpNoopResponseChannel.INSTANCE);
+    private final AtomicReference<Round> round = new AtomicReference<>(INITIAL_ROUND);
+    private final AtomicBoolean cancelledFlag = new AtomicBoolean();
     private volatile McpInputRequiredSignal lastInput;
 
     /**
@@ -73,6 +87,9 @@ public final class McpContinuation {
         events.add(new Input(input));
         try {
             return future.get(inputTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (CancellationException e) {
+            onAbandon.run();
+            throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Client input request cancelled");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             onAbandon.run();
@@ -148,21 +165,73 @@ public final class McpContinuation {
     }
 
     /**
-     * Sets the channel used to deliver request-scoped notifications (progress, logs) for the current round.
+     * Sets the request-scoped state for the current round: the transport to deliver notifications on, the progress
+     * token this round's client expects (or {@code null}), and whether this round asked for log notifications. Must be
+     * called before the worker starts (round 1) and before supplying answers on every retry, so that request-scoped
+     * notifications are never attributed to a stale round.
      *
-     * @param responseChannel the channel for this round, or {@code null} to drop notifications
+     * @param channel the channel for this round, or {@code null} to drop notifications
+     * @param progressToken the progress token this round's client expects, or {@code null} if none
+     * @param logsRequested whether this round's client asked for log notifications
      */
-    public void useChannel(McpResponseChannel responseChannel) {
-        channel.set(responseChannel != null ? responseChannel : McpNoopResponseChannel.INSTANCE);
+    public void useRound(McpResponseChannel channel, Object progressToken, boolean logsRequested) {
+        round.set(new Round(channel != null ? channel : McpNoopResponseChannel.INSTANCE, progressToken, logsRequested));
     }
 
-    /** @return a channel delegating to the channel of the current round */
+    /**
+     * Returns a channel delegating to the current round's channel. {@code notifications/progress} messages have their
+     * {@code params.progressToken} rewritten to the current round's token (dropped if it has none);
+     * {@code notifications/message} messages are dropped unless the current round asked for logs; anything else is
+     * forwarded as-is. After forwarding, if the current round's channel reports it is no longer open, the
+     * continuation-wide {@link #cancelledFlag()} is set.
+     *
+     * @return a channel delegating to the channel of the current round
+     */
     public McpResponseChannel channel() {
-        return message -> channel.get().send(message);
+        return this::deliver;
+    }
+
+    /**
+     * Shared, continuation-wide cancellation flag: set once any round's channel is found closed. The worker thread uses
+     * this flag (not any single round's local flag) as its {@code McpRequestContext.cancelledFlag()}, since the worker
+     * outlives any one HTTP round.
+     *
+     * @return the continuation-wide cancellation flag
+     */
+    public AtomicBoolean cancelledFlag() {
+        return cancelledFlag;
     }
 
     /** Cancels any pending client request, releasing the worker thread. */
     public void cancel() {
         pending.values().forEach(future -> future.cancel(true));
+    }
+
+    private void deliver(Object message) {
+        Round current = round.get();
+        JsonObject json = McpJsonSerializer.toJsonObject(message);
+        String method = json.getString("method", "");
+        Object toSend = message;
+        if ("notifications/progress".equals(method)) {
+            if (current.progressToken() == null) {
+                return;
+            }
+            toSend = withProgressToken(json, current.progressToken());
+        } else if ("notifications/message".equals(method)) {
+            if (!current.logsRequested()) {
+                return;
+            }
+        }
+        current.channel().send(toSend);
+        if (!current.channel().isOpen()) {
+            cancelledFlag.set(true);
+        }
+    }
+
+    private static JsonObject withProgressToken(JsonObject notification, Object token) {
+        JsonObject params = notification.getJsonObject("params");
+        JsonObjectBuilder params2 = params != null ? Json.createObjectBuilder(params) : Json.createObjectBuilder();
+        params2.add("progressToken", McpJsonSerializer.toJsonValue(token));
+        return Json.createObjectBuilder(notification).add("params", params2).build();
     }
 }

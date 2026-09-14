@@ -167,12 +167,16 @@ public class McpModernProtocolHandler {
     /**
      * Executes an invocation, running it on a worker thread that blocks when it needs client input (MRTR
      * {@code CONTINUATION} mode). The first request (no {@code requestState}) starts the invocation; a retry with a
-     * {@code requestState} supplies the pending answer and waits for the next event.
+     * {@code requestState} supplies the pending answer and waits for the next event. Each round's channel and progress
+     * token are attached to the continuation via {@link McpContinuation#useRound} before the worker starts or before
+     * answers are supplied, so request-scoped notifications are always attributed to the current round, not to round 1;
+     * the worker's own cancellation flag is the continuation-wide {@link McpContinuation#cancelledFlag()}, which is set
+     * when any round's channel closes.
      *
      * @param request the JSON-RPC request being invoked
      * @param protocol the protocol context for this request
-     * @param channel the channel for request-scoped notifications (progress, logs)
-     * @param cancelled flag set to {@code true} when the request is cancelled
+     * @param channel this round's channel for request-scoped notifications (progress, logs)
+     * @param cancelled unused: this round's local flag would only reflect one HTTP round, not the whole invocation
      * @return the decorated invocation result, either {@code complete} or {@code input_required}
      */
     JsonObject executeWithContinuation(
@@ -183,28 +187,32 @@ public class McpModernProtocolHandler {
         String name = McpMrtrSupport.mrtrName(method, params);
         String digest = McpMrtrSupport.argumentsDigest(method, params);
         String token = params.getString("requestState", null);
+        boolean logsRequested = protocol.logLevel() != null;
 
         McpContinuation continuation;
         if (token == null) {
-            continuation = continuations.start(started -> {
+            continuation = continuations.create();
+            // set round 1 state before the worker starts, so early notifications are not attributed to no round
+            continuation.useRound(channel, request.getProgressToken(), logsRequested);
+            continuations.run(continuation, started -> {
                 McpRequestContext ctx = new McpRequestContext(
                         null,
                         id,
                         request.getProgressToken(),
-                        cancelled,
+                        started.cancelledFlag(),
                         protocol,
                         new McpContinuationClientRequester(protocol, started),
                         started.channel());
                 return dispatchInvocation(request, ctx);
             });
-            continuation.useChannel(channel);
         } else {
             String continuationId =
                     mrtr.codec().decode(id, token, method, name, digest).continuationId();
             continuation = continuations
                     .find(continuationId)
                     .orElseThrow(() -> McpProtocolErrors.invalidParams(id, "Unknown or expired requestState"));
-            continuation.useChannel(channel);
+            // re-target this round's notifications before supplying answers, so they don't reach a stale round
+            continuation.useRound(channel, request.getProgressToken(), logsRequested);
             McpInputRequiredSignal pendingInput = continuation.lastInput();
             JsonObject inputs = params.get("inputResponses") instanceof JsonObject o ? o : JsonValue.EMPTY_JSON_OBJECT;
             if (pendingInput != null
@@ -223,6 +231,8 @@ public class McpModernProtocolHandler {
             event = continuation.nextEvent(mrtr.continuationTimeout());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            continuations.remove(continuation.id());
+            continuation.cancel();
             throw new McpException(id, McpErrorCode.INTERNAL_ERROR, "Interrupted while waiting for the invocation");
         }
         if (event instanceof McpContinuation.Input input) {
