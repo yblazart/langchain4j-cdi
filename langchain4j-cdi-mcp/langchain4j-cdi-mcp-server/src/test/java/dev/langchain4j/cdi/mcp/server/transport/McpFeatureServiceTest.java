@@ -7,32 +7,39 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
+import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpToolNotFoundException;
 import dev.langchain4j.cdi.mcp.server.registry.*;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class McpFeatureServiceTest {
 
     McpToolRegistry toolRegistry;
     McpToolInvoker toolInvoker;
+    McpResourceRegistry resourceRegistry;
+    McpBeanInvoker beanInvoker;
     McpFeatureService service;
 
     @BeforeEach
     void setup() {
         toolRegistry = mock(McpToolRegistry.class);
         toolInvoker = mock(McpToolInvoker.class);
+        resourceRegistry = mock(McpResourceRegistry.class);
+        beanInvoker = mock(McpBeanInvoker.class);
         service = new McpFeatureService(
                 toolRegistry,
-                mock(McpResourceRegistry.class),
+                resourceRegistry,
                 mock(McpPromptRegistry.class),
                 toolInvoker,
-                mock(McpBeanInvoker.class),
+                beanInvoker,
                 new McpCancellationManager(),
                 new McpServerConfigResolver(new McpServerConfig("srv", "1.2")));
     }
@@ -73,6 +80,73 @@ class McpFeatureServiceTest {
         assertThat(service.serverInfo().name()).isEqualTo("srv");
         assertThat(service.serverInfo().version()).isEqualTo("1.2");
         assertThat(service.capabilities().completions()).isNotNull();
+    }
+
+    // --- resources/read: exact URIs, URI templates, and the not-found error ---
+
+    @SuppressWarnings("unused")
+    static class TemplateBean {
+        public String data(String id) {
+            return id;
+        }
+    }
+
+    private static JsonObject readRequest(String uri) {
+        return Json.createObjectBuilder().add("uri", uri).build();
+    }
+
+    @Test
+    void readResourceResolvesAUriTemplateAndBindsItsVariables() throws Exception {
+        McpResourceTemplateDescriptor template = new McpResourceTemplateDescriptor(
+                "test://template/{id}/data",
+                "Template",
+                "d",
+                "application/json",
+                TemplateBean.class,
+                TemplateBean.class.getMethod("data", String.class));
+        when(resourceRegistry.findResource("test://template/42/data")).thenReturn(Optional.empty());
+        when(resourceRegistry.matchTemplate("test://template/42/data"))
+                .thenReturn(Optional.of(new McpResourceRegistry.TemplateMatch(template, Map.of("id", "42"))));
+        when(beanInvoker.invoke(eq(1), eq(TemplateBean.class), any(), any(), any(), any()))
+                .thenReturn("{\"id\":\"42\"}");
+
+        JsonObject result = service.readResource(1, readRequest("test://template/42/data"), ctx(), null);
+
+        ArgumentCaptor<JsonObject> arguments = ArgumentCaptor.forClass(JsonObject.class);
+        verify(beanInvoker).invoke(eq(1), eq(TemplateBean.class), any(), arguments.capture(), any(), any());
+        assertThat(arguments.getValue().getString("id")).isEqualTo("42");
+
+        JsonObject contents = result.getJsonArray("contents").getJsonObject(0);
+        assertThat(contents.getString("uri")).isEqualTo("test://template/42/data");
+        assertThat(contents.getString("mimeType")).isEqualTo("application/json");
+        assertThat(contents.getString("text")).isEqualTo("{\"id\":\"42\"}");
+    }
+
+    @Test
+    void readResourcePrefersAnExactUriOverATemplate() throws Exception {
+        McpResourceDescriptor resource = mock(McpResourceDescriptor.class);
+        when(resource.getBeanType()).thenAnswer(i -> TemplateBean.class);
+        when(resource.getMethod()).thenReturn(TemplateBean.class.getMethod("data", String.class));
+        when(resource.getMimeType()).thenReturn("text/plain");
+        when(resourceRegistry.findResource("test://exact")).thenReturn(Optional.of(resource));
+        when(beanInvoker.invoke(any(), any(), any(), any(), any(), any())).thenReturn("body");
+
+        service.readResource(1, readRequest("test://exact"), ctx(), null);
+
+        verify(resourceRegistry, never()).matchTemplate(any());
+    }
+
+    @Test
+    void readResourceReportsTheRequestedUriInTheErrorData() {
+        when(resourceRegistry.findResource("unknown://x")).thenReturn(Optional.empty());
+        when(resourceRegistry.matchTemplate("unknown://x")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.readResource(1, readRequest("unknown://x"), ctx(), null))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
+                    assertThat(e.getMessage()).contains("unknown://x");
+                    assertThat(e.getData()).isEqualTo(Map.of("uri", "unknown://x"));
+                });
     }
 
     private static McpRequestContext ctx() {

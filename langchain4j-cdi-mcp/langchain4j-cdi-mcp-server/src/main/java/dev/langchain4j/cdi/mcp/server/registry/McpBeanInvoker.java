@@ -19,6 +19,8 @@ import jakarta.json.JsonValue;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import org.mcpjava.server.prompts.PromptArg;
+import org.mcpjava.server.resources.ResourceTemplateArg;
 import org.mcpjava.server.tools.ToolArg;
 
 /** Shared utility for invoking CDI bean methods with JSON arguments. */
@@ -121,10 +123,26 @@ public class McpBeanInvoker {
         return args;
     }
 
+    /**
+     * Resolves the wire name of a parameter: the {@code name} of its {@code @ToolArg}, {@code @PromptArg} or
+     * {@code @ResourceTemplateArg} annotation when it sets one, otherwise the Java parameter name (which needs the
+     * module to be compiled with {@code -parameters}, or it is {@code arg0}).
+     *
+     * @param param the method parameter
+     * @return the name the argument is sent under
+     */
     private static String resolveParamName(Parameter param) {
-        ToolArg annotation = param.getAnnotation(ToolArg.class);
-        if (annotation != null && !DEFAULT_NAME.equals(annotation.name())) {
-            return annotation.name();
+        ToolArg toolArg = param.getAnnotation(ToolArg.class);
+        if (toolArg != null && !DEFAULT_NAME.equals(toolArg.name())) {
+            return toolArg.name();
+        }
+        PromptArg promptArg = param.getAnnotation(PromptArg.class);
+        if (promptArg != null && !DEFAULT_NAME.equals(promptArg.name())) {
+            return promptArg.name();
+        }
+        ResourceTemplateArg templateArg = param.getAnnotation(ResourceTemplateArg.class);
+        if (templateArg != null && !DEFAULT_NAME.equals(templateArg.name())) {
+            return templateArg.name();
         }
         return param.getName();
     }

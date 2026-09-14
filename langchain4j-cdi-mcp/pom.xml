@@ -20,6 +20,16 @@
         <module>langchain4j-cdi-mcp-portable-ext</module>
     </modules>
 
+    <properties>
+        <!--
+            Tool, prompt and resource-template arguments are advertised and bound under the Java parameter name
+            unless the @ToolArg / @PromptArg / @ResourceTemplateArg annotation sets an explicit name; without
+            -parameters they would be advertised as arg0, arg1, ... and never bind. Applications using this server
+            must set the same flag on the modules holding their annotated beans.
+        -->
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+    </properties>
+
     <profiles>
         <profile>
             <id>unpublished</id>

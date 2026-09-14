@@ -33,8 +33,11 @@ import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.mcpjava.server.prompts.PromptMessage;
 import org.mcpjava.server.prompts.PromptResponse;
 import org.mcpjava.server.resources.ResourceResponse;
@@ -223,7 +226,9 @@ public class McpFeatureService {
     }
 
     /**
-     * Reads a resource by URI.
+     * Reads a resource by URI. An exact registered URI is served first; failing that, the URI is matched against the
+     * registered {@code @ResourceTemplate} URI templates and the variables it carries are bound to the template
+     * method's parameters by name.
      *
      * @param requestId the JSON-RPC request id
      * @param params the {@code resources/read} parameters ({@code uri})
@@ -238,21 +243,73 @@ public class McpFeatureService {
             throw new McpException(requestId, McpErrorCode.INVALID_PARAMS, "Missing resource URI");
         }
 
-        McpResourceDescriptor resource = resourceRegistry
-                .findResource(uri)
-                .orElseThrow(
-                        () -> new McpException(requestId, McpErrorCode.INVALID_PARAMS, "Resource not found: " + uri));
+        Optional<McpResourceDescriptor> resource = resourceRegistry.findResource(uri);
+        if (resource.isPresent()) {
+            return read(
+                    requestId,
+                    uri,
+                    resource.get().getBeanType(),
+                    resource.get().getMethod(),
+                    null,
+                    resource.get().getMimeType(),
+                    ctx,
+                    session);
+        }
 
+        Optional<McpResourceRegistry.TemplateMatch> match = resourceRegistry.matchTemplate(uri);
+        if (match.isPresent()) {
+            McpResourceTemplateDescriptor template = match.get().template();
+            return read(
+                    requestId,
+                    uri,
+                    template.getBeanType(),
+                    template.getMethod(),
+                    templateArguments(match.get().variables()),
+                    template.getMimeType(),
+                    ctx,
+                    session);
+        }
+
+        throw resourceNotFound(requestId, uri);
+    }
+
+    /**
+     * Builds the {@code -32602} error answered for an unknown resource URI. SEP-2164 asks the error to carry the URI
+     * that was requested in its {@code data}, so a client can tell which of several reads failed.
+     *
+     * @param requestId the JSON-RPC request id
+     * @param uri the requested resource URI
+     * @return the exception to throw
+     */
+    private static McpException resourceNotFound(Object requestId, String uri) {
+        return new McpException(
+                requestId, McpErrorCode.INVALID_PARAMS, "Resource not found: " + uri, 200, Map.of("uri", uri));
+    }
+
+    private static JsonObject templateArguments(Map<String, String> variables) {
+        JsonObjectBuilder arguments = Json.createObjectBuilder();
+        variables.forEach(arguments::add);
+        return arguments.build();
+    }
+
+    private JsonObject read(
+            Object requestId,
+            String uri,
+            Class<?> beanType,
+            Method method,
+            JsonObject arguments,
+            String mimeType,
+            McpRequestContext ctx,
+            McpSession session) {
         try {
-            Object content =
-                    beanInvoker.invoke(requestId, resource.getBeanType(), resource.getMethod(), null, ctx, session);
+            Object content = beanInvoker.invoke(requestId, beanType, method, arguments, ctx, session);
             JsonObjectBuilder resultBuilder = Json.createObjectBuilder();
             JsonArrayBuilder contentsArray = Json.createArrayBuilder();
             if (content instanceof ResourceResponse rr) {
                 rr.getContents().forEach(rc -> contentsArray.add(McpJsonSerializer.resourceContentsToJson(rc)));
             } else {
                 String text = content != null ? content.toString() : "";
-                contentsArray.add(McpJsonSerializer.plainTextResourceContents(uri, text, resource.getMimeType()));
+                contentsArray.add(McpJsonSerializer.plainTextResourceContents(uri, text, mimeType));
             }
             resultBuilder.add("contents", contentsArray);
             return resultBuilder.build();
