@@ -361,6 +361,22 @@ public class McpHelidonIntegrationTest {
         JsonRpcAssertions.assertJsonRpcError(response, 70, -32001, "Invalid or missing Mcp-Session-Id");
     }
 
+    @Test
+    void shouldRejectForeignOrigin() {
+        McpHttpResponse response = transport()
+                .post("/mcp", McpTestRequests.initializeRequest(71), Map.of("Origin", "https://evil.example"));
+
+        assertThat(response.statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void shouldAcceptLocalhostOrigin() {
+        McpHttpResponse response = transport()
+                .post("/mcp", McpTestRequests.initializeRequest(72), Map.of("Origin", "http://localhost:3000"));
+
+        JsonRpcAssertions.assertJsonRpcSuccess(response, 72);
+    }
+
     // --- Helpers ---
 
     private String initializeSession() {

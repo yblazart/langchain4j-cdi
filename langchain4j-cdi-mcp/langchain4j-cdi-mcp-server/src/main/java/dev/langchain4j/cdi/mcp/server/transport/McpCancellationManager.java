@@ -30,6 +30,18 @@ public class McpCancellationManager {
     }
 
     /**
+     * Registers an externally created cancellation flag (modern requests cancel via stream closure).
+     *
+     * @param requestId request id
+     * @param flag the flag
+     */
+    public void register(Object requestId, AtomicBoolean flag) {
+        if (requestId != null && flag != null) {
+            flags.put(requestId, flag);
+        }
+    }
+
+    /**
      * Marks a request as cancelled by setting its flag to {@code true}.
      *
      * @param requestId the JSON-RPC request identifier to cancel
