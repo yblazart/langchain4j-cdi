@@ -92,11 +92,13 @@ public class McpModernProtocolHandler {
             validateParams(id, request.getMethod(), params);
             return switch (request.getMethod()) {
                 case "server/discover" -> ok(id, discover());
-                case "tools/list" -> ok(id, complete(features.listTools(McpFeatureService.cursor(params))));
-                case "resources/list" -> ok(id, complete(features.listResources(McpFeatureService.cursor(params))));
+                case "tools/list" -> ok(id, complete(cacheable(features.listTools(McpFeatureService.cursor(params)))));
+                case "resources/list" ->
+                    ok(id, complete(cacheable(features.listResources(McpFeatureService.cursor(params)))));
                 case "resources/templates/list" ->
-                    ok(id, complete(features.listResourceTemplates(McpFeatureService.cursor(params))));
-                case "prompts/list" -> ok(id, complete(features.listPrompts(McpFeatureService.cursor(params))));
+                    ok(id, complete(cacheable(features.listResourceTemplates(McpFeatureService.cursor(params)))));
+                case "prompts/list" ->
+                    ok(id, complete(cacheable(features.listPrompts(McpFeatureService.cursor(params)))));
                 case "completion/complete" -> ok(id, complete(features.complete(id, params)));
                 case "tools/call", "prompts/get", "resources/read" -> invoke(request, protocol, acceptsSse);
                 case McpListenRoutingFilter.LISTEN_METHOD -> throw listenNotRouted(id);
@@ -469,8 +471,28 @@ public class McpModernProtocolHandler {
         return switch (request.getMethod()) {
             case "tools/call" -> features.callTool(id, params, ctx, null);
             case "prompts/get" -> features.getPrompt(id, params, ctx, null);
-            default -> features.readResource(id, params, ctx, null);
+            default -> cacheable(features.readResource(id, params, ctx, null));
         };
+    }
+
+    /**
+     * Adds the SEP-2549 {@code ttlMs} and {@code cacheScope} caching hints to a result. The 2026-07-28 schema makes
+     * both <em>required</em> on every {@code CacheableResult} - {@code ListToolsResult}, {@code ListPromptsResult},
+     * {@code ListResourcesResult}, {@code ListResourceTemplatesResult} and {@code ReadResourceResult} - so a result
+     * without them also fails generic wire-schema validation. The values come from {@link McpServerConfig} and default
+     * to {@code ttlMs = 0} (immediately stale) and {@code cacheScope = "public"}.
+     *
+     * <p>Only called on the 2026-07-28 path: legacy-era results stay byte-identical.
+     *
+     * @param result the raw result
+     * @return the result carrying its caching hints
+     */
+    JsonObject cacheable(JsonObject result) {
+        McpServerConfig c = config.get();
+        return Json.createObjectBuilder(result)
+                .add("ttlMs", c.getCacheTtl().toMillis())
+                .add("cacheScope", c.getCacheScope())
+                .build();
     }
 
     /**

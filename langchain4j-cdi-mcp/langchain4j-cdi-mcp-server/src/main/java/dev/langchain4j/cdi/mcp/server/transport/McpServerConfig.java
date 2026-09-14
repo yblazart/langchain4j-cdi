@@ -31,6 +31,26 @@ public class McpServerConfig {
     /** The timeout for continuation. Defaults to 5 minutes. */
     private Duration continuationTimeout = Duration.ofMinutes(5);
 
+    /**
+     * The SEP-2549 {@code ttlMs} caching hint emitted on cacheable results ({@code tools/list}, {@code prompts/list},
+     * {@code resources/list}, {@code resources/templates/list} and {@code resources/read}) of the 2026-07-28 era.
+     * Defaults to zero, which tells the client to consider the result immediately stale.
+     */
+    private Duration cacheTtl = Duration.ZERO;
+
+    /**
+     * The SEP-2549 {@code cacheScope} caching hint emitted on cacheable results of the 2026-07-28 era, either
+     * {@code "public"} (no user-specific data, shared caches may reuse it) or {@code "private"}. Defaults to
+     * {@code "public"}.
+     */
+    private String cacheScope = CACHE_SCOPE_PUBLIC;
+
+    /** Value of {@link #getCacheScope()} for a result that carries no user-specific data. */
+    public static final String CACHE_SCOPE_PUBLIC = "public";
+
+    /** Value of {@link #getCacheScope()} for a result that may only be reused in the same authorization context. */
+    public static final String CACHE_SCOPE_PRIVATE = "private";
+
     /** Creates a config with default server name and version. */
     public McpServerConfig() {}
 
@@ -182,6 +202,45 @@ public class McpServerConfig {
         this.continuationTimeout = continuationTimeout;
     }
 
+    /**
+     * Returns the SEP-2549 {@code ttlMs} caching hint emitted on cacheable 2026-07-28 results.
+     *
+     * @return the cache TTL, never negative
+     */
+    public Duration getCacheTtl() {
+        return cacheTtl;
+    }
+
+    /**
+     * Sets the SEP-2549 {@code ttlMs} caching hint emitted on cacheable 2026-07-28 results. A {@code null} or negative
+     * value is read as zero, the value the schema gives to an immediately stale result.
+     *
+     * @param cacheTtl the cache TTL
+     */
+    public void setCacheTtl(Duration cacheTtl) {
+        this.cacheTtl = cacheTtl == null || cacheTtl.isNegative() ? Duration.ZERO : cacheTtl;
+    }
+
+    /**
+     * Returns the SEP-2549 {@code cacheScope} caching hint emitted on cacheable 2026-07-28 results.
+     *
+     * @return {@value #CACHE_SCOPE_PUBLIC} or {@value #CACHE_SCOPE_PRIVATE}
+     */
+    public String getCacheScope() {
+        return cacheScope;
+    }
+
+    /**
+     * Sets the SEP-2549 {@code cacheScope} caching hint emitted on cacheable 2026-07-28 results. The schema allows only
+     * {@value #CACHE_SCOPE_PUBLIC} and {@value #CACHE_SCOPE_PRIVATE}; anything else falls back to
+     * {@value #CACHE_SCOPE_PUBLIC} rather than putting an invalid value on the wire.
+     *
+     * @param cacheScope the cache scope
+     */
+    public void setCacheScope(String cacheScope) {
+        this.cacheScope = CACHE_SCOPE_PRIVATE.equals(cacheScope) ? CACHE_SCOPE_PRIVATE : CACHE_SCOPE_PUBLIC;
+    }
+
     /** Builder for constructing {@link McpServerConfig} instances. */
     public static class McpServerConfigBuilder {
 
@@ -192,9 +251,33 @@ public class McpServerConfig {
         private String requestStateSecret;
         private Duration requestStateTtl = Duration.ofMinutes(10);
         private Duration continuationTimeout = Duration.ofMinutes(5);
+        private Duration cacheTtl = Duration.ZERO;
+        private String cacheScope = CACHE_SCOPE_PUBLIC;
 
         /** Creates a new builder with default values. */
         public McpServerConfigBuilder() {}
+
+        /**
+         * Sets the SEP-2549 {@code ttlMs} caching hint emitted on cacheable 2026-07-28 results.
+         *
+         * @param cacheTtl the cache TTL
+         * @return this builder
+         */
+        public McpServerConfigBuilder cacheTtl(Duration cacheTtl) {
+            this.cacheTtl = cacheTtl;
+            return this;
+        }
+
+        /**
+         * Sets the SEP-2549 {@code cacheScope} caching hint emitted on cacheable 2026-07-28 results.
+         *
+         * @param cacheScope {@value #CACHE_SCOPE_PUBLIC} or {@value #CACHE_SCOPE_PRIVATE}
+         * @return this builder
+         */
+        public McpServerConfigBuilder cacheScope(String cacheScope) {
+            this.cacheScope = cacheScope;
+            return this;
+        }
 
         /**
          * Sets the server name.
@@ -285,6 +368,8 @@ public class McpServerConfig {
             config.setRequestStateSecret(requestStateSecret);
             config.setRequestStateTtl(requestStateTtl);
             config.setContinuationTimeout(continuationTimeout);
+            config.setCacheTtl(cacheTtl);
+            config.setCacheScope(cacheScope);
             return config;
         }
     }

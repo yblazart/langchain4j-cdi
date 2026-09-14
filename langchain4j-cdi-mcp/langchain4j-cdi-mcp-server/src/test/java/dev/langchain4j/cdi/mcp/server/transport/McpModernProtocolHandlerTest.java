@@ -116,6 +116,88 @@ class McpModernProtocolHandlerTest {
                 .isEqualTo("complete");
     }
 
+    // --- SEP-2549 caching hints, required on every CacheableResult of the 2026-07-28 schema ---
+
+    @Test
+    void cacheableListResultsCarryTtlMsAndCacheScope() {
+        when(features.listTools(null))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("tools", Json.createArrayBuilder())
+                        .build());
+        when(features.listPrompts(null))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("prompts", Json.createArrayBuilder())
+                        .build());
+        when(features.listResources(null))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("resources", Json.createArrayBuilder())
+                        .build());
+        when(features.listResourceTemplates(null))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("resourceTemplates", Json.createArrayBuilder())
+                        .build());
+
+        for (String method :
+                new String[] {"tools/list", "prompts/list", "resources/list", "resources/templates/list"}) {
+            McpReply reply = handler.handle(new JsonRpcRequest(2, method, null), modern(null), false);
+
+            JsonObject result = parse(reply.body()).getJsonObject("result");
+            assertThat(result.getJsonNumber("ttlMs").longValue()).as(method).isZero();
+            assertThat(result.getString("cacheScope")).as(method).isEqualTo("public");
+        }
+    }
+
+    @Test
+    void readResourceResultCarriesTtlMsAndCacheScope() {
+        when(features.readResource(eq(6), any(), any(), isNull()))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("contents", Json.createArrayBuilder())
+                        .build());
+        JsonObject params = Json.createObjectBuilder().add("uri", "test://x").build();
+
+        McpReply reply = handler.handle(new JsonRpcRequest(6, "resources/read", params), modern(null), false);
+
+        JsonObject result = parse(reply.body()).getJsonObject("result");
+        assertThat(result.getJsonNumber("ttlMs").longValue()).isZero();
+        assertThat(result.getString("cacheScope")).isEqualTo("public");
+    }
+
+    @Test
+    void cachingHintsComeFromTheServerConfiguration() {
+        McpServerConfig config = McpServerConfig.builder()
+                .cacheTtl(Duration.ofMinutes(5))
+                .cacheScope("private")
+                .build();
+        McpServerConfigResolver resolver = new McpServerConfigResolver(config);
+        McpMrtrSupport support = new McpMrtrSupport(resolver);
+        McpModernProtocolHandler configured =
+                new McpModernProtocolHandler(features, resolver, registry, support, store);
+        when(features.listTools(null))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("tools", Json.createArrayBuilder())
+                        .build());
+
+        McpReply reply = configured.handle(new JsonRpcRequest(2, "tools/list", null), modern(null), false);
+
+        JsonObject result = parse(reply.body()).getJsonObject("result");
+        assertThat(result.getJsonNumber("ttlMs").longValue()).isEqualTo(300_000L);
+        assertThat(result.getString("cacheScope")).isEqualTo("private");
+    }
+
+    @Test
+    void nonCacheableResultsDoNotCarryCachingHints() {
+        when(features.callTool(eq(7), any(), any(), isNull()))
+                .thenReturn(Json.createObjectBuilder()
+                        .add("content", Json.createArrayBuilder())
+                        .build());
+        JsonObject params = Json.createObjectBuilder().add("name", "greet").build();
+
+        McpReply reply = handler.handle(new JsonRpcRequest(7, "tools/call", params), modern(null), false);
+
+        JsonObject result = parse(reply.body()).getJsonObject("result");
+        assertThat(result).doesNotContainKey("ttlMs").doesNotContainKey("cacheScope");
+    }
+
     @Test
     void toolCallWithoutStreamingIsJsonWithModernContext() {
         when(features.callTool(eq(3), any(), any(), isNull()))
