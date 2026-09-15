@@ -83,16 +83,33 @@ baselined too, they are treated as failures by the gate.
 | `--spec-version 2025-11-25 --suite all` | 74 | 1 | 58 / 9 |
 | stable line `@0.1.16`, default suite | 40 | 0 | 25 / 7 |
 
-The eight remaining 2026-07-28 failures and the single 2025-11-25 one are missing features or known API
-limitations (custom tool `inputSchema`, `x-mcp-header`, SEP-2322 input-request naming, one pending input request
-per round); see the two baseline files and `langchain4j-cdi-mcp/README.md` ("Conformance").
+## Recorded results (2026-09-15, after the SEP-2243 `x-mcp-header` fixture)
+
+| Run | Passed | Failed |
+|---|---|---|
+| `--spec-version 2026-07-28 --suite all` | 133 | 9 |
+| `--spec-version 2025-11-25 --suite all` | 74 | 1 |
+| stable line `@0.1.16`, default suite | 40 | 0 |
+
+`http-custom-header-server-validation` used to emit 6 checks, 5 of them "not testable" for want of a fixture
+carrying a designation. It now emits 10 real checks, 4 passing. The three that still fail need the *request*
+half of SEP-2243 — reading the `Mcp-Param-*` headers a client mirrors back and rejecting a mismatch with HTTP
+400 + `-32020` — which the server does not implement.
+
+The nine remaining 2026-07-28 failures and the single 2025-11-25 one are missing features or known API
+limitations (custom tool `inputSchema`, `Mcp-Param-*` request validation, SEP-2322 input-request naming, one
+pending input request per round); see the two baseline files and `langchain4j-cdi-mcp/README.md`
+("Conformance").
 
 ## Fixtures
 
 `ConformanceTools` — `test_simple_text`, `test_image_content`, `test_audio_content`, `test_embedded_resource`,
 `test_multiple_content_types`, `test_error_handling`, `test_tool_with_logging`, `test_logging_tool`,
 `test_tool_with_progress`, `test_streaming_elicitation`, `test_sampling`, `test_elicitation`,
-`test_elicitation_sep1034_defaults`, `test_elicitation_sep1330_enums`, `test_missing_capability`.
+`test_elicitation_sep1034_defaults`, `test_elicitation_sep1330_enums`, `test_missing_capability`,
+`test_custom_header_tool` (the only tool carrying SEP-2243 `x-mcp-header` designations — one argument of each
+permitted primitive type; `http-custom-header-server-validation` picks the first tool with any designation and
+then its first *string*-typed designated argument).
 
 `ConformanceMrtrTools` — the SEP-2322 family: `test_input_required_result_elicitation`, `_sampling`,
 `_list_roots`, `_request_state`, `_multiple_inputs`, `_multi_round`, `_tampered_state`, `_capabilities`, and the
@@ -112,7 +129,9 @@ that `notifications/tools/list_changed` and `notifications/prompts/list_changed`
 
 - `json_schema_2020_12_tool` — a tool's `inputSchema` is always generated from the Java signature
   (`JsonSchemaGenerator`); there is no way to supply a hand-written JSON Schema 2020-12 document.
-- A tool carrying SEP-2243 `x-mcp-header` annotations — `Mcp-Param-*` headers are not implemented.
+- A fixture exercising the *request* half of SEP-2243 — the server never reads the `Mcp-Param-*` headers a
+  client mirrors back, so it cannot reject a header/body mismatch. (The *publishing* half is implemented:
+  `test_custom_header_tool` carries `x-mcp-header` designations.)
 - `test_reconnection` — needs raw control of the response stream framing.
 - The `tasks-*` extension — not implemented.
 

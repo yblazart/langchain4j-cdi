@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.conformance;
 
 import dev.langchain4j.cdi.mcp.server.api.Elicitation;
 import dev.langchain4j.cdi.mcp.server.api.ElicitationResponse;
+import dev.langchain4j.cdi.mcp.server.api.McpHeaderArg;
 import dev.langchain4j.cdi.mcp.server.api.McpLog;
 import dev.langchain4j.cdi.mcp.server.api.Sampling;
 import dev.langchain4j.cdi.mcp.server.api.SamplingResponse;
@@ -98,6 +99,38 @@ public class ConformanceTools {
                                 .setMimeType("application/json")
                                 .build())
                 .build();
+    }
+
+    // ===== SEP-2243 CUSTOM HEADERS =====
+
+    /**
+     * The SEP-2243 fixture: the only tool whose schema carries {@code x-mcp-header} designations. One argument of each
+     * permitted primitive type — {@code string}, {@code integer}, {@code boolean} — so that the published schema
+     * exercises all three; {@code number} is not permitted by the spec and is rejected at registration.
+     *
+     * <p>{@code http-custom-header-server-validation} picks the first tool carrying any designation, then the first
+     * <em>string</em>-typed designated argument, and sends the remaining required arguments with default values plus
+     * their {@code Mcp-Param-*} headers.
+     *
+     * @param tenantId the tenant, mirrored into {@code Mcp-Param-Tenant-Id}
+     * @param attempt the attempt number, mirrored into {@code Mcp-Param-Attempt}
+     * @param verbose the verbosity flag, mirrored into {@code Mcp-Param-Verbose}
+     * @return the echoed arguments as text
+     */
+    @Tool(
+            name = "test_custom_header_tool",
+            description = "Tests SEP-2243 x-mcp-header argument designations on a tool definition")
+    public ToolResponse testCustomHeaderTool(
+            @ToolArg(name = "tenantId", description = "Tenant identifier, mirrored into Mcp-Param-Tenant-Id")
+                    @McpHeaderArg("Tenant-Id")
+                    String tenantId,
+            @ToolArg(name = "attempt", description = "Attempt number, mirrored into Mcp-Param-Attempt")
+                    @McpHeaderArg("Attempt")
+                    int attempt,
+            @ToolArg(name = "verbose", description = "Verbosity flag, mirrored into Mcp-Param-Verbose")
+                    @McpHeaderArg("Verbose")
+                    boolean verbose) {
+        return ToolResponse.ofText("tenantId=" + tenantId + ", attempt=" + attempt + ", verbose=" + verbose);
     }
 
     // ===== ERRORS =====

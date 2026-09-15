@@ -201,6 +201,42 @@ public class Calculator {
 
 **Optional parameters:** Set `required = false` on `@ToolArg` — the parameter will be `null` if the client doesn't provide it.
 
+#### Custom headers (SEP-2243)
+
+MCP 2026-07-28 lets a tool declare, in its JSON Schema, that a client must mirror an argument's value into an HTTP request header on the Streamable HTTP transport. Annotate the parameter with `@McpHeaderArg`:
+
+```java
+@Tool(name = "fetch_report", description = "Fetch a tenant's report")
+public String fetchReport(
+        @ToolArg(name = "tenantId", description = "Tenant identifier") @McpHeaderArg("Tenant-Id") String tenantId,
+        @ToolArg(name = "reportId", description = "Report identifier") String reportId) {
+    // ...
+}
+```
+
+The 2026-07-28 `tools/list` then publishes the designation as the `x-mcp-header` keyword, and a conforming client sends the value in `Mcp-Param-Tenant-Id` alongside the JSON-RPC body:
+
+```json
+"tenantId": { "type": "string", "description": "Tenant identifier", "x-mcp-header": "Tenant-Id" }
+```
+
+The 2025-03-26 legacy era predates SEP-2243 and its output is unchanged — the keyword is omitted there.
+
+SEP-2243 puts four constraints on the value; all are checked when the tool is registered, and a violation **fails the deployment** with a message naming the tool, the parameter and the rule:
+
+| Rule | Rejected example |
+|---|---|
+| must not be empty | `@McpHeaderArg("")` |
+| ASCII only, no space, no `:` | `@McpHeaderArg("X Tenant")`, `@McpHeaderArg("X:Tenant")` |
+| case-insensitively unique within one tool | two arguments designating `Tenant-Id` and `tenant-id` |
+| `integer`, `string` or `boolean` only — `number` is **not** permitted | `@McpHeaderArg("X-Amount") double amount` |
+
+Failing at deployment is deliberate: a client MUST *exclude* a tool whose designation is invalid from `tools/list`, so a malformed value produces no error anywhere — the tool simply vanishes from the client's catalogue.
+
+Do not designate sensitive arguments (passwords, API keys, tokens, PII): the value travels in a header, where intermediaries can read and log it.
+
+> `@McpHeaderArg` is **provisional** and the only user-facing annotation this module defines outside `org.mcpjava`. `org.mcpjava:mcp-server-api` has no hook for the designation (`@ToolArg` exposes only `name`, `description`, `required`, `defaultValue`); the annotation is intended to migrate upstream if that project adopts SEP-2243.
+
 ### Prompts
 
 Prompts are reusable templates that guide how an AI model should respond. They are returned as structured messages.
@@ -492,7 +528,7 @@ The server is measured against the official [`@modelcontextprotocol/conformance`
 
 | Run | Score |
 |---|---|
-| `--spec-version 2026-07-28 --suite all` | **130 passed, 8 failed** |
+| `--spec-version 2026-07-28 --suite all` | **133 passed, 9 failed** |
 | `--spec-version 2025-11-25 --suite all` | **74 passed, 1 failed** |
 | `@0.1.16` (stable line, default suite) | **40 passed, 0 failed** |
 
@@ -512,7 +548,7 @@ npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:80
 The remaining failures are missing features and API limitations, not protocol bugs. They are listed in `conformance-baseline.yml` / `conformance-baseline-legacy.yml`, so a regression anywhere else fails the gate.
 
 - **Custom tool `inputSchema`** — a tool's schema is always derived from its Java signature; there is no API to supply a hand-written JSON Schema 2020-12 document (`$defs`, `allOf`/`anyOf`, `if`/`then`/`else`, …).
-- **SEP-2243 `x-mcp-header` / `Mcp-Param-*`** — custom header mirroring is not implemented server-side.
+- **SEP-2243 `Mcp-Param-*` request validation** — the *publishing* half is implemented (see [Custom headers](#custom-headers-sep-2243)): a tool declares designations with `@McpHeaderArg` and the 2026-07-28 schema carries `x-mcp-header`. The server does not yet read the `Mcp-Param-*` headers a client mirrors back, so it cannot reject a header/body mismatch with HTTP 400 + JSON-RPC `-32020`. Three checks of `http-custom-header-server-validation` fail on that: invalid Base64 padding, non-alphabet Base64 characters, and a header omitted while the body carries the value.
 - **SEP-2322 input-request names** — multi-round-trip input requests are named by call order (`input-0`, `input-1`, …); a server cannot choose the key it publishes. Needs an API change on the `Elicitation` / `Sampling` / `Roots` builders.
 - **One pending input request per round** — the blocking `sendAndAwait()` API suspends the method at its first interaction, so an `input_required` result always carries a single `inputRequests` entry. Asking several questions in one round trip needs a batch interaction API.
 - **Tasks extension** — not implemented.
