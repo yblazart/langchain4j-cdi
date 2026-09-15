@@ -10,6 +10,7 @@ import dev.langchain4j.cdi.mcp.integrationtests.ArquillianDeploymentHelper;
 import dev.langchain4j.cdi.mcp.integrationtests.ConfigResource;
 import dev.langchain4j.cdi.mcp.integrationtests.ElicitationTool;
 import dev.langchain4j.cdi.mcp.integrationtests.GreetingTool;
+import dev.langchain4j.cdi.mcp.integrationtests.HeaderParamTool;
 import dev.langchain4j.cdi.mcp.integrationtests.IconedTool;
 import dev.langchain4j.cdi.mcp.integrationtests.JaxRsApplication;
 import dev.langchain4j.cdi.mcp.integrationtests.JdkHttpClientTransport;
@@ -93,6 +94,7 @@ public class McpOpenLibertyArquillianTest {
                         // Nested types are not pulled in with their enclosing class, and describeSignature
                         // takes one as a parameter.
                         GreetingTool.Style.class,
+                        HeaderParamTool.class,
                         IconedTool.class,
                         IconedTool.CdiIconProvider.class,
                         ElicitationTool.class,
@@ -581,6 +583,75 @@ public class McpOpenLibertyArquillianTest {
                 postModern(103, "tools/call", "other", "\"name\":\"greet\",\"arguments\":{\"name\":\"Ada\"}", "{}");
 
         JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 103, -32020);
+    }
+
+    // --- SEP-2243 request half: Mcp-Param-<designation> validated against the body ---
+
+    private McpHttpResponse postDesignatedCall(int id, String... paramHeaders) {
+        return transport()
+                .post(
+                        "/mcp",
+                        McpModernTestRequests.designatedCallBody(id),
+                        McpModernTestRequests.designatedCallHeaders(paramHeaders));
+    }
+
+    @Test
+    public void shouldAcceptMirroredParamHeadersMatchingTheBody() {
+        // the header names are deliberately mis-cased: SEP-2243 requires a case-insensitive name comparison, and the
+        // lookup is the container's
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(
+                postDesignatedCall(130, "mcp-param-tenant-id", "acme", "MCP-PARAM-ATTEMPT", "7"), 130);
+
+        assertThat(result.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("tenant=acme, attempt=7");
+    }
+
+    @Test
+    public void shouldRejectAParamHeaderDisagreeingWithTheBody() {
+        McpHttpResponse response = postDesignatedCall(131, "Mcp-Param-Tenant-Id", "evilcorp", "Mcp-Param-Attempt", "7");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 131, -32020);
+    }
+
+    @Test
+    public void shouldRejectAnOmittedParamHeaderWhenTheBodyCarriesTheValue() {
+        McpHttpResponse response = postDesignatedCall(132, "Mcp-Param-Attempt", "7");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 132, -32020);
+    }
+
+    /** A malformed Base64 payload must be a 400, not an unchecked exception surfacing as a 500. */
+    @Test
+    public void shouldRejectMalformedBase64ParamHeaderWith400NotWith500() {
+        for (String malformed : McpModernTestRequests.malformedBase64Values()) {
+            McpHttpResponse response =
+                    postDesignatedCall(133, "Mcp-Param-Tenant-Id", malformed, "Mcp-Param-Attempt", "7");
+
+            assertThat(response.statusCode()).as(malformed).isEqualTo(400);
+            JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 133, -32020);
+        }
+    }
+
+    /** The 2025-03-26 era predates SEP-2243: it must ignore every {@code Mcp-Param-*} header. */
+    @Test
+    public void shouldIgnoreParamHeadersInTheLegacyEra() {
+        String sessionId = initializeSession();
+        Map<String, String> headers = new HashMap<>();
+        headers.put(MCP_SESSION_ID, sessionId);
+        // a value the modern era would reject twice over: it disagrees with the body, and its Base64 is malformed
+        headers.put("Mcp-Param-Tenant-Id", "=?base64?ZXZpbA?=");
+
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(
+                transport()
+                        .post(
+                                "/mcp",
+                                McpTestRequests.toolsCallRequest(
+                                        134, "tenantEcho", "{\"tenant\":\"acme\",\"attempt\":7}"),
+                                headers),
+                134);
+
+        assertThat(result.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("tenant=acme, attempt=7");
     }
 
     @Test

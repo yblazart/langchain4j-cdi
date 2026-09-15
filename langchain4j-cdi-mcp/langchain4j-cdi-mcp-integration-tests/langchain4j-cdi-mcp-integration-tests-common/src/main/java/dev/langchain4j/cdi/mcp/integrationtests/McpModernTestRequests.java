@@ -39,4 +39,39 @@ public final class McpModernTestRequests {
         headers.put("Accept", "application/json");
         return headers;
     }
+
+    /**
+     * Builds the body of a {@code tools/call} for {@link HeaderParamTool#TENANT_ECHO}, whose two arguments carry
+     * SEP-2243 {@code x-mcp-header} designations.
+     *
+     * @param id the JSON-RPC id
+     * @return the request body, always carrying {@code tenant=acme} and {@code attempt=7}
+     */
+    public static String designatedCallBody(Object id) {
+        return body(
+                id,
+                "tools/call",
+                "\"name\":\"" + HeaderParamTool.TENANT_ECHO + "\",\"arguments\":{\"tenant\":\"acme\",\"attempt\":7}",
+                "{}");
+    }
+
+    /**
+     * Builds the headers of a {@code tools/call} for {@link HeaderParamTool#TENANT_ECHO}, adding the given extra header
+     * name/value pairs verbatim so that a test can spell an {@code Mcp-Param-*} name in any case it likes.
+     *
+     * @param extra header name/value pairs, of even length
+     * @return the headers
+     */
+    public static Map<String, String> designatedCallHeaders(String... extra) {
+        Map<String, String> headers = headers("tools/call", HeaderParamTool.TENANT_ECHO);
+        for (int i = 0; i < extra.length; i += 2) {
+            headers.put(extra[i], extra[i + 1]);
+        }
+        return headers;
+    }
+
+    /** The three malformed {@code =?base64?…?=} payloads every container suite checks answer 400 rather than 500. */
+    public static String[] malformedBase64Values() {
+        return new String[] {"=?base64?YWNtZQ?=", "=?base64?YWN!!tZQ==?=", "=?base64?YWNtZQ====?="};
+    }
 }

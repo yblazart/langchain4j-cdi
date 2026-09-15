@@ -516,6 +516,123 @@ public abstract class AbstractMcpIntegrationTest {
         assertThat(legacyTool).doesNotContainKey("icons");
     }
 
+    // --- SEP-2243 request half: Mcp-Param-<designation> validated against the body ---
+
+    /**
+     * Posts a {@code tools/call} for {@link HeaderParamTool#TENANT_ECHO} with {@code tenant=acme, attempt=7} in the
+     * body and the given {@code Mcp-Param-*} headers on the request.
+     *
+     * @param id the JSON-RPC id
+     * @param paramHeaders header name/value pairs to add, {@code Mcp-Param-…} included verbatim
+     * @return the raw HTTP response
+     */
+    private McpHttpResponse postDesignatedCall(int id, String... paramHeaders) {
+        return transport()
+                .post(
+                        "/mcp",
+                        McpModernTestRequests.designatedCallBody(id),
+                        McpModernTestRequests.designatedCallHeaders(paramHeaders));
+    }
+
+    @Test
+    void shouldAcceptMirroredParamHeadersMatchingTheBody() {
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(
+                postDesignatedCall(
+                        130,
+                        "Mcp-Param-" + HeaderParamTool.TENANT_HEADER,
+                        "acme",
+                        "Mcp-Param-" + HeaderParamTool.ATTEMPT_HEADER,
+                        "7"),
+                130);
+
+        assertThat(result.getJsonArray(CONTENT).getJsonObject(0).getString("text"))
+                .isEqualTo("tenant=acme, attempt=7");
+    }
+
+    @Test
+    void shouldMatchParamHeaderNamesCaseInsensitively() {
+        // the container owns the header lookup; SEP-2243 requires the name comparison to be case-insensitive
+        JsonRpcAssertions.assertJsonRpcSuccess(
+                postDesignatedCall(131, "mcp-param-tenant-id", "acme", "MCP-PARAM-ATTEMPT", "7"), 131);
+    }
+
+    @Test
+    void shouldAcceptABase64WrappedParamHeader() {
+        // "acme" -> YWNtZQ==
+        JsonRpcAssertions.assertJsonRpcSuccess(
+                postDesignatedCall(
+                        132,
+                        "Mcp-Param-" + HeaderParamTool.TENANT_HEADER,
+                        "=?base64?YWNtZQ==?=",
+                        "Mcp-Param-" + HeaderParamTool.ATTEMPT_HEADER,
+                        "7"),
+                132);
+    }
+
+    @Test
+    void shouldRejectAParamHeaderDisagreeingWithTheBody() {
+        McpHttpResponse response = postDesignatedCall(
+                133,
+                "Mcp-Param-" + HeaderParamTool.TENANT_HEADER,
+                "evilcorp",
+                "Mcp-Param-" + HeaderParamTool.ATTEMPT_HEADER,
+                "7");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 133, -32020);
+    }
+
+    @Test
+    void shouldRejectAnOmittedParamHeaderWhenTheBodyCarriesTheValue() {
+        McpHttpResponse response = postDesignatedCall(134, "Mcp-Param-" + HeaderParamTool.ATTEMPT_HEADER, "7");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 134, -32020);
+    }
+
+    @Test
+    void shouldRejectAnIntegerParamHeaderThatIsNotTheDecimalBodyValue() {
+        McpHttpResponse response = postDesignatedCall(
+                135,
+                "Mcp-Param-" + HeaderParamTool.TENANT_HEADER,
+                "acme",
+                "Mcp-Param-" + HeaderParamTool.ATTEMPT_HEADER,
+                "8");
+
+        JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 135, -32020);
+    }
+
+    /** A malformed Base64 payload must be a 400, not an unchecked exception surfacing as a 500. */
+    @Test
+    void shouldRejectMalformedBase64ParamHeaderWith400NotWith500() {
+        for (String malformed : McpModernTestRequests.malformedBase64Values()) {
+            McpHttpResponse response = postDesignatedCall(
+                    136,
+                    "Mcp-Param-" + HeaderParamTool.TENANT_HEADER,
+                    malformed,
+                    "Mcp-Param-" + HeaderParamTool.ATTEMPT_HEADER,
+                    "7");
+
+            assertThat(response.statusCode()).as(malformed).isEqualTo(400);
+            JsonRpcAssertions.assertHttpJsonRpcError(response, 400, 136, -32020);
+        }
+    }
+
+    /** The 2025-03-26 era predates SEP-2243: it must ignore every {@code Mcp-Param-*} header. */
+    @Test
+    void shouldIgnoreParamHeadersInTheLegacyEra() {
+        String sessionId = initializeSession();
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":137,\"method\":\"tools/call\",\"params\":{\"name\":\""
+                + HeaderParamTool.TENANT_ECHO + "\",\"arguments\":{\"tenant\":\"acme\",\"attempt\":7}}}";
+        Map<String, String> headers = new HashMap<>();
+        headers.put(MCP_SESSION_ID, sessionId);
+        // a value the modern era would reject twice over: it disagrees with the body, and its Base64 is malformed
+        headers.put("Mcp-Param-" + HeaderParamTool.TENANT_HEADER, "=?base64?ZXZpbA?=");
+
+        JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(transport().post("/mcp", body, headers), 137);
+
+        assertThat(result.getJsonArray(CONTENT).getJsonObject(0).getString("text"))
+                .isEqualTo("tenant=acme, attempt=7");
+    }
+
     @Test
     void shouldCallToolWithModernRequest() {
         JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(
