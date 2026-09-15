@@ -21,6 +21,7 @@ The server is **dual-era**: on the same `/mcp` endpoint it speaks both MCP **202
   - [Tools](#tools)
   - [Prompts](#prompts)
   - [Resources](#resources)
+  - [Icons](#icons)
   - [Framework Types (Logging, Progress, Cancellation…)](#framework-types)
   - [Protocol Versions & Compatibility](#protocol-versions--compatibility)
   - [Client Interactions with MCP 2026-07-28](#client-interactions-with-mcp-2026-07-28)
@@ -306,6 +307,51 @@ public String userProfile(@ResourceTemplateArg(name = "userId") String userId) {
 > **Caveat:** a variable that *ends* the template deliberately captures the rest of the URI, slashes included, so `file:///{path}` matches `file:///a/b/c.txt` with `path = "a/b/c.txt"`. Strict RFC 6570 level-1 expansion percent-encodes `/` and would never produce such a URI, so this is a deliberate convenience: a template ending in a variable is greedy, and one that should only match a single segment must be written with something after it (`file:///{name}/content`). Variable values are percent-decoded; a value that is not valid percent-encoding (`100%`, `a%zz`) is passed through unchanged rather than rejected.
 
 > Without `@ResourceTemplateArg(name = …)` — and likewise without `@ToolArg(name = …)` / `@PromptArg(name = …)` — arguments are named after the Java parameter, which requires the module holding your beans to be **compiled with `-parameters`**; otherwise they are advertised and bound as `arg0`, `arg1`, … Set `<maven.compiler.parameters>true</maven.compiler.parameters>` in your application's POM.
+
+### Icons
+
+Tools, prompts, resources and resource templates can advertise icons a client renders next to them. The contract is the upstream one from `org.mcpjava:mcp-server-api` — there is no annotation of our own:
+
+```java
+@Icons(iconProvider = BrandIcons.class)          // on the type: covers every feature the bean declares
+@ApplicationScoped
+public class WeatherTool {
+
+    @Tool(description = "Get the current weather for a given city")
+    @Icons(iconProvider = WeatherIcons.class)    // on the method: wins over the type-level one
+    public String getWeather(String city) { … }
+}
+
+@ApplicationScoped                               // a CDI bean, or any class with a no-arg constructor
+public class WeatherIcons implements IconProvider {
+
+    @Override
+    public List<Icon> getIcons(FeatureType featureType, String name) {
+        return List.of(Icon.builder("https://example.org/weather.png")
+                .setMimeType("image/png")
+                .addSize(48, 48)
+                .setTheme(Icon.Theme.LIGHT)
+                .build());
+    }
+}
+```
+
+- **Where `@Icons` is accepted** — exactly where the annotation's `@Target({TYPE, METHOD})` allows it: on the feature method, and on the class declaring it. The method-level annotation wins; otherwise the CDI bean class is consulted, then the method's declaring class (they differ for an inherited feature).
+- **How the provider is resolved** — as a CDI bean when the container knows one, otherwise through its no-argument constructor. `getIcons` is called **once, at registration time**, with the feature's `FeatureType` and its registered **name** (for a resource that is the `name`, not the `uri`, as the `IconProvider` javadoc specifies).
+- **Failures break the deployment.** A provider that cannot be resolved, is ambiguous, cannot be instantiated, throws, or returns an icon without a `src` raises `McpIconProviderException` while the feature is being registered, with a message naming the feature and the provider class. Icons are optional everywhere in the schema, so a call-time failure would silently drop them from the client's catalogue instead.
+- **No icons means no key.** A provider returning `null` or an empty list emits no `icons` member at all, never an empty array. Optional icon members (`mimeType`, `sizes`, `theme`) are likewise omitted when unset.
+- **2026-07-28 only.** `icons` exists on `Tool`, `Prompt`, `Resource` and `ResourceTemplate` in the 2026-07-28 schema and in none of the 2025-03-26 definitions, so the legacy era's listings are unchanged — byte for byte.
+
+```jsonc
+// tools/list, MCP 2026-07-28
+{ "description": "Get the current weather for a given city",
+  "icons": [ { "mimeType": "image/png", "sizes": ["48x48"],
+               "src": "https://example.org/weather.png", "theme": "light" } ],
+  "inputSchema": { … },
+  "name": "getWeather" }
+```
+
+> **Caveat (Quarkus):** `Icon.of(…)` / `Icon.builder(…)` go through `org.mcpjava.server.spi.McpServerSPILoader`, which loads the SPI with `McpServerSPI.class.getClassLoader()`. Under Quarkus the API jar sits in the base runtime class loader while `langchain4j-cdi-mcp-server` (which carries the `META-INF/services` entry) is an application archive in the child loader, so the lookup fails with `No McpServerSPI implementation found`. This is an upstream loader limitation shared by every `org.mcpjava` static factory (`ToolResponse.builder()`, `TextContent.of()`, …), not something specific to icons; until it is fixed upstream, a Quarkus provider can implement the four-method `Icon` interface directly.
 
 ### Framework Types
 

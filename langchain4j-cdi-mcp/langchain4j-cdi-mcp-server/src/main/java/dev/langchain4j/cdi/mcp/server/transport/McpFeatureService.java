@@ -161,11 +161,28 @@ public class McpFeatureService {
      * @return the {@code resources/list} result as a JSON object
      */
     public JsonObject listResources(String cursor) {
+        return listResources(cursor, false);
+    }
+
+    /**
+     * Lists the registered resources for a given protocol era.
+     *
+     * @param cursor the pagination cursor, or {@code null} for the first page
+     * @param modernEra {@code true} for MCP 2026-07-28, whose {@code Resource} definition carries {@code icons};
+     *     {@code false} for the 2025-03-26 legacy era, which has no such member and whose output is therefore unchanged
+     * @return the {@code resources/list} result as a JSON object
+     */
+    public JsonObject listResources(String cursor, boolean modernEra) {
         McpPagination.Page<McpResourceDescriptor> page =
                 McpPagination.paginate(new ArrayList<>(resourceRegistry.listResources()), cursor);
         McpListResourcesResult result = new McpListResourcesResult(
                 page.items().stream()
-                        .map(r -> McpResourceModel.of(r.getUri(), r.getName(), r.getDescription(), r.getMimeType()))
+                        .map(r -> McpResourceModel.of(
+                                r.getUri(),
+                                r.getName(),
+                                r.getDescription(),
+                                r.getMimeType(),
+                                modernEra ? r.getIcons() : null))
                         .toList(),
                 nextCursor(page));
         return McpJsonSerializer.toJsonObject(result);
@@ -178,12 +195,29 @@ public class McpFeatureService {
      * @return the {@code resources/templates/list} result as a JSON object
      */
     public JsonObject listResourceTemplates(String cursor) {
+        return listResourceTemplates(cursor, false);
+    }
+
+    /**
+     * Lists the registered resource templates for a given protocol era.
+     *
+     * @param cursor the pagination cursor, or {@code null} for the first page
+     * @param modernEra {@code true} for MCP 2026-07-28, whose {@code ResourceTemplate} definition carries
+     *     {@code icons}; {@code false} for the 2025-03-26 legacy era, which has no such member and whose output is
+     *     therefore unchanged
+     * @return the {@code resources/templates/list} result as a JSON object
+     */
+    public JsonObject listResourceTemplates(String cursor, boolean modernEra) {
         McpPagination.Page<McpResourceTemplateDescriptor> page =
                 McpPagination.paginate(new ArrayList<>(resourceRegistry.listTemplates()), cursor);
         McpListResourceTemplatesResult result = new McpListResourceTemplatesResult(
                 page.items().stream()
                         .map(t -> McpResourceTemplateModel.of(
-                                t.getUriTemplate(), t.getName(), t.getDescription(), t.getMimeType()))
+                                t.getUriTemplate(),
+                                t.getName(),
+                                t.getDescription(),
+                                t.getMimeType(),
+                                modernEra ? t.getIcons() : null))
                         .toList(),
                 nextCursor(page));
         return McpJsonSerializer.toJsonObject(result);
@@ -196,6 +230,18 @@ public class McpFeatureService {
      * @return the {@code prompts/list} result as a JSON object
      */
     public JsonObject listPrompts(String cursor) {
+        return listPrompts(cursor, false);
+    }
+
+    /**
+     * Lists the registered prompts for a given protocol era.
+     *
+     * @param cursor the pagination cursor, or {@code null} for the first page
+     * @param modernEra {@code true} for MCP 2026-07-28, whose {@code Prompt} definition carries {@code icons};
+     *     {@code false} for the 2025-03-26 legacy era, which has no such member and whose output is therefore unchanged
+     * @return the {@code prompts/list} result as a JSON object
+     */
+    public JsonObject listPrompts(String cursor, boolean modernEra) {
         McpPagination.Page<McpPromptDescriptor> page =
                 McpPagination.paginate(new ArrayList<>(promptRegistry.listPrompts()), cursor);
         McpListPromptsResult result = new McpListPromptsResult(
@@ -205,7 +251,8 @@ public class McpFeatureService {
                                 p.getDescription(),
                                 p.getArguments().stream()
                                         .map(a -> new McpPromptArgument(a.name(), a.description(), a.required()))
-                                        .toList()))
+                                        .toList(),
+                                modernEra ? p.getIcons() : null))
                         .toList(),
                 nextCursor(page));
         return McpJsonSerializer.toJsonObject(result);

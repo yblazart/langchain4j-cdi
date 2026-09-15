@@ -124,15 +124,15 @@ class McpModernProtocolHandlerTest {
                 .thenReturn(Json.createObjectBuilder()
                         .add("tools", Json.createArrayBuilder())
                         .build());
-        when(features.listPrompts(null))
+        when(features.listPrompts(null, true))
                 .thenReturn(Json.createObjectBuilder()
                         .add("prompts", Json.createArrayBuilder())
                         .build());
-        when(features.listResources(null))
+        when(features.listResources(null, true))
                 .thenReturn(Json.createObjectBuilder()
                         .add("resources", Json.createArrayBuilder())
                         .build());
-        when(features.listResourceTemplates(null))
+        when(features.listResourceTemplates(null, true))
                 .thenReturn(Json.createObjectBuilder()
                         .add("resourceTemplates", Json.createArrayBuilder())
                         .build());

@@ -1,5 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
+import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
 import java.lang.reflect.Method;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.mcpjava.server.FeatureType;
 import org.mcpjava.server.resources.ResourceTemplate;
 
 /**
@@ -36,9 +38,10 @@ public class McpResourceTemplateDescriptor {
     private final Method method;
     private final List<String> variableNames;
     private final Pattern uriPattern;
+    private final List<McpIconModel> icons;
 
     /**
-     * Creates a new resource template descriptor.
+     * Creates a new resource template descriptor carrying no icons.
      *
      * @param uriTemplate the URI template pattern
      * @param name the resource template name
@@ -49,6 +52,29 @@ public class McpResourceTemplateDescriptor {
      */
     public McpResourceTemplateDescriptor(
             String uriTemplate, String name, String description, String mimeType, Class<?> beanType, Method method) {
+        this(uriTemplate, name, description, mimeType, beanType, method, null);
+    }
+
+    /**
+     * Creates a new resource template descriptor.
+     *
+     * @param uriTemplate the URI template pattern
+     * @param name the resource template name
+     * @param description the resource template description
+     * @param mimeType the MIME type of the resource content
+     * @param beanType the CDI bean class that declares the resource template method
+     * @param method the annotated method
+     * @param icons the icons resolved from {@code @Icons} at registration time, or {@code null} when there are none
+     */
+    public McpResourceTemplateDescriptor(
+            String uriTemplate,
+            String name,
+            String description,
+            String mimeType,
+            Class<?> beanType,
+            Method method,
+            List<McpIconModel> icons) {
+        this.icons = icons;
         this.uriTemplate = uriTemplate;
         this.name = name;
         this.description = description;
@@ -143,7 +169,22 @@ public class McpResourceTemplateDescriptor {
         String name = DEFAULT_NAME.equals(annotation.name()) ? method.getName() : annotation.name();
         String mimeType = annotation.mimeType().isEmpty() ? "text/plain" : annotation.mimeType();
         return new McpResourceTemplateDescriptor(
-                annotation.uriTemplate(), name, annotation.description(), mimeType, beanClass, method);
+                annotation.uriTemplate(),
+                name,
+                annotation.description(),
+                mimeType,
+                beanClass,
+                method,
+                McpIconResolver.resolve(FeatureType.RESOURCE_TEMPLATE, name, beanClass, method));
+    }
+
+    /**
+     * Returns the icons resolved from an {@code org.mcpjava.server.Icons} annotation at registration time.
+     *
+     * @return the icons, or {@code null} when the resource template declares none
+     */
+    public List<McpIconModel> getIcons() {
+        return icons;
     }
 
     /**

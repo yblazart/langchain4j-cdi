@@ -1,6 +1,9 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
+import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
 import java.lang.reflect.Method;
+import java.util.List;
+import org.mcpjava.server.FeatureType;
 import org.mcpjava.server.resources.Resource;
 
 /**
@@ -17,9 +20,10 @@ public class McpResourceDescriptor {
     private final String mimeType;
     private final Class<?> beanType;
     private final Method method;
+    private final List<McpIconModel> icons;
 
     /**
-     * Creates a new resource descriptor.
+     * Creates a new resource descriptor carrying no icons.
      *
      * @param uri the resource URI
      * @param name the resource name
@@ -30,12 +34,35 @@ public class McpResourceDescriptor {
      */
     public McpResourceDescriptor(
             String uri, String name, String description, String mimeType, Class<?> beanType, Method method) {
+        this(uri, name, description, mimeType, beanType, method, null);
+    }
+
+    /**
+     * Creates a new resource descriptor.
+     *
+     * @param uri the resource URI
+     * @param name the resource name
+     * @param description the resource description
+     * @param mimeType the MIME type of the resource content
+     * @param beanType the CDI bean class that declares the resource method
+     * @param method the annotated method
+     * @param icons the icons resolved from {@code @Icons} at registration time, or {@code null} when there are none
+     */
+    public McpResourceDescriptor(
+            String uri,
+            String name,
+            String description,
+            String mimeType,
+            Class<?> beanType,
+            Method method,
+            List<McpIconModel> icons) {
         this.uri = uri;
         this.name = name;
         this.description = description;
         this.mimeType = mimeType;
         this.beanType = beanType;
         this.method = method;
+        this.icons = icons;
     }
 
     /**
@@ -49,7 +76,23 @@ public class McpResourceDescriptor {
         Resource annotation = method.getAnnotation(Resource.class);
         String name = DEFAULT_NAME.equals(annotation.name()) ? method.getName() : annotation.name();
         String mimeType = annotation.mimeType().isEmpty() ? "text/plain" : annotation.mimeType();
-        return new McpResourceDescriptor(annotation.uri(), name, annotation.description(), mimeType, beanClass, method);
+        return new McpResourceDescriptor(
+                annotation.uri(),
+                name,
+                annotation.description(),
+                mimeType,
+                beanClass,
+                method,
+                McpIconResolver.resolve(FeatureType.RESOURCE, name, beanClass, method));
+    }
+
+    /**
+     * Returns the icons resolved from an {@code org.mcpjava.server.Icons} annotation at registration time.
+     *
+     * @return the icons, or {@code null} when the resource declares none
+     */
+    public List<McpIconModel> getIcons() {
+        return icons;
     }
 
     /**

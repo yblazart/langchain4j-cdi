@@ -93,11 +93,11 @@ public class McpModernProtocolHandler {
                 case "tools/list" ->
                     ok(id, complete(cacheable(features.listTools(McpFeatureService.cursor(params), true))));
                 case "resources/list" ->
-                    ok(id, complete(cacheable(features.listResources(McpFeatureService.cursor(params)))));
+                    ok(id, complete(cacheable(features.listResources(McpFeatureService.cursor(params), true))));
                 case "resources/templates/list" ->
-                    ok(id, complete(cacheable(features.listResourceTemplates(McpFeatureService.cursor(params)))));
+                    ok(id, complete(cacheable(features.listResourceTemplates(McpFeatureService.cursor(params), true))));
                 case "prompts/list" ->
-                    ok(id, complete(cacheable(features.listPrompts(McpFeatureService.cursor(params)))));
+                    ok(id, complete(cacheable(features.listPrompts(McpFeatureService.cursor(params), true))));
                 case "completion/complete" -> ok(id, complete(features.complete(id, params)));
                 case "tools/call", "prompts/get", "resources/read" -> invoke(request, protocol, acceptsSse);
                 case McpListenRoutingFilter.LISTEN_METHOD -> throw listenNotRouted(id);
