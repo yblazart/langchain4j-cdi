@@ -19,13 +19,13 @@ import java.lang.annotation.Target;
  *
  * <pre>{@code
  * @Tool(name = "example")
- * String example(@ToolArg(name = "tenant") @McpHeaderArg("X-Tenant-Id") String tenant) { ... }
+ * String example(@ToolArg(name = "tenant") @McpHeader("X-Tenant-Id") String tenant) { ... }
  * }</pre>
  *
  * <h2>Constraints</h2>
  *
  * SEP-2243 puts four constraints on the value, all enforced at registration time by
- * {@code dev.langchain4j.cdi.mcp.server.schema.McpHeaderArgValidator}:
+ * {@code dev.langchain4j.cdi.mcp.server.schema.McpHeaderValidator}:
  *
  * <ol>
  *   <li>it must not be empty;
@@ -48,11 +48,16 @@ import java.lang.annotation.Target;
  * {@link org.mcpjava.server.tools.ToolArg} exposes only {@code name}, {@code description}, {@code required} and
  * {@code defaultValue}. It is intended to migrate to that project should it adopt SEP-2243, at which point this
  * annotation would be deprecated in favour of the upstream one.
+ *
+ * <p>The name follows the WildFly MCP implementation, which independently arrived at {@code @Header} for this same
+ * SEP-2243 keyword. Agreeing on the noun now — while nothing is released — costs nothing and makes a later convergence
+ * on an {@code org.mcpjava} annotation cheaper. See <a
+ * href="https://github.com/mcp-java/java-mcp-annotations/issues/70">mcp-java/java-mcp-annotations#70</a>.
  */
 @Documented
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface McpHeaderArg {
+public @interface McpHeader {
 
     /**
      * The header name suffix carried in the {@code x-mcp-header} schema keyword; a client mirrors the argument value

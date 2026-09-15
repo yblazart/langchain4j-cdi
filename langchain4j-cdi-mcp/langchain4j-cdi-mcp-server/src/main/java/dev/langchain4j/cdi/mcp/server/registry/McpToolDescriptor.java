@@ -2,7 +2,7 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolModel;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
-import dev.langchain4j.cdi.mcp.server.schema.McpHeaderArgValidator;
+import dev.langchain4j.cdi.mcp.server.schema.McpHeaderValidator;
 import jakarta.json.JsonObject;
 import java.lang.reflect.Method;
 import org.mcpjava.server.tools.Tool;
@@ -65,14 +65,14 @@ public class McpToolDescriptor {
      * @param beanClass the CDI bean class that declares the method
      * @param method the method annotated with {@link Tool}
      * @return a new descriptor populated from the annotation and method signature
-     * @throws dev.langchain4j.cdi.mcp.server.error.McpHeaderArgDefinitionException if an
-     *     {@link dev.langchain4j.cdi.mcp.server.api.McpHeaderArg} designation violates SEP-2243
+     * @throws dev.langchain4j.cdi.mcp.server.error.McpHeaderDefinitionException if an
+     *     {@link dev.langchain4j.cdi.mcp.server.api.McpHeader} designation violates SEP-2243
      */
     public static McpToolDescriptor fromMethod(Class<?> beanClass, Method method) {
         Tool tool = method.getAnnotation(Tool.class);
         String toolName = DEFAULT_NAME.equals(tool.name()) ? method.getName() : tool.name();
         String toolDescription = tool.description();
-        McpHeaderArgValidator.validate(toolName, method);
+        McpHeaderValidator.validate(toolName, method);
         return new McpToolDescriptor(
                 toolName,
                 toolDescription,

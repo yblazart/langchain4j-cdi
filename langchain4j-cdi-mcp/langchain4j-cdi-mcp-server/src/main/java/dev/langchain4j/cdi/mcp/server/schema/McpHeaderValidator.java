@@ -1,8 +1,8 @@
 package dev.langchain4j.cdi.mcp.server.schema;
 
 import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
-import dev.langchain4j.cdi.mcp.server.api.McpHeaderArg;
-import dev.langchain4j.cdi.mcp.server.error.McpHeaderArgDefinitionException;
+import dev.langchain4j.cdi.mcp.server.api.McpHeader;
+import dev.langchain4j.cdi.mcp.server.error.McpHeaderDefinitionException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
@@ -18,29 +18,29 @@ import java.util.Set;
  * value therefore produces no error a user would ever see, it just makes the tool silently vanish from the client's
  * catalogue. Failing the deployment is the only place the mistake is visible.
  *
- * @see McpHeaderArg
+ * @see McpHeader
  */
-public final class McpHeaderArgValidator {
+public final class McpHeaderValidator {
 
     /** JSON Schema types a designation may be applied to. {@code number} is excluded by the spec. */
     private static final Set<String> PERMITTED_TYPES = Set.of("string", "integer", "boolean");
 
     private static final String PERMITTED_TYPES_TEXT = "integer, string, boolean";
 
-    private McpHeaderArgValidator() {}
+    private McpHeaderValidator() {}
 
     /**
-     * Validates every {@link McpHeaderArg} designation on the given tool method.
+     * Validates every {@link McpHeader} designation on the given tool method.
      *
      * @param toolName the tool's advertised name, used in the failure message
      * @param method the {@code @Tool} method to inspect
-     * @throws McpHeaderArgDefinitionException if any designation violates SEP-2243
+     * @throws McpHeaderDefinitionException if any designation violates SEP-2243
      */
     public static void validate(String toolName, Method method) {
         Map<String, String> designatedBy = new HashMap<>();
 
         for (Parameter param : method.getParameters()) {
-            McpHeaderArg designation = param.getAnnotation(McpHeaderArg.class);
+            McpHeader designation = param.getAnnotation(McpHeader.class);
             if (designation == null) {
                 continue;
             }
@@ -102,10 +102,10 @@ public final class McpHeaderArgValidator {
         return true;
     }
 
-    private static McpHeaderArgDefinitionException fail(
+    private static McpHeaderDefinitionException fail(
             String toolName, String paramName, String headerName, String rule) {
-        return new McpHeaderArgDefinitionException("Tool '" + toolName + "', parameter '" + paramName
-                + "': invalid @McpHeaderArg(\"" + headerName + "\") — " + rule
+        return new McpHeaderDefinitionException("Tool '" + toolName + "', parameter '" + paramName
+                + "': invalid @McpHeader(\"" + headerName + "\") — " + rule
                 + ". SEP-2243 requires clients to exclude a tool with an invalid designation from tools/list, "
                 + "so this tool would silently disappear from every conforming client.");
     }

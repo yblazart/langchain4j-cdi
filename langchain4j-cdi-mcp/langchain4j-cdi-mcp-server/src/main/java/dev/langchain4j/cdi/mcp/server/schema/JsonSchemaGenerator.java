@@ -1,7 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.schema;
 
 import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
-import dev.langchain4j.cdi.mcp.server.api.McpHeaderArg;
+import dev.langchain4j.cdi.mcp.server.api.McpHeader;
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
@@ -54,10 +54,10 @@ public class JsonSchemaGenerator {
             String description = annotation != null ? annotation.description() : "";
             boolean isRequired = annotation == null || annotation.required();
 
-            McpHeaderArg headerArg = includeHeaderDesignations ? param.getAnnotation(McpHeaderArg.class) : null;
+            McpHeader header = includeHeaderDesignations ? param.getAnnotation(McpHeader.class) : null;
             properties.add(
                     paramName,
-                    buildPropertySchema(param.getType(), description, headerArg == null ? null : headerArg.value()));
+                    buildPropertySchema(param.getType(), description, header == null ? null : header.value()));
             if (isRequired) {
                 required.add(paramName);
             }

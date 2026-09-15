@@ -2,7 +2,7 @@ package dev.langchain4j.cdi.mcp.conformance;
 
 import dev.langchain4j.cdi.mcp.server.api.Elicitation;
 import dev.langchain4j.cdi.mcp.server.api.ElicitationResponse;
-import dev.langchain4j.cdi.mcp.server.api.McpHeaderArg;
+import dev.langchain4j.cdi.mcp.server.api.McpHeader;
 import dev.langchain4j.cdi.mcp.server.api.McpLog;
 import dev.langchain4j.cdi.mcp.server.api.Sampling;
 import dev.langchain4j.cdi.mcp.server.api.SamplingResponse;
@@ -122,13 +122,13 @@ public class ConformanceTools {
             description = "Tests SEP-2243 x-mcp-header argument designations on a tool definition")
     public ToolResponse testCustomHeaderTool(
             @ToolArg(name = "tenantId", description = "Tenant identifier, mirrored into Mcp-Param-Tenant-Id")
-                    @McpHeaderArg("Tenant-Id")
+                    @McpHeader("Tenant-Id")
                     String tenantId,
             @ToolArg(name = "attempt", description = "Attempt number, mirrored into Mcp-Param-Attempt")
-                    @McpHeaderArg("Attempt")
+                    @McpHeader("Attempt")
                     int attempt,
             @ToolArg(name = "verbose", description = "Verbosity flag, mirrored into Mcp-Param-Verbose")
-                    @McpHeaderArg("Verbose")
+                    @McpHeader("Verbose")
                     boolean verbose) {
         return ToolResponse.ofText("tenantId=" + tenantId + ", attempt=" + attempt + ", verbose=" + verbose);
     }

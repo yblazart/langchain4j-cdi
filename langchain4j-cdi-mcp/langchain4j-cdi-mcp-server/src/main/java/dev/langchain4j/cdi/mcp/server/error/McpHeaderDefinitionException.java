@@ -8,7 +8,7 @@ package dev.langchain4j.cdi.mcp.server.error;
  * invalid designation from {@code tools/list}, so the tool would otherwise disappear from the client's catalogue with
  * no error raised anywhere the server author could see.
  */
-public class McpHeaderArgDefinitionException extends RuntimeException {
+public class McpHeaderDefinitionException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
@@ -17,7 +17,7 @@ public class McpHeaderArgDefinitionException extends RuntimeException {
      *
      * @param message a description naming the tool, the parameter and the violated rule
      */
-    public McpHeaderArgDefinitionException(String message) {
+    public McpHeaderDefinitionException(String message) {
         super(message);
     }
 }

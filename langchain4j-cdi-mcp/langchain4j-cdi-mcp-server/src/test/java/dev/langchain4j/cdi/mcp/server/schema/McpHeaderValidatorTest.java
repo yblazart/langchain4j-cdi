@@ -3,7 +3,7 @@ package dev.langchain4j.cdi.mcp.server.schema;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.langchain4j.cdi.mcp.server.error.McpHeaderArgDefinitionException;
+import dev.langchain4j.cdi.mcp.server.error.McpHeaderDefinitionException;
 import dev.langchain4j.cdi.mcp.server.fixtures.HeaderArgTool;
 import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import java.lang.reflect.Method;
@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * SEP-2243 puts four constraints on {@code x-mcp-header}. A client MUST exclude a tool that violates any of them from
  * {@code tools/list}, so the tool would vanish silently: these must fail at registration, loudly.
  */
-class McpHeaderArgValidatorTest {
+class McpHeaderValidatorTest {
 
     private static Method method(String name, Class<?>... params) throws Exception {
         return HeaderArgTool.class.getMethod(name, params);
@@ -34,7 +34,7 @@ class McpHeaderArgValidatorTest {
         Method empty = method("empty", String.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, empty))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("empty_designation")
                 .hasMessageContaining("tenant")
                 .hasMessageContaining("MUST NOT be empty");
@@ -45,7 +45,7 @@ class McpHeaderArgValidatorTest {
         Method space = method("space", String.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, space))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("space_designation")
                 .hasMessageContaining("tenant")
                 .hasMessageContaining("only ASCII characters, excluding space and ':'");
@@ -56,7 +56,7 @@ class McpHeaderArgValidatorTest {
         Method colon = method("colon", String.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, colon))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("colon_designation")
                 .hasMessageContaining("only ASCII characters, excluding space and ':'");
     }
@@ -66,7 +66,7 @@ class McpHeaderArgValidatorTest {
         Method nonAscii = method("nonAscii", String.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, nonAscii))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("non_ascii_designation")
                 .hasMessageContaining("only ASCII characters, excluding space and ':'");
     }
@@ -76,7 +76,7 @@ class McpHeaderArgValidatorTest {
         Method duplicate = method("duplicate", String.class, String.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, duplicate))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("duplicate_designation")
                 .hasMessageContaining("otherTenant")
                 .hasMessageContaining("case-insensitively unique")
@@ -88,7 +88,7 @@ class McpHeaderArgValidatorTest {
         Method doubleArg = method("doubleArg", double.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, doubleArg))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("double_designation")
                 .hasMessageContaining("amount")
                 .hasMessageContaining("integer, string, boolean")
@@ -100,7 +100,7 @@ class McpHeaderArgValidatorTest {
         Method floatArg = method("floatArg", float.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, floatArg))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("float_designation")
                 .hasMessageContaining("integer, string, boolean");
     }
@@ -110,7 +110,7 @@ class McpHeaderArgValidatorTest {
         Method bigDecimalArg = method("bigDecimalArg", BigDecimal.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, bigDecimalArg))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("big_decimal_designation")
                 .hasMessageContaining("integer, string, boolean");
     }
@@ -120,7 +120,7 @@ class McpHeaderArgValidatorTest {
         Method frameworkArg = method("frameworkArg", dev.langchain4j.cdi.mcp.server.api.McpLog.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, frameworkArg))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("framework_type_designation")
                 .hasMessageContaining("not part of the tool's input schema");
     }
@@ -130,7 +130,7 @@ class McpHeaderArgValidatorTest {
         Method objectArg = method("objectArg", List.class);
 
         assertThatThrownBy(() -> McpToolDescriptor.fromMethod(HeaderArgTool.class, objectArg))
-                .isInstanceOf(McpHeaderArgDefinitionException.class)
+                .isInstanceOf(McpHeaderDefinitionException.class)
                 .hasMessageContaining("object_designation")
                 .hasMessageContaining("payload")
                 .hasMessageContaining("integer, string, boolean");
