@@ -229,7 +229,7 @@ public String importData(
     log.info("Starting import of " + path);
 
     for (int i = 0; i < 100; i++) {
-        if (cancellation.check().isCancelled()) {
+        if (cancellation.check().isRequested()) {
             return "Import cancelled at " + i + "%";
         }
         // ... process chunk ...
@@ -240,17 +240,45 @@ public String importData(
 }
 ```
 
-| Type | Description |
-|------|-------------|
-| `McpLog` | Send log messages (`debug`, `info`, `warning`, `error`) to the client |
-| `Progress` | Report progress for long-running operations |
-| `Cancellation` | Check if the client has cancelled the current request |
-| `McpConnection` | Access session and connection information |
-| `Roots` | Access the client's file system roots |
-| `Sampling` | Request LLM completions from the client |
-| `Elicitation` | Request user input from the client |
+| Type | Package | Description |
+|------|---------|-------------|
+| `McpLog` | `dev.langchain4j.cdi.mcp.server.api` | Send log messages (`debug`, `info`, `warning`, `error`) to the client |
+| `Progress` | `org.mcpjava.server.progress` | Report progress for long-running operations |
+| `Cancellation` | `org.mcpjava.server` | Check if the client has cancelled the current request |
+| `McpConnection` | `dev.langchain4j.cdi.mcp.server.api` | Access session and connection information |
+| `Roots` | `dev.langchain4j.cdi.mcp.server.api` | Access the client's file system roots |
+| `Sampling` | `dev.langchain4j.cdi.mcp.server.api` | Request LLM completions from the client |
+| `Elicitation` | `dev.langchain4j.cdi.mcp.server.api` | Request user input from the client |
 
-All types are from the `org.mcpjava.server` package.
+`Roots` and `Sampling` hand back wire-format records from `dev.langchain4j.cdi.mcp.server.protocol` (`McpRoot`,
+`McpSamplingMessage`, `McpModelPreferences`).
+
+### Server Identity
+
+The server name and version advertised to clients during `initialize` default to `langchain4j-cdi` / `unknown`.
+Produce a `@Named("mcp-server")` `McpServerConfig` bean to override them:
+
+```java
+import dev.langchain4j.cdi.mcp.server.transport.McpServerConfig;
+
+@Produces
+@ApplicationScoped
+@Named("mcp-server")
+public McpServerConfig mcpServerConfig() {
+    return McpServerConfig.builder()
+            .serverName("car-booking")
+            .serverVersion("1.0.0")
+            .build();
+}
+```
+
+### Java Module (JPMS) Consumers
+
+On a strict module path, `requires dev.langchain4j.cdi.mcp.server;` is enough: the module exports
+`…server.api`, `…server.protocol`, `…server.registry` and `…server.transport`. Everything else
+(`…server.error`, `…server.logging`, `…server.schema`, `…server.spi`) is internal and intentionally not
+exported. The `langchain4j-cdi-jlink` module compiles a stand-in consumer against this surface on every
+`-Pjlink-vidocq verify` run, so an export that goes missing fails the build.
 
 ---
 
