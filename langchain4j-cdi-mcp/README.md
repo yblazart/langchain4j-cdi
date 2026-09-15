@@ -234,6 +234,23 @@ SEP-2243 puts four constraints on the value; all are checked when the tool is re
 
 Failing at deployment is deliberate: a client MUST *exclude* a tool whose designation is invalid from `tools/list`, so a malformed value produces no error anywhere — the tool simply vanishes from the client's catalogue.
 
+On the request side, the 2026-07-28 endpoint **validates the headers a client mirrors back** before it dispatches `tools/call`. For every designated argument, `Mcp-Param-<designation>` must agree with the request body; a disagreement is answered **HTTP 400** with JSON-RPC error **`-32020` (HeaderMismatch)** and the tool is never invoked:
+
+| Case | Outcome |
+|---|---|
+| header and body agree (after decoding) | accepted |
+| header carries `=?base64?<payload>?=` that decodes to the body value | accepted — an integer is compared as its decimal string, a boolean as lowercase `true`/`false` |
+| value missing either `=?base64?` or `?=` | compared **literally**, not decoded |
+| header and body disagree (comparison is case-sensitive) | 400 / `-32020` |
+| body carries the argument, header omitted | 400 / `-32020` |
+| header present, argument absent or `null` in the body | 400 / `-32020` |
+| header carries a malformed Base64 payload (bad padding, non-alphabet characters) | 400 / `-32020` — never a 500 |
+| argument absent or `null` in the body **and** header omitted | accepted |
+
+A tool that designates no argument is never inspected, and an `Mcp-Param-*` header whose designation the tool does not declare is ignored. The 2025-03-26 legacy era reads no `Mcp-Param-*` header at all.
+
+Note that `Base64.getDecoder()` accepts an unpadded payload, so `=?base64?SGVsbG8?=` would silently decode to `Hello`; SEP-2243's conformance test-case table requires rejection, so the payload's alphabet, length and padding are checked before it is decoded.
+
 Do not designate sensitive arguments (passwords, API keys, tokens, PII): the value travels in a header, where intermediaries can read and log it.
 
 > `@McpHeader` is **provisional** and the only user-facing annotation this module defines outside `org.mcpjava`. `org.mcpjava:mcp-server-api` has no hook for the designation (`@ToolArg` exposes only `name`, `description`, `required`, `defaultValue`); the annotation is intended to migrate upstream if that project adopts SEP-2243.
@@ -574,7 +591,7 @@ The server is measured against the official [`@modelcontextprotocol/conformance`
 
 | Run | Score |
 |---|---|
-| `--spec-version 2026-07-28 --suite all` | **133 passed, 9 failed** |
+| `--spec-version 2026-07-28 --suite all` | **139 passed, 3 failed** |
 | `--spec-version 2025-11-25 --suite all` | **74 passed, 1 failed** |
 | `@0.1.16` (stable line, default suite) | **40 passed, 0 failed** |
 
@@ -594,7 +611,6 @@ npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:80
 The remaining failures are missing features and API limitations, not protocol bugs. They are listed in `conformance-baseline.yml` / `conformance-baseline-legacy.yml`, so a regression anywhere else fails the gate.
 
 - **Custom tool `inputSchema`** — a tool's schema is always derived from its Java signature; there is no API to supply a hand-written JSON Schema 2020-12 document (`$defs`, `allOf`/`anyOf`, `if`/`then`/`else`, …).
-- **SEP-2243 `Mcp-Param-*` request validation** — the *publishing* half is implemented (see [Custom headers](#custom-headers-sep-2243)): a tool declares designations with `@McpHeader` and the 2026-07-28 schema carries `x-mcp-header`. The server does not yet read the `Mcp-Param-*` headers a client mirrors back, so it cannot reject a header/body mismatch with HTTP 400 + JSON-RPC `-32020`. Three checks of `http-custom-header-server-validation` fail on that: invalid Base64 padding, non-alphabet Base64 characters, and a header omitted while the body carries the value.
 - **SEP-2322 input-request names** — multi-round-trip input requests are named by call order (`input-0`, `input-1`, …); a server cannot choose the key it publishes. Needs an API change on the `Elicitation` / `Sampling` / `Roots` builders.
 - **One pending input request per round** — the blocking `sendAndAwait()` API suspends the method at its first interaction, so an `input_required` result always carries a single `inputRequests` entry. Asking several questions in one round trip needs a batch interaction API.
 - **Tasks extension** — not implemented.

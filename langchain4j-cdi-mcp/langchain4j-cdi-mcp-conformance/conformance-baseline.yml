@@ -10,7 +10,7 @@
 # checks of that scenario stay enforced. Warnings count as failures for the gate
 # and must be listed here too.
 #
-# Score at the time of writing: 133 passed, 9 failed.
+# Score at the time of writing: 139 passed, 3 failed.
 # Every remaining entry is a missing feature or a known API limitation, not a
 # protocol bug; see langchain4j-cdi-mcp/README.md ("Conformance").
 server:
@@ -20,24 +20,14 @@ server:
   # (a $ref/$defs-carrying schema is not mangled) passes and stays enforced.
   - json-schema-2020-12:json-schema-2020-12-tool-found
 
-  # SEP-2243: `test_custom_header_tool` now publishes `x-mcp-header` designations,
-  # so the scenario runs for real instead of reporting 5 of 6 checks "not
-  # testable". The three acceptance cases pass (valid Base64 decoded and matched
-  # against the body; a value without the `=?base64?...?=` wrapper treated as a
-  # literal, both for a missing prefix and a missing suffix).
-  #
-  # What remains is the *request* half of SEP-2243, which is a separate feature:
-  # the server does not read `Mcp-Param-*` headers at all, so it cannot reject a
-  # mismatch with HTTP 400 + JSON-RPC -32020. Three cases therefore still fail —
-  # invalid Base64 padding, non-alphabet Base64 characters, and a header omitted
-  # while the body carries the value. These are server obligations, not client
-  # ones: they are reachable, but they need `Mcp-Param-*` validation wired into
-  # the tools/call path, which this change deliberately does not add.
-  - http-custom-header-server-validation:sep-2243-server-reject-invalid-param-chars
-  - http-custom-header-server-validation:sep-2243-server-reject-param-mismatch
-  # Emitted three times: twice SUCCESS (the two literal-value cases) and once
-  # FAILURE (header omitted, value in body). The entry covers the failing row.
-  - http-custom-header-server-validation:sep-2243-server-validate-param-match
+  # SEP-2243 is fully closed, both halves. `http-custom-header-server-validation`
+  # emits 10 checks and all 10 pass, so the three entries that used to live here
+  # (sep-2243-server-reject-invalid-param-chars,
+  # sep-2243-server-reject-param-mismatch, sep-2243-server-validate-param-match)
+  # were removed: `McpModernProtocolHandler` now validates the `Mcp-Param-*`
+  # headers a client mirrors back against the request body before dispatching
+  # `tools/call`, rejecting a mismatch, a missing header and a malformed
+  # `=?base64?...?=` payload with HTTP 400 + JSON-RPC -32020.
 
   # SEP-2322 MRTR: the framework names input requests by call order
   # (`input-0`, `input-1`, ...); a fixture cannot choose the key `user_name`,
