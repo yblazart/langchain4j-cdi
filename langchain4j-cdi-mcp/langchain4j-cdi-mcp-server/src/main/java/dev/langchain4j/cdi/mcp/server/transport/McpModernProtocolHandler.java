@@ -29,8 +29,6 @@ public class McpModernProtocolHandler {
 
     private static final Logger LOGGER = Logger.getLogger(McpModernProtocolHandler.class.getName());
 
-    static final long DISCOVER_TTL_MS = 60_000L;
-
     protected McpFeatureService features;
     protected McpServerConfigResolver config;
     protected McpSubscriptionRegistry subscriptions;
@@ -193,13 +191,24 @@ public class McpModernProtocolHandler {
         }
     }
 
+    /**
+     * Builds the {@code server/discover} result. Its {@code ttlMs} and {@code cacheScope} come from
+     * {@link McpServerConfig} exactly like the five {@code CacheableResult} responses: an application that configures a
+     * TTL means it for its whole surface, and {@code DiscoverResult} was the one place that ignored it.
+     *
+     * <p>The 2026-07-28 schema requires both fields on {@code DiscoverResult} but constrains neither beyond
+     * {@code ttlMs >= 0}, and neither the conformance suite's {@code caching} scenario (which exercises
+     * {@code tools/list}, {@code prompts/list}, {@code resources/list}, {@code resources/templates/list} and
+     * {@code resources/read}, never {@code server/discover}) nor any {@code sep-2575-*} discover check asserts a
+     * particular value — the suite's own mock servers answer discover with {@code ttlMs: 0}.
+     *
+     * @return the discover result, carrying the configured caching hints
+     */
     private JsonObject discover() {
-        return complete(Json.createObjectBuilder()
+        return complete(cacheable(Json.createObjectBuilder()
                 .add("supportedVersions", Json.createArrayBuilder(McpProtocolVersions.SUPPORTED))
                 .add("capabilities", McpJsonSerializer.toJsonObject(features.capabilities()))
-                .add("ttlMs", DISCOVER_TTL_MS)
-                .add("cacheScope", "public")
-                .build());
+                .build()));
     }
 
     private McpReply invoke(JsonRpcRequest request, McpProtocolContext protocol, boolean acceptsSse) {
@@ -479,9 +488,9 @@ public class McpModernProtocolHandler {
     /**
      * Adds the SEP-2549 {@code ttlMs} and {@code cacheScope} caching hints to a result. The 2026-07-28 schema makes
      * both <em>required</em> on every {@code CacheableResult} - {@code ListToolsResult}, {@code ListPromptsResult},
-     * {@code ListResourcesResult}, {@code ListResourceTemplatesResult} and {@code ReadResourceResult} - so a result
-     * without them also fails generic wire-schema validation. The values come from {@link McpServerConfig} and default
-     * to {@code ttlMs = 0} (immediately stale) and {@code cacheScope = "public"}.
+     * {@code ListResourcesResult}, {@code ListResourceTemplatesResult} and {@code ReadResourceResult} - and on
+     * {@code DiscoverResult}, so a result without them also fails generic wire-schema validation. The values come from
+     * {@link McpServerConfig} and default to {@code ttlMs = 0} (immediately stale) and {@code cacheScope = "public"}.
      *
      * <p>Only called on the 2026-07-28 path: legacy-era results stay byte-identical.
      *

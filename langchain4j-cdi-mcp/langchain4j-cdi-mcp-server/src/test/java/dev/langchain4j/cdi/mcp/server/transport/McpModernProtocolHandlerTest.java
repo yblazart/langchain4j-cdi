@@ -83,7 +83,7 @@ class McpModernProtocolHandlerTest {
         assertThat(result.getJsonArray("supportedVersions").getString(0)).isEqualTo("2026-07-28");
         assertThat(result.getJsonArray("supportedVersions").getString(1)).isEqualTo("2025-03-26");
         assertThat(result.getJsonObject("capabilities").containsKey("tools")).isTrue();
-        assertThat(result.getJsonNumber("ttlMs").longValue()).isPositive();
+        assertThat(result.getJsonNumber("ttlMs").longValue()).isZero();
         assertThat(result.getString("cacheScope")).isEqualTo("public");
         assertThat(result.getJsonObject("_meta")
                         .getJsonObject("io.modelcontextprotocol/serverInfo")
@@ -178,6 +178,24 @@ class McpModernProtocolHandlerTest {
                         .build());
 
         McpReply reply = configured.handle(new JsonRpcRequest(2, "tools/list", null), modern(null), false);
+
+        JsonObject result = parse(reply.body()).getJsonObject("result");
+        assertThat(result.getJsonNumber("ttlMs").longValue()).isEqualTo(300_000L);
+        assertThat(result.getString("cacheScope")).isEqualTo("private");
+    }
+
+    @Test
+    void discoverCachingHintsComeFromTheServerConfiguration() {
+        McpServerConfig config = McpServerConfig.builder()
+                .cacheTtl(Duration.ofMinutes(5))
+                .cacheScope("private")
+                .build();
+        McpServerConfigResolver resolver = new McpServerConfigResolver(config);
+        McpMrtrSupport support = new McpMrtrSupport(resolver);
+        McpModernProtocolHandler configured =
+                new McpModernProtocolHandler(features, resolver, registry, support, store);
+
+        McpReply reply = configured.handle(new JsonRpcRequest("d2", "server/discover", null), modern(null), false);
 
         JsonObject result = parse(reply.body()).getJsonObject("result");
         assertThat(result.getJsonNumber("ttlMs").longValue()).isEqualTo(300_000L);

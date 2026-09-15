@@ -517,7 +517,7 @@ public class McpConfigProducer {
 | `requestStateSecret` | random per JVM | HMAC key protecting `requestState`; **set it when running several instances** |
 | `requestStateTtl` | 10 minutes | Validity of a `requestState` |
 | `continuationTimeout` | 5 minutes | `CONTINUATION` mode: maximum wait for a client answer or for the method to finish |
-| `cacheTtl` | 0 (immediately stale) | SEP-2549 `ttlMs` emitted on cacheable MCP 2026-07-28 results; raise it when your tool/prompt/resource catalogue is stable |
+| `cacheTtl` | 0 (immediately stale) | SEP-2549 `ttlMs` emitted on `server/discover` and on every cacheable MCP 2026-07-28 result; raise it when your tool/prompt/resource catalogue is stable |
 | `cacheScope` | `public` | SEP-2549 `cacheScope` emitted on the same results; use `private` when a result depends on the caller's authorization context |
 
 ---
