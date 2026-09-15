@@ -104,7 +104,7 @@ class McpModernProtocolHandlerTest {
 
     @Test
     void listResultsCarryResultType() {
-        when(features.listTools(null))
+        when(features.listTools(null, true))
                 .thenReturn(Json.createObjectBuilder()
                         .add("tools", Json.createArrayBuilder())
                         .build());
@@ -120,7 +120,7 @@ class McpModernProtocolHandlerTest {
 
     @Test
     void cacheableListResultsCarryTtlMsAndCacheScope() {
-        when(features.listTools(null))
+        when(features.listTools(null, true))
                 .thenReturn(Json.createObjectBuilder()
                         .add("tools", Json.createArrayBuilder())
                         .build());
@@ -172,7 +172,7 @@ class McpModernProtocolHandlerTest {
         McpMrtrSupport support = new McpMrtrSupport(resolver);
         McpModernProtocolHandler configured =
                 new McpModernProtocolHandler(features, resolver, registry, support, store);
-        when(features.listTools(null))
+        when(features.listTools(null, true))
                 .thenReturn(Json.createObjectBuilder()
                         .add("tools", Json.createArrayBuilder())
                         .build());

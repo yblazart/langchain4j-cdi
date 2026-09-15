@@ -132,10 +132,26 @@ public class McpFeatureService {
      * @return the {@code tools/list} result as a JSON object
      */
     public JsonObject listTools(String cursor) {
+        return listTools(cursor, false);
+    }
+
+    /**
+     * Lists the registered tools for a given protocol era.
+     *
+     * @param cursor the pagination cursor, or {@code null} for the first page
+     * @param modernEra {@code true} for MCP 2026-07-28, whose tool schemas carry the SEP-2243 {@code x-mcp-header}
+     *     argument designations; {@code false} for the 2025-03-26 legacy era, which predates SEP-2243 and whose output
+     *     is unchanged by it
+     * @return the {@code tools/list} result as a JSON object
+     */
+    public JsonObject listTools(String cursor, boolean modernEra) {
         McpPagination.Page<McpToolDescriptor> page =
                 McpPagination.paginate(new ArrayList<>(toolRegistry.listTools()), cursor);
         return McpJsonSerializer.toJsonObject(new McpListToolsResult(
-                page.items().stream().map(McpToolDescriptor::toWireFormat).toList(), nextCursor(page)));
+                page.items().stream()
+                        .map(descriptor -> descriptor.toWireFormat(modernEra))
+                        .toList(),
+                nextCursor(page)));
     }
 
     /**

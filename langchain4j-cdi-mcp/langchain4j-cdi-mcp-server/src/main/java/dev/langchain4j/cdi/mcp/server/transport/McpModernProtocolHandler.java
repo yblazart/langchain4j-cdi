@@ -92,7 +92,8 @@ public class McpModernProtocolHandler {
             validateParams(id, request.getMethod(), params);
             return switch (request.getMethod()) {
                 case "server/discover" -> ok(id, discover());
-                case "tools/list" -> ok(id, complete(cacheable(features.listTools(McpFeatureService.cursor(params)))));
+                case "tools/list" ->
+                    ok(id, complete(cacheable(features.listTools(McpFeatureService.cursor(params), true))));
                 case "resources/list" ->
                     ok(id, complete(cacheable(features.listResources(McpFeatureService.cursor(params)))));
                 case "resources/templates/list" ->
