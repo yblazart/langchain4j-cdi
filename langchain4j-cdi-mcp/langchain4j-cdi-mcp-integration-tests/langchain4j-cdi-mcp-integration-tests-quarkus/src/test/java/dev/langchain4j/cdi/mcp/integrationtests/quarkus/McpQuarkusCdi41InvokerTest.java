@@ -9,6 +9,7 @@ import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.MCP_SESS
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.SUMMARIZE;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.langchain4j.cdi.mcp.integrationtests.IconedTool;
 import dev.langchain4j.cdi.mcp.integrationtests.JsonRpcAssertions;
 import dev.langchain4j.cdi.mcp.integrationtests.McpHttpResponse;
 import dev.langchain4j.cdi.mcp.integrationtests.McpHttpTransport;
@@ -46,10 +47,10 @@ class McpQuarkusCdi41InvokerTest {
     /**
      * Number of {@code @Tool}/{@code @Prompt}/{@code @Resource} methods in the shared IT application:
      * {@code getWeather}, {@code greet}, {@code describeSignature}, {@code askName}, {@code summarize},
-     * {@code getConfig}, {@code getStatus}. This test invokes all seven, so the match count is expected to reach
-     * exactly this number.
+     * {@code getConfig}, {@code getStatus}, {@code iconedTool}. This test invokes all eight, so the match count is
+     * expected to reach exactly this number.
      */
-    private static final int ANNOTATED_MCP_METHODS = 7;
+    private static final int ANNOTATED_MCP_METHODS = 8;
 
     /** URI of the second resource of {@code ConfigResource}, invoked here only to cover its invoker too. */
     private static final String STATUS_RESOURCE = "data://status";
@@ -87,6 +88,8 @@ class McpQuarkusCdi41InvokerTest {
                 200);
         JsonRpcAssertions.assertJsonRpcSuccess(
                 post(transport, sessionId, McpTestRequests.toolsCallRequest(201, GREET, "{\"name\":\"Ada\"}")), 201);
+        JsonRpcAssertions.assertJsonRpcSuccess(
+                post(transport, sessionId, McpTestRequests.toolsCallRequest(208, IconedTool.ICONED, "{}")), 208);
 
         // describeSignature is the only MCP method of the deployment whose parameters are not all java.lang.String:
         // it takes an int, a String[], a List<String> and a nested record. Those are exactly the shapes the build-time

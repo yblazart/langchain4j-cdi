@@ -491,6 +491,32 @@ public abstract class AbstractMcpIntegrationTest {
     }
 
     @Test
+    void shouldPublishIconsInTheModernEraOnly() {
+        // the icon provider is an @ApplicationScoped CDI bean, so this also proves the container-side resolution path
+        JsonObject modern = JsonRpcAssertions.assertJsonRpcSuccess(postModern(120, "tools/list", null, "", "{}"), 120);
+        JsonObject modernTool = modern.getJsonArray("tools").getValuesAs(JsonObject.class).stream()
+                .filter(t -> IconedTool.ICONED.equals(t.getString("name")))
+                .findFirst()
+                .orElseThrow();
+        JsonObject icon = modernTool.getJsonArray("icons").getJsonObject(0);
+        assertThat(icon.getString("src")).isEqualTo(IconedTool.ICON_SRC);
+        assertThat(icon.getString("mimeType")).isEqualTo("image/png");
+        assertThat(icon.getJsonArray("sizes").getValuesAs(JsonString::getString))
+                .containsExactly("48x48");
+        assertThat(icon.getString("theme")).isEqualTo("light");
+
+        // the 2025-03-26 schema has no `icons` member on a Tool, so the legacy listing must not carry one
+        String sessionId = initializeSession();
+        JsonObject legacy =
+                JsonRpcAssertions.assertJsonRpcSuccess(postMcp(sessionId, McpTestRequests.toolsListRequest(121)), 121);
+        JsonObject legacyTool = legacy.getJsonArray("tools").getValuesAs(JsonObject.class).stream()
+                .filter(t -> IconedTool.ICONED.equals(t.getString("name")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(legacyTool).doesNotContainKey("icons");
+    }
+
+    @Test
     void shouldCallToolWithModernRequest() {
         JsonObject result = JsonRpcAssertions.assertJsonRpcSuccess(
                 postModern(102, "tools/call", GREET, "\"name\":\"greet\",\"arguments\":{\"name\":\"Ada\"}", "{}"), 102);

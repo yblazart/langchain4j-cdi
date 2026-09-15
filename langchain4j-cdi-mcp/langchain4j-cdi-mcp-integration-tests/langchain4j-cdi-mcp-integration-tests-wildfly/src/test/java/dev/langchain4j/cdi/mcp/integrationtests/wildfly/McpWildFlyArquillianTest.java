@@ -10,6 +10,7 @@ import dev.langchain4j.cdi.mcp.integrationtests.ArquillianDeploymentHelper;
 import dev.langchain4j.cdi.mcp.integrationtests.ConfigResource;
 import dev.langchain4j.cdi.mcp.integrationtests.ElicitationTool;
 import dev.langchain4j.cdi.mcp.integrationtests.GreetingTool;
+import dev.langchain4j.cdi.mcp.integrationtests.IconedTool;
 import dev.langchain4j.cdi.mcp.integrationtests.JaxRsApplication;
 import dev.langchain4j.cdi.mcp.integrationtests.JdkHttpClientTransport;
 import dev.langchain4j.cdi.mcp.integrationtests.JsonRpcAssertions;
@@ -92,6 +93,8 @@ public class McpWildFlyArquillianTest {
                         // Nested types are not pulled in with their enclosing class, and describeSignature
                         // takes one as a parameter.
                         GreetingTool.Style.class,
+                        IconedTool.class,
+                        IconedTool.CdiIconProvider.class,
                         ElicitationTool.class,
                         ConfigResource.class,
                         SummarizePrompt.class,
