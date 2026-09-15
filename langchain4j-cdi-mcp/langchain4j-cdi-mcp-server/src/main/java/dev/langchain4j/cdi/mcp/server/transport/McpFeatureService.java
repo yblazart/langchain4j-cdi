@@ -116,6 +116,19 @@ public class McpFeatureService {
     }
 
     /**
+     * Looks up a registered tool by name.
+     *
+     * <p>Used by the 2026-07-28 path to read a tool's SEP-2243 {@code x-mcp-header} designations before dispatching a
+     * {@code tools/call}, without re-deriving them from the bean's annotations on every request.
+     *
+     * @param name the tool name
+     * @return the descriptor, or empty when no tool is registered under that name
+     */
+    public Optional<McpToolDescriptor> findTool(String name) {
+        return toolRegistry.findTool(name);
+    }
+
+    /**
      * Extracts the pagination cursor from a request's parameters.
      *
      * @param params the request parameters, may be {@code null}

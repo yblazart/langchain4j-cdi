@@ -3,10 +3,12 @@ package dev.langchain4j.cdi.mcp.server.registry;
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolModel;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
+import dev.langchain4j.cdi.mcp.server.schema.McpHeaderDesignations;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderValidator;
 import jakarta.json.JsonObject;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import org.mcpjava.server.FeatureType;
 import org.mcpjava.server.tools.Tool;
 
@@ -22,6 +24,7 @@ public class McpToolDescriptor {
     private final Class<?> beanType;
     private final Method method;
     private final List<McpIconModel> icons;
+    private final Map<String, String> headerDesignations;
 
     /**
      * Creates a tool descriptor with the given metadata, using the same input schema in both protocol eras.
@@ -85,6 +88,7 @@ public class McpToolDescriptor {
         this.beanType = beanType;
         this.method = method;
         this.icons = icons;
+        this.headerDesignations = McpHeaderDesignations.of(method);
     }
 
     /**
@@ -140,6 +144,22 @@ public class McpToolDescriptor {
                 null,
                 null,
                 modernEra ? icons : null);
+    }
+
+    /**
+     * Returns the SEP-2243 {@code x-mcp-header} designations this tool declares, resolved at registration time from the
+     * {@link dev.langchain4j.cdi.mcp.server.api.McpHeader} annotations on the backing method.
+     *
+     * <p>The keys are the argument names used in the tool's input schema and in the {@code tools/call}
+     * {@code arguments} object; the values are the header name suffixes, so a designation {@code "Tenant-Id"} is
+     * mirrored by a conforming client into the {@code Mcp-Param-Tenant-Id} request header. The MCP 2026-07-28 path
+     * validates those headers against the body before dispatching the call; the 2025-03-26 legacy era, which predates
+     * SEP-2243, ignores them entirely.
+     *
+     * @return an unmodifiable map of argument name to designation, empty when this tool designates no argument
+     */
+    public Map<String, String> getHeaderDesignations() {
+        return headerDesignations;
     }
 
     /**

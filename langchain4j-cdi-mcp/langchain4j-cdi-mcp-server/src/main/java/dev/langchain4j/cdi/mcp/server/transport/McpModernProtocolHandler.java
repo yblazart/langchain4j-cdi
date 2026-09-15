@@ -9,6 +9,7 @@ import dev.langchain4j.cdi.mcp.server.protocol.McpImplementation;
 import dev.langchain4j.cdi.mcp.server.protocol.McpJsonSerializer;
 import dev.langchain4j.cdi.mcp.server.protocol.McpMetaKeys;
 import dev.langchain4j.cdi.mcp.server.protocol.McpProtocolVersions;
+import dev.langchain4j.cdi.mcp.server.registry.McpToolDescriptor;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
@@ -19,7 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -78,16 +81,39 @@ public class McpModernProtocolHandler {
      * {@link McpEndpoint} selected by {@link McpListenRoutingFilter}, so a listen request reaching this method is
      * answered with {@code -32600 Invalid Request} (HTTP 400).
      *
+     * <p>This overload has no access to the request's headers, so the SEP-2243 {@code Mcp-Param-*} validation of
+     * {@link #handle(JsonRpcRequest, McpProtocolContext, boolean, Function)} is skipped. Transports pass their header
+     * lookup and should call that overload.
+     *
      * @param request the parsed JSON-RPC request
      * @param protocol the protocol context detected for this request
      * @param acceptsSse whether the client's {@code Accept} header allows an SSE response
      * @return the reply, as JSON or as a request-scoped SSE stream
      */
     public McpReply handle(JsonRpcRequest request, McpProtocolContext protocol, boolean acceptsSse) {
+        return handle(request, protocol, acceptsSse, null);
+    }
+
+    /**
+     * Handles a single modern (2026-07-28) JSON-RPC request, validating the SEP-2243 {@code Mcp-Param-<designation>}
+     * headers a client mirrors back on a {@code tools/call} before the call is dispatched. A header that disagrees with
+     * the body, one that is missing while the body carries the value, and a malformed {@code =?base64?…?=} payload are
+     * all answered {@code -32020 HeaderMismatch} (HTTP 400) by {@link McpParamHeaderValidator}; a tool that designates
+     * no argument is never inspected.
+     *
+     * @param request the parsed JSON-RPC request
+     * @param protocol the protocol context detected for this request
+     * @param acceptsSse whether the client's {@code Accept} header allows an SSE response
+     * @param headers the request's header lookup, case-insensitive on the name; {@code null} skips header validation
+     * @return the reply, as JSON or as a request-scoped SSE stream
+     */
+    public McpReply handle(
+            JsonRpcRequest request, McpProtocolContext protocol, boolean acceptsSse, Function<String, String> headers) {
         Object id = request.getId();
         JsonObject params = request.getParams() != null ? request.getParams() : JsonValue.EMPTY_JSON_OBJECT;
         try {
             validateParams(id, request.getMethod(), params);
+            validateParamHeaders(id, request.getMethod(), params, headers);
             return switch (request.getMethod()) {
                 case "server/discover" -> ok(id, discover());
                 case "tools/list" ->
@@ -174,6 +200,37 @@ public class McpModernProtocolHandler {
                 // no parameters read by this handler
             }
         }
+    }
+
+    /**
+     * Validates the SEP-2243 {@code Mcp-Param-<designation>} headers of a {@code tools/call} against its
+     * {@code arguments}. Nothing is inspected for any other method, for an unknown tool, or for a tool that designates
+     * no argument — a tool without designations behaves exactly as it did before SEP-2243 — and nothing at all is
+     * inspected on the 2025-03-26 legacy path, which never reaches this handler.
+     *
+     * @param id the request id
+     * @param method the JSON-RPC method
+     * @param params the request parameters
+     * @param headers the request's header lookup, or {@code null} when the caller has none
+     */
+    void validateParamHeaders(Object id, String method, JsonObject params, Function<String, String> headers) {
+        if (headers == null || !"tools/call".equals(method)) {
+            return;
+        }
+        String tool = params.getString("name", null);
+        if (tool == null) {
+            return;
+        }
+        Optional<McpToolDescriptor> descriptor = features.findTool(tool);
+        if (descriptor == null || descriptor.isEmpty()) {
+            return;
+        }
+        Map<String, String> designations = descriptor.get().getHeaderDesignations();
+        if (designations.isEmpty()) {
+            return;
+        }
+        JsonObject arguments = params.get("arguments") instanceof JsonObject o ? o : JsonValue.EMPTY_JSON_OBJECT;
+        McpParamHeaderValidator.validate(id, designations, arguments, headers);
     }
 
     private static void requireInvocationStateTypes(Object id, JsonObject params) {

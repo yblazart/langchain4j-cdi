@@ -89,7 +89,9 @@ public class McpEndpoint {
         }
         McpProtocolContext protocol = McpEraDetector.detect(request, headers::getHeaderString);
         if (protocol.isModern()) {
-            return toResponse(modern.handle(request, protocol, wantsSse));
+            // the header lookup is passed on so that the SEP-2243 Mcp-Param-* headers can be validated against the
+            // body before a tools/call is dispatched; the legacy branch below predates SEP-2243 and is untouched
+            return toResponse(modern.handle(request, protocol, wantsSse, headers::getHeaderString));
         }
         return legacy.handle(request, sessionId, wantsSse);
     }
