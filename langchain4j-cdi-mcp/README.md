@@ -255,6 +255,57 @@ Do not designate sensitive arguments (passwords, API keys, tokens, PII): the val
 
 > `@McpHeader` is **provisional** and the only user-facing annotation this module defines outside `org.mcpjava`. `org.mcpjava:mcp-server-api` has no hook for the designation (`@ToolArg` exposes only `name`, `description`, `required`, `defaultValue`); the annotation is intended to migrate upstream if that project adopts SEP-2243.
 
+#### Title and annotations
+
+`@Tool` carries `title()` and `annotations()` (`Tool.Annotations`, with `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`); both are published on `tools/list`:
+
+```java
+@Tool(
+        name = "delete_report",
+        title = "Delete Report",
+        description = "Permanently deletes a report",
+        annotations = @Tool.Annotations(readOnlyHint = false, destructiveHint = true, idempotentHint = true))
+public void deleteReport(@ToolArg(name = "reportId") String reportId) {
+    // ...
+}
+```
+
+A Java annotation element cannot distinguish "left unspecified" from "explicitly set to the default", so a hint is published only when it **differs** from the MCP spec default (`readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=true`; `title=""`). A tool whose annotation members all equal their default — including one that never mentions `annotations` at all — omits the `annotations` key entirely rather than emitting values that would assert something the tool author never wrote; likewise an empty `title` is omitted. Both `title` and `annotations` are 2026-07-28-only: the 2025-03-26 legacy era's `tools/list` output is unchanged, byte for byte, even though its `Tool` schema technically permits `annotations` too — that invariant is promised by the upstream PR this module tracks.
+
+> `Tool.structuredContent()` and `Tool.outputSchemaFrom()` also exist upstream and are not read by this module.
+
+#### Hand-written input schema
+
+`JsonSchemaGenerator` only ever derives a flat `properties`/`required` object from a Java signature — it cannot emit composition (`oneOf`/`anyOf`/`allOf`/`not`), conditional (`if`/`then`/`else`), or reference (`$ref`/`$defs`/`$anchor`) keywords, none of which has a signature counterpart. `@McpInputSchema` supplies a literal JSON Schema 2020-12 document instead, published verbatim, identically, in both protocol eras:
+
+```java
+@Tool(name = "example", description = "A tool with a hand-written input schema")
+@McpInputSchema("""
+        {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"]
+        }
+        """)
+public String example(@ToolArg(name = "name") String name) {
+    // ...
+}
+```
+
+Three rules are enforced **when the tool is registered**, failing the deployment with a message naming the tool and the rule:
+
+| Rule | Rejected example |
+|---|---|
+| the root must be a JSON object with `"type": "object"` | `@McpInputSchema("{\"type\":\"array\"}")` |
+| every property in a top-level `required` array must have a same-named, bindable Java parameter | `"required": ["missingParam"]` with no `missingParam` parameter |
+| must not be combined with `@McpHeader` on the same method | a parameter carrying both `@McpHeader` and a method carrying `@McpInputSchema` |
+
+The third rule is a deliberate design choice, not a limitation: SEP-2243 request validation reads header designations from the reflected `@McpHeader` annotations, independently of whatever the hand-written schema says. A schema a tool author forgets to keep in sync — or one written before a later `@McpHeader` addition — would validate `Mcp-Param-*` headers the client was never told to send, because the client only ever learns about a designation from the `x-mcp-header` keyword the *schema* carries. Rejecting the combination removes that entire class of drift.
+
+A tool that does not use `@McpInputSchema` keeps exactly the generated schema it always had, in both eras, byte for byte.
+
+> `@McpInputSchema` is **provisional**, following the `@McpHeader` precedent: `org.mcpjava:mcp-server-api` has no hook for a hand-written input schema at all, so the mechanism lives here and is intended to migrate to (or be superseded by) an upstream one, should `org.mcpjava` adopt a feature like it.
+
 ### Prompts
 
 Prompts are reusable templates that guide how an AI model should respond. They are returned as structured messages.
@@ -591,8 +642,8 @@ The server is measured against the official [`@modelcontextprotocol/conformance`
 
 | Run | Score |
 |---|---|
-| `--spec-version 2026-07-28 --suite all` | **139 passed, 3 failed** |
-| `--spec-version 2025-11-25 --suite all` | **74 passed, 1 failed** |
+| `--spec-version 2026-07-28 --suite all` | **146 passed, 2 failed** |
+| `--spec-version 2025-11-25 --suite all` | **81 passed, 0 failed** |
 | `@0.1.16` (stable line, default suite) | **40 passed, 0 failed** |
 
 ```bash
@@ -610,7 +661,6 @@ npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:80
 
 The remaining failures are missing features and API limitations, not protocol bugs. They are listed in `conformance-baseline.yml` / `conformance-baseline-legacy.yml`, so a regression anywhere else fails the gate.
 
-- **Custom tool `inputSchema`** — a tool's schema is always derived from its Java signature; there is no API to supply a hand-written JSON Schema 2020-12 document (`$defs`, `allOf`/`anyOf`, `if`/`then`/`else`, …).
 - **SEP-2322 input-request names** — multi-round-trip input requests are named by call order (`input-0`, `input-1`, …); a server cannot choose the key it publishes. Needs an API change on the `Elicitation` / `Sampling` / `Roots` builders.
 - **One pending input request per round** — the blocking `sendAndAwait()` API suspends the method at its first interaction, so an `input_required` result always carries a single `inputRequests` entry. Asking several questions in one round trip needs a batch interaction API.
 - **Tasks extension** — not implemented.

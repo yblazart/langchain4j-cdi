@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.mcp.conformance;
 import dev.langchain4j.cdi.mcp.server.api.Elicitation;
 import dev.langchain4j.cdi.mcp.server.api.ElicitationResponse;
 import dev.langchain4j.cdi.mcp.server.api.McpHeader;
+import dev.langchain4j.cdi.mcp.server.api.McpInputSchema;
 import dev.langchain4j.cdi.mcp.server.api.McpLog;
 import dev.langchain4j.cdi.mcp.server.api.Sampling;
 import dev.langchain4j.cdi.mcp.server.api.SamplingResponse;
@@ -131,6 +132,58 @@ public class ConformanceTools {
                     @McpHeader("Verbose")
                     boolean verbose) {
         return ToolResponse.ofText("tenantId=" + tenantId + ", attempt=" + attempt + ", verbose=" + verbose);
+    }
+
+    // ===== JSON SCHEMA 2020-12 (SEP-1613, SEP-2106) =====
+
+    /**
+     * The {@code json-schema-2020-12} conformance scenario fixture: an {@code inputSchema} that cannot be generated
+     * from a Java signature at all — {@code $schema}, {@code $defs} with an {@code $anchor}, a {@code $ref} into it,
+     * {@code allOf}/{@code anyOf} composition, and {@code if}/{@code then}/{@code else} conditionals — so it is
+     * supplied verbatim via {@link McpInputSchema}. The document is the canonical {@code JSON_SCHEMA_2020_12_FIXTURE}
+     * from {@code modelcontextprotocol/conformance}'s {@code src/scenarios/server/json-schema-2020-12.ts}. None of its
+     * top-level properties is {@code required} (the {@code required} keyword only appears nested, inside the
+     * composition/conditional subschemas), so registration rule 2 (every required property must bind to a parameter)
+     * does not constrain this fixture; the four scalar properties still bind by name to real parameters.
+     *
+     * @param name the contact's name
+     * @param contactMethod which of {@code phone}/{@code email} to use
+     * @param phone the phone number, when {@code contactMethod} is {@code "phone"}
+     * @param email the email address, when {@code contactMethod} is {@code "email"}
+     * @return the tool response
+     */
+    @Tool(name = "json_schema_2020_12_tool", description = "Tool with JSON Schema 2020-12 features")
+    @McpInputSchema("{"
+            + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+            + "\"type\":\"object\","
+            + "\"$defs\":{"
+            + "\"address\":{"
+            + "\"$anchor\":\"addressDef\","
+            + "\"type\":\"object\","
+            + "\"properties\":{\"street\":{\"type\":\"string\"},\"city\":{\"type\":\"string\"}}"
+            + "}"
+            + "},"
+            + "\"properties\":{"
+            + "\"name\":{\"type\":\"string\"},"
+            + "\"address\":{\"$ref\":\"#/$defs/address\"},"
+            + "\"contactMethod\":{\"type\":\"string\",\"enum\":[\"phone\",\"email\"]},"
+            + "\"phone\":{\"type\":\"string\"},"
+            + "\"email\":{\"type\":\"string\"}"
+            + "},"
+            + "\"allOf\":[{\"anyOf\":[{\"required\":[\"phone\"]},{\"required\":[\"email\"]}]}],"
+            + "\"if\":{\"properties\":{\"contactMethod\":{\"const\":\"phone\"}},"
+            + "\"required\":[\"contactMethod\"]},"
+            + "\"then\":{\"required\":[\"phone\"]},"
+            + "\"else\":{\"required\":[\"email\"]},"
+            + "\"additionalProperties\":false"
+            + "}")
+    public ToolResponse testJsonSchema202012(
+            @ToolArg(name = "name", required = false) String name,
+            @ToolArg(name = "contactMethod", required = false) String contactMethod,
+            @ToolArg(name = "phone", required = false) String phone,
+            @ToolArg(name = "email", required = false) String email) {
+        return ToolResponse.ofText(
+                "name=" + name + ", contactMethod=" + contactMethod + ", phone=" + phone + ", email=" + email);
     }
 
     // ===== ERRORS =====

@@ -10,15 +10,16 @@
 # checks of that scenario stay enforced. Warnings count as failures for the gate
 # and must be listed here too.
 #
-# Score at the time of writing: 139 passed, 3 failed.
+# Score at the time of writing: 146 passed, 2 failed.
 # Every remaining entry is a missing feature or a known API limitation, not a
 # protocol bug; see langchain4j-cdi-mcp/README.md ("Conformance").
 server:
-  # No API to supply a hand-written tool inputSchema: the schema is always
-  # generated from the Java signature, so the SEP-1613/SEP-2106 fixture tool
-  # `json_schema_2020_12_tool` cannot be expressed. The scenario's second check
-  # (a $ref/$defs-carrying schema is not mangled) passes and stays enforced.
-  - json-schema-2020-12:json-schema-2020-12-tool-found
+  # json-schema-2020-12 is now fully closed: `json_schema_2020_12_tool` is
+  # published via @McpInputSchema with the scenario's exact
+  # JSON_SCHEMA_2020_12_FIXTURE, verbatim. All 8 checks of the scenario pass
+  # ($schema, $defs, additionalProperties, the allOf/anyOf composition
+  # keywords, the if/then/else conditional keywords, and the $anchor inside
+  # $defs), so no entry is baselined here any more.
 
   # SEP-2243 is fully closed, both halves. `http-custom-header-server-validation`
   # emits 10 checks and all 10 pass, so the three entries that used to live here

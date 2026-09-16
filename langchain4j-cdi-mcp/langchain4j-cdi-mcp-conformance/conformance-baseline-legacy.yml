@@ -12,11 +12,12 @@
 # scenarios target 2025-06-18 / 2025-11-25. Not one failure is attributable to
 # that difference.
 #
-# Scores at the time of writing: 2025-11-25 -> 74 passed, 1 failed;
-# stable line @0.1.16 -> 40 passed, 0 failed (a clean sweep).
-server:
-  # No API to supply a hand-written tool inputSchema: the schema is always
-  # generated from the Java signature, so the SEP-1613/SEP-2106 fixture tool
-  # `json_schema_2020_12_tool` cannot be expressed. The scenario's second check
-  # passes and stays enforced; the scenario is absent from the @0.1.16 suite.
-  - json-schema-2020-12:json-schema-2020-12-tool-found
+# Scores at the time of writing: 2025-11-25 -> 81 passed, 0 failed (a clean
+# sweep); stable line @0.1.16 -> 40 passed, 0 failed (a clean sweep; the
+# scenario below is absent from the @0.1.16 suite).
+#
+# json-schema-2020-12 is now fully closed: `json_schema_2020_12_tool` is
+# published via @McpInputSchema with the scenario's exact
+# JSON_SCHEMA_2020_12_FIXTURE, verbatim. All 8 checks pass, so no entry is
+# baselined here any more.
+server: []

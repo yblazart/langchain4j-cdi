@@ -112,6 +112,29 @@ closed in both halves. The three remaining 2026-07-28 failures and the single 20
 features or known API limitations (custom tool `inputSchema`, SEP-2322 input-request naming, one pending input
 request per round); see the two baseline files and `langchain4j-cdi-mcp/README.md` ("Conformance").
 
+## Recorded results (2026-09-16, after tool title/annotations and the hand-written inputSchema)
+
+| Run | Passed | Failed |
+|---|---|---|
+| `--spec-version 2026-07-28 --suite all` | 146 | 2 |
+| `--spec-version 2025-11-25 --suite all` | 81 | 0 |
+| stable line `@0.1.16`, default suite | 40 | 0 |
+
+`json_schema_2020_12_tool` (`ConformanceTools`) now exists, published via the new `@McpInputSchema` with the
+scenario's exact `JSON_SCHEMA_2020_12_FIXTURE` verbatim, so `json-schema-2020-12` goes from 1 failing check
+(early-return "tool not found") to **8 checks, 8 passing** in both the 2026-07-28 and 2025-11-25 runs: `$schema`,
+`$defs`, `additionalProperties` (SEP-1613), and the `allOf`/`anyOf` composition, `if`/`then`/`else` conditional,
+and `$anchor` keywords (SEP-2106) all survive `tools/list` unmangled. Both baseline files drop their
+`json-schema-2020-12:json-schema-2020-12-tool-found` entry.
+
+The jump from 139/3 to 146/2 (not 140/2) and from 74/1 to 81/0 (not 75/0) is not all this fixture's doing: the
+`json-schema-2020-12` scenario itself accounts for +7/2026-07-28 and +7/2025-11-25 (8 passing checks now running
+where only 1 failing one ran before), and `input-required-result-ignore-extra-params` — previously baselined as
+failing — is passing on both 2026-07-28 runs measured here; `@alpha` is a floating tag, so some drift between
+measurements independent of this server's code is expected. The two 2026-07-28 failures remaining
+(`input-required-result-basic-elicitation`, `input-required-result-multiple-input-requests`) are the same
+pre-existing SEP-2322 input-request-naming limitations as before.
+
 ## Fixtures
 
 `ConformanceTools` — `test_simple_text`, `test_image_content`, `test_audio_content`, `test_embedded_resource`,
@@ -120,7 +143,9 @@ request per round); see the two baseline files and `langchain4j-cdi-mcp/README.m
 `test_elicitation_sep1034_defaults`, `test_elicitation_sep1330_enums`, `test_missing_capability`,
 `test_custom_header_tool` (the only tool carrying SEP-2243 `x-mcp-header` designations — one argument of each
 permitted primitive type; `http-custom-header-server-validation` picks the first tool with any designation and
-then its first *string*-typed designated argument).
+then its first *string*-typed designated argument), `json_schema_2020_12_tool` (the only tool carrying a
+hand-written `@McpInputSchema` — the `json-schema-2020-12` scenario's canonical `JSON_SCHEMA_2020_12_FIXTURE`,
+published verbatim; see `langchain4j-cdi-mcp/README.md`, "Hand-written input schema").
 
 `ConformanceMrtrTools` — the SEP-2322 family: `test_input_required_result_elicitation`, `_sampling`,
 `_list_roots`, `_request_state`, `_multiple_inputs`, `_multi_round`, `_tampered_state`, `_capabilities`, and the
@@ -138,8 +163,6 @@ that `notifications/tools/list_changed` and `notifications/prompts/list_changed`
 
 ### Fixtures that cannot be expressed with the current API
 
-- `json_schema_2020_12_tool` — a tool's `inputSchema` is always generated from the Java signature
-  (`JsonSchemaGenerator`); there is no way to supply a hand-written JSON Schema 2020-12 document.
 - `test_reconnection` — needs raw control of the response stream framing.
 - The `tasks-*` extension — not implemented.
 
