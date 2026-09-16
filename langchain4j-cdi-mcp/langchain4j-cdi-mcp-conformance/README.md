@@ -135,6 +135,31 @@ measurements independent of this server's code is expected. The two 2026-07-28 f
 (`input-required-result-basic-elicitation`, `input-required-result-multiple-input-requests`) are the same
 pre-existing SEP-2322 input-request-naming limitations as before.
 
+## Recorded results (2026-09-16, after SEP-2322 server-chosen keys and batch interactions)
+
+| Run | Passed | Failed |
+|---|---|---|
+| `--spec-version 2026-07-28 --suite all` | 150 | 0 |
+| `--spec-version 2025-11-25 --suite all` | 81 | 0 |
+| stable line `@0.1.16`, default suite | 40 | 0 |
+
+Both remaining 2026-07-28 SEP-2322 failures are fixed. `ConformanceMrtrTools.askName` now calls
+`ElicitationRequest.Builder.setKey("user_name")`, so `test_input_required_result_elicitation` publishes exactly the
+key `input-required-result-basic-elicitation`'s `sep-2322-elicitation-incomplete` check requires verbatim (now
+3/3). `test_input_required_result_multiple_inputs` now injects `McpInteractions` and declares a batch of one
+elicitation, one sampling and one `roots/list` request, awaited together with `Batch.awaitAll()`; the resulting
+`input_required` result lists all three requests at once (never just the first), which is what
+`input-required-result-multiple-input-requests`'s `sep-2322-multiple-inputs-incomplete` check requires (now 3/3).
+
+`input-required-result-ignore-extra-params:sep-2322-ignore-unexpected-params` stays baselined (warning-severity):
+the fixture's single, ungated call (no prior round, no `requestState`) can never be accepted by a server that
+requires a valid `requestState` before honouring `inputResponses` — see `conformance-baseline.yml` for the full
+rationale. The plain summary above buckets this check as "1 passed, 0 failed" for `input-required-result-ignore-extra-params`
+(a WARNING status does not count as a scenario-level failure there), but under `--expected-failures` the run still
+reports it as a matched, non-stale expected failure (`~`), because the gate treats warnings as failures that must be
+listed; with the entry kept, `--expected-failures conformance-baseline.yml` exits 0 (verified against this exact
+150/0 run).
+
 ## Fixtures
 
 `ConformanceTools` — `test_simple_text`, `test_image_content`, `test_audio_content`, `test_embedded_resource`,

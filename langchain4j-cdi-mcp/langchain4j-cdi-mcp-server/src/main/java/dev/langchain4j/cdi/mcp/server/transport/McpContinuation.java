@@ -7,7 +7,12 @@ import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -28,6 +33,12 @@ public final class McpContinuation {
 
     /** The invocation needs an answer from the client before it can proceed. */
     public record Input(McpInputRequiredSignal request) implements Event {}
+
+    /** The invocation needs answers to every member of a batch before it can proceed (MRTR, SEP-2322). */
+    public record InputBatch(List<McpInputRequiredSignal> requests) implements Event {}
+
+    /** A single, not-yet-sent member of a batch of client interactions, awaited together via {@link #awaitBatch}. */
+    public record PendingRequest(String key, String method, Map<String, Object> params) {}
 
     /** The invocation finished successfully. */
     public record Done(JsonObject result) implements Event {}
@@ -52,6 +63,7 @@ public final class McpContinuation {
     private final AtomicReference<Round> round = new AtomicReference<>(INITIAL_ROUND);
     private final AtomicBoolean cancelledFlag = new AtomicBoolean();
     private volatile McpInputRequiredSignal lastInput;
+    private volatile List<McpInputRequiredSignal> lastInputs = List.of();
 
     /**
      * Creates a continuation.
@@ -98,6 +110,7 @@ public final class McpContinuation {
         pending.put(effectiveKey, future);
         McpInputRequiredSignal input = new McpInputRequiredSignal(effectiveKey, method, params);
         lastInput = input;
+        lastInputs = List.of(input);
         events.add(new Input(input));
         try {
             return future.get(inputTimeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -113,6 +126,54 @@ public final class McpContinuation {
             throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "No client input received for " + method);
         } finally {
             pending.remove(effectiveKey);
+        }
+    }
+
+    /**
+     * Called by the worker thread: declares every member of a batch of client interactions before waiting on any of
+     * them, and blocks until every member is answered or {@code inputTimeout} elapses (MRTR, SEP-2322). Every member is
+     * registered as pending, and a single {@link InputBatch} event carrying all of them is emitted, before this method
+     * blocks — so a retry can answer several of them in one round trip.
+     *
+     * <p>Each member is removed from the pending set the instant it is individually answered (or cancelled) — not only
+     * once the whole batch resolves — so {@link #isWaitingFor(String)} is accurate for a batch exactly as it is for a
+     * single {@link #awaitInput}. On timeout, cancellation or interruption this means members already answered report
+     * {@link #isWaitingFor(String)} {@code false} and members still unanswered report {@code true}, even though this
+     * call has already thrown.
+     *
+     * @param requests the batch members, in declaration order; must not be empty
+     * @return every member's answer, keyed as declared
+     */
+    public Map<String, JsonObject> awaitBatch(List<PendingRequest> requests) {
+        Map<String, CompletableFuture<JsonObject>> futures = new LinkedHashMap<>();
+        List<McpInputRequiredSignal> signals = new ArrayList<>();
+        for (PendingRequest r : requests) {
+            String effectiveKey = r.key() != null ? r.key() : "input-" + next.getAndIncrement();
+            CompletableFuture<JsonObject> future = new CompletableFuture<>();
+            // removed the instant this one member is answered/cancelled, not only once the whole batch resolves
+            future.whenComplete((value, error) -> pending.remove(effectiveKey, future));
+            pending.put(effectiveKey, future);
+            futures.put(effectiveKey, future);
+            signals.add(new McpInputRequiredSignal(effectiveKey, r.method(), r.params()));
+        }
+        lastInputs = List.copyOf(signals);
+        events.add(new InputBatch(lastInputs));
+        try {
+            CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0]))
+                    .get(inputTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            Map<String, JsonObject> result = new LinkedHashMap<>();
+            futures.forEach((k, f) -> result.put(k, f.join()));
+            return result;
+        } catch (CancellationException e) {
+            onAbandon.run();
+            throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Client input request cancelled");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            onAbandon.run();
+            throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Interrupted while waiting for client input");
+        } catch (ExecutionException | TimeoutException e) {
+            onAbandon.run();
+            throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "No client input received for batch");
         }
     }
 
@@ -153,11 +214,26 @@ public final class McpContinuation {
      * @return the number of pending requests actually unblocked
      */
     public int supply(JsonObject inputResponses) {
-        int supplied = 0;
+        return supplyAndReport(inputResponses).size();
+    }
+
+    /**
+     * Called by the handler: supplies client answers, unblocking the worker thread for each key that is currently
+     * pending, and returns exactly which keys were unblocked. Unlike checking {@link #isWaitingFor(String)} afterward,
+     * this is race-free: {@link CompletableFuture#complete} is synchronous, while the worker thread only removes a key
+     * from the pending set (in a {@code finally} block) some time after it wakes up, so a caller that needs to know
+     * precisely which keys this call answered — e.g. to decide which of several pending requests are still missing —
+     * must use this return value, not a later {@link #isWaitingFor(String)} check.
+     *
+     * @param inputResponses the answers, keyed by input request key (e.g. {@code input-0})
+     * @return the keys actually unblocked by this call
+     */
+    public Set<String> supplyAndReport(JsonObject inputResponses) {
+        Set<String> supplied = new LinkedHashSet<>();
         for (Map.Entry<String, jakarta.json.JsonValue> entry : inputResponses.entrySet()) {
             CompletableFuture<JsonObject> future = pending.get(entry.getKey());
             if (future != null && entry.getValue() instanceof JsonObject response && future.complete(response)) {
-                supplied++;
+                supplied.add(entry.getKey());
             }
         }
         return supplied;
@@ -176,6 +252,16 @@ public final class McpContinuation {
     /** @return the most recent input request raised by the invocation, or {@code null} if none yet */
     public McpInputRequiredSignal lastInput() {
         return lastInput;
+    }
+
+    /**
+     * Returns the requests raised by the most recent {@link #awaitInput} (a singleton list) or {@link #awaitBatch} call
+     * (one entry per batch member), whichever happened last.
+     *
+     * @return the most recent input request(s), or an empty list if none yet
+     */
+    public List<McpInputRequiredSignal> lastInputs() {
+        return lastInputs;
     }
 
     /**

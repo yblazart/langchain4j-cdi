@@ -3,6 +3,9 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import jakarta.json.JsonObject;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Stateless MRTR requester: answers from the collected input responses, otherwise signals that input is needed. */
@@ -53,6 +56,29 @@ public class McpReplayClientRequester implements McpClientRequester {
             return response;
         }
         throw new McpInputRequiredSignal(key, method, params);
+    }
+
+    /**
+     * Answers every batch member already present in the collected responses, and reports every other member in a single
+     * {@link McpInputRequiredBatchSignal} — never just the first missing one, which is the whole point of a batch under
+     * a stateless (REPLAY) requester.
+     */
+    @Override
+    public Map<String, JsonObject> requestBatch(List<BatchRequestSpec> requests, Duration timeout) {
+        Map<String, JsonObject> collected = new LinkedHashMap<>();
+        List<McpInputRequiredSignal> missing = new ArrayList<>();
+        for (BatchRequestSpec spec : requests) {
+            JsonObject response = responses.get(spec.key());
+            if (response != null) {
+                collected.put(spec.key(), response);
+            } else {
+                missing.add(new McpInputRequiredSignal(spec.key(), spec.method(), spec.params()));
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new McpInputRequiredBatchSignal(missing);
+        }
+        return collected;
     }
 
     @Override

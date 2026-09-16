@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -378,12 +379,21 @@ public class McpModernProtocolHandler {
                     .orElseThrow(() -> McpProtocolErrors.invalidParams(id, "Unknown or expired requestState"));
             // re-target this round's notifications before supplying answers, so they don't reach a stale round
             continuation.useRound(channel, request.getProgressToken(), logsRequested);
-            McpInputRequiredSignal pendingInput = continuation.lastInput();
+            List<McpInputRequiredSignal> pendingInputs = continuation.lastInputs();
             JsonObject inputs = params.get("inputResponses") instanceof JsonObject o ? o : JsonValue.EMPTY_JSON_OBJECT;
-            if (pendingInput != null
-                    && continuation.isWaitingFor(pendingInput.key())
-                    && continuation.supply(inputs) == 0) {
-                return inputRequired(pendingInput, continuationState(method, name, digest, continuation));
+            if (!pendingInputs.isEmpty()) {
+                // a signal answered by THIS round's supplyAndReport is excluded outright (its isWaitingFor would
+                // still race the worker thread's own pending-map cleanup for a single awaitInput); a signal answered
+                // by an EARLIER round is excluded via isWaitingFor, which by then is race-free even for a single
+                // awaitInput (the worker has long since returned from its blocking get()) and is the only way to
+                // recognise a batch member a previous round already resolved
+                Set<String> answered = continuation.supplyAndReport(inputs);
+                List<McpInputRequiredSignal> stillPending = pendingInputs.stream()
+                        .filter(signal -> !answered.contains(signal.key()) && continuation.isWaitingFor(signal.key()))
+                        .toList();
+                if (!stillPending.isEmpty()) {
+                    return inputRequired(stillPending, continuationState(method, name, digest, continuation));
+                }
             }
         }
         return awaitContinuation(id, method, name, digest, continuation);
@@ -401,7 +411,10 @@ public class McpModernProtocolHandler {
             throw new McpException(id, McpErrorCode.INTERNAL_ERROR, "Interrupted while waiting for the invocation");
         }
         if (event instanceof McpContinuation.Input input) {
-            return inputRequired(input.request(), continuationState(method, name, digest, continuation));
+            return inputRequired(List.of(input.request()), continuationState(method, name, digest, continuation));
+        }
+        if (event instanceof McpContinuation.InputBatch batch) {
+            return inputRequired(batch.requests(), continuationState(method, name, digest, continuation));
         }
         continuations.remove(continuation.id());
         if (event instanceof McpContinuation.Done done) {
@@ -460,19 +473,42 @@ public class McpModernProtocolHandler {
         try {
             return complete(dispatchInvocation(request, ctx));
         } catch (McpInputRequiredSignal signal) {
-            JsonObjectBuilder responses = Json.createObjectBuilder();
-            collected.forEach(responses::add);
-            McpRequestStateCodec codec = mrtr.codec();
-            String state = codec.encode(new McpRequestStateCodec.State(
-                    method,
-                    name,
-                    digest,
-                    codec.expiresAt(mrtr.stateTtl()),
-                    responses.build(),
-                    null,
-                    List.of(signal.key())));
-            return inputRequired(signal, state);
+            return inputRequired(List.of(signal), List.of(signal.key()), collected, method, name, digest);
+        } catch (McpInputRequiredBatchSignal batchSignal) {
+            List<McpInputRequiredSignal> missing = batchSignal.missing();
+            List<String> missingKeys =
+                    missing.stream().map(McpInputRequiredSignal::key).toList();
+            return inputRequired(missing, missingKeys, collected, method, name, digest);
         }
+    }
+
+    /**
+     * Builds the {@code input_required} result and signed {@code requestState} for one or more pending client requests
+     * raised while replaying an invocation (MRTR REPLAY mode).
+     *
+     * @param signals the pending requests to list in {@code inputRequests}, in declaration order
+     * @param pendingKeys {@code signals}' keys, carried in the new {@code requestState} so a future round accepts only
+     *     answers to requests actually pending
+     * @param collected the responses already collected on earlier rounds, carried forward in the new
+     *     {@code requestState}
+     * @param method the JSON-RPC method being invoked
+     * @param name tool/prompt name or resource URI
+     * @param digest digest of the arguments (or URI)
+     * @return the decorated {@code input_required} result
+     */
+    private JsonObject inputRequired(
+            List<McpInputRequiredSignal> signals,
+            List<String> pendingKeys,
+            Map<String, JsonObject> collected,
+            String method,
+            String name,
+            String digest) {
+        JsonObjectBuilder responses = Json.createObjectBuilder();
+        collected.forEach(responses::add);
+        McpRequestStateCodec codec = mrtr.codec();
+        String state = codec.encode(new McpRequestStateCodec.State(
+                method, name, digest, codec.expiresAt(mrtr.stateTtl()), responses.build(), null, pendingKeys));
+        return inputRequired(signals, state);
     }
 
     /**
@@ -512,14 +548,31 @@ public class McpModernProtocolHandler {
      * @return the decorated {@code input_required} result
      */
     public JsonObject inputRequired(McpInputRequiredSignal signal, String requestState) {
-        JsonObject inputRequest = Json.createObjectBuilder()
-                .add("method", signal.method())
-                .add("params", McpJsonSerializer.toJsonObject(signal.params() != null ? signal.params() : Map.of()))
-                .build();
+        return inputRequired(List.of(signal), requestState);
+    }
+
+    /**
+     * Builds an {@code input_required} result listing every given pending client request — one entry per batch member
+     * missing an answer, never just the first (SEP-2322). For a single-element list this produces exactly the same JSON
+     * as {@link #inputRequired(McpInputRequiredSignal, String)}.
+     *
+     * @param signals the pending requests to list, in declaration order; must not be empty
+     * @param requestState the signed state to hand back to the client so it can retry with the missing answers
+     * @return the decorated {@code input_required} result
+     */
+    public JsonObject inputRequired(List<McpInputRequiredSignal> signals, String requestState) {
+        JsonObjectBuilder inputRequests = Json.createObjectBuilder();
+        for (McpInputRequiredSignal signal : signals) {
+            JsonObject inputRequest = Json.createObjectBuilder()
+                    .add("method", signal.method())
+                    .add("params", McpJsonSerializer.toJsonObject(signal.params() != null ? signal.params() : Map.of()))
+                    .build();
+            inputRequests.add(signal.key(), inputRequest);
+        }
         return decorate(
                 Json.createObjectBuilder()
                         .add("resultType", "input_required")
-                        .add("inputRequests", Json.createObjectBuilder().add(signal.key(), inputRequest))
+                        .add("inputRequests", inputRequests)
                         .add("requestState", requestState),
                 null);
     }

@@ -3,6 +3,8 @@ package dev.langchain4j.cdi.mcp.modulepathconsumer;
 import dev.langchain4j.cdi.mcp.server.api.Elicitation;
 import dev.langchain4j.cdi.mcp.server.api.ElicitationResponse;
 import dev.langchain4j.cdi.mcp.server.api.McpConnection;
+import dev.langchain4j.cdi.mcp.server.api.McpInteractionResults;
+import dev.langchain4j.cdi.mcp.server.api.McpInteractions;
 import dev.langchain4j.cdi.mcp.server.api.McpLog;
 import dev.langchain4j.cdi.mcp.server.api.Roots;
 import dev.langchain4j.cdi.mcp.server.api.Sampling;
@@ -28,6 +30,10 @@ import org.mcpjava.server.tools.ToolArg;
  *       {@code Roots}, {@code Sampling}, {@code Elicitation} as {@code @Tool} method parameters;
  *   <li>the types those framework interfaces return or accept in their own signatures ({@code McpRoot},
  *       {@code McpSamplingMessage}, {@code SamplingResponse}, {@code ElicitationResponse});
+ *   <li>the MRTR server-chosen input keys (SEP-2322): {@code ElicitationRequest.Builder.setKey},
+ *       {@code SamplingRequest.Builder.setKey}, {@code Roots.listAndAwait(String)};
+ *   <li>the MRTR batch interactions (SEP-2322): {@code McpInteractions} injected as a method parameter,
+ *       {@code McpInteractions.Batch} and {@code McpInteractionResults};
  *   <li>the {@code @Named("mcp-server")} {@link McpServerConfig} producer an application declares to advertise its own
  *       server name and version.
  * </ul>
@@ -59,7 +65,8 @@ public class DocumentedMcpApiConsumer {
             McpConnection connection,
             Roots roots,
             Sampling sampling,
-            Elicitation elicitation) {
+            Elicitation elicitation,
+            McpInteractions interactions) {
 
         log.info("connection %s is %s", connection.id(), connection.status());
         if (log.level() == McpLog.LogLevel.DEBUG) {
@@ -90,6 +97,25 @@ public class DocumentedMcpApiConsumer {
                     .build()
                     .sendAndAwait();
             return String.valueOf(response.action());
+        }
+
+        if (elicitation.isSupported() && sampling.isSupported() && roots.isSupported()) {
+            McpInteractionResults answers = interactions
+                    .batch()
+                    .elicit(
+                            "user_name",
+                            elicitation.requestBuilder().setMessage("Your name?").build())
+                    .sample(
+                            "summary",
+                            sampling.requestBuilder()
+                                    .addMessage(new McpSamplingMessage("user", input))
+                                    .setMaxTokens(16L)
+                                    .build())
+                    .roots("roots")
+                    .awaitAll();
+            return answers.elicitation("user_name").content().getString("name") + " / "
+                    + answers.sampling("summary").model() + " / "
+                    + answers.roots("roots").size();
         }
 
         return input;

@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import jakarta.json.JsonObject;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /** Stateful MRTR requester: blocks the invocation thread until the client answers on a retry. */
@@ -35,6 +36,15 @@ public class McpContinuationClientRequester implements McpClientRequester {
     @Override
     public JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
         return continuation.awaitInput(method, params, key);
+    }
+
+    /** Parks the worker thread until every batch member is answered (MRTR CONTINUATION mode, SEP-2322). */
+    @Override
+    public Map<String, JsonObject> requestBatch(List<BatchRequestSpec> requests, Duration timeout) {
+        List<McpContinuation.PendingRequest> pendingRequests = requests.stream()
+                .map(spec -> new McpContinuation.PendingRequest(spec.key(), spec.method(), spec.params()))
+                .toList();
+        return continuation.awaitBatch(pendingRequests);
     }
 
     @Override

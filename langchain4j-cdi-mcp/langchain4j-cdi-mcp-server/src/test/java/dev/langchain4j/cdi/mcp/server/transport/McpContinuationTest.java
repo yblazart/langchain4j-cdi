@@ -81,6 +81,137 @@ class McpContinuationTest {
     }
 
     @Test
+    void batchAnsweredInASingleRetry() throws Exception {
+        McpContinuation continuation = new McpContinuation("b1", Duration.ofSeconds(5), () -> {});
+        List<McpContinuation.PendingRequest> requests = List.of(
+                new McpContinuation.PendingRequest("user_name", "elicitation/create", Map.of()),
+                new McpContinuation.PendingRequest("summary", "sampling/createMessage", Map.of()),
+                new McpContinuation.PendingRequest("roots", "roots/list", Map.of()));
+        CompletableFuture<Map<String, JsonObject>> worker =
+                CompletableFuture.supplyAsync(() -> continuation.awaitBatch(requests));
+
+        McpContinuation.Event event = continuation.nextEvent(Duration.ofSeconds(5));
+        assertThat(event).isInstanceOf(McpContinuation.InputBatch.class);
+        List<McpInputRequiredSignal> pending = ((McpContinuation.InputBatch) event).requests();
+        assertThat(pending).extracting(McpInputRequiredSignal::key).containsExactly("user_name", "summary", "roots");
+        assertThat(continuation.isWaitingFor("user_name")).isTrue();
+        assertThat(continuation.isWaitingFor("summary")).isTrue();
+        assertThat(continuation.isWaitingFor("roots")).isTrue();
+
+        JsonObject answer = Json.createObjectBuilder().add("action", "accept").build();
+        int supplied = continuation.supply(Json.createObjectBuilder()
+                .add("user_name", answer)
+                .add("summary", answer)
+                .add("roots", answer)
+                .build());
+        assertThat(supplied).isEqualTo(3);
+
+        Map<String, JsonObject> result = worker.get(5, TimeUnit.SECONDS);
+        assertThat(result).containsOnlyKeys("user_name", "summary", "roots");
+        assertThat(continuation.isWaitingFor("user_name")).isFalse();
+        assertThat(continuation.isWaitingFor("summary")).isFalse();
+        assertThat(continuation.isWaitingFor("roots")).isFalse();
+    }
+
+    @Test
+    void batchAnsweredAcrossTwoRetriesPartialAnswersFirst() throws Exception {
+        McpContinuation continuation = new McpContinuation("b2", Duration.ofSeconds(5), () -> {});
+        List<McpContinuation.PendingRequest> requests = List.of(
+                new McpContinuation.PendingRequest("user_name", "elicitation/create", Map.of()),
+                new McpContinuation.PendingRequest("summary", "sampling/createMessage", Map.of()),
+                new McpContinuation.PendingRequest("roots", "roots/list", Map.of()));
+        CompletableFuture<Map<String, JsonObject>> worker =
+                CompletableFuture.supplyAsync(() -> continuation.awaitBatch(requests));
+        continuation.nextEvent(Duration.ofSeconds(5));
+
+        JsonObject answer = Json.createObjectBuilder().add("action", "accept").build();
+        // first retry only answers one of the three
+        assertThat(continuation.supply(
+                        Json.createObjectBuilder().add("user_name", answer).build()))
+                .isEqualTo(1);
+        assertThat(worker.isDone()).isFalse();
+        assertThat(continuation.isWaitingFor("user_name")).isFalse();
+        assertThat(continuation.isWaitingFor("summary")).isTrue();
+        assertThat(continuation.isWaitingFor("roots")).isTrue();
+
+        // second retry answers the remaining two
+        assertThat(continuation.supply(Json.createObjectBuilder()
+                        .add("summary", answer)
+                        .add("roots", answer)
+                        .build()))
+                .isEqualTo(2);
+
+        Map<String, JsonObject> result = worker.get(5, TimeUnit.SECONDS);
+        assertThat(result).containsOnlyKeys("user_name", "summary", "roots");
+    }
+
+    @Test
+    void batchTimesOutWithSomeKeysStillPending() throws Exception {
+        McpContinuation continuation = new McpContinuation("b3", Duration.ofMillis(200), () -> {});
+        List<McpContinuation.PendingRequest> requests = List.of(
+                new McpContinuation.PendingRequest("user_name", "elicitation/create", Map.of()),
+                new McpContinuation.PendingRequest("roots", "roots/list", Map.of()));
+        CompletableFuture<Map<String, JsonObject>> worker =
+                CompletableFuture.supplyAsync(() -> continuation.awaitBatch(requests));
+        continuation.nextEvent(Duration.ofSeconds(5));
+
+        JsonObject answer = Json.createObjectBuilder().add("action", "accept").build();
+        continuation.supply(Json.createObjectBuilder().add("user_name", answer).build());
+
+        assertThatThrownBy(() -> worker.get(5, TimeUnit.SECONDS))
+                .isInstanceOf(ExecutionException.class)
+                .hasCauseInstanceOf(McpException.class);
+
+        assertThat(continuation.isWaitingFor("user_name")).isFalse();
+        assertThat(continuation.isWaitingFor("roots")).isTrue();
+    }
+
+    @Test
+    void twoConcurrentBatchesDoNotLeakPendingKeysIntoEachOther() throws Exception {
+        McpContinuation c1 = new McpContinuation("conc1", Duration.ofSeconds(5), () -> {});
+        McpContinuation c2 = new McpContinuation("conc2", Duration.ofSeconds(5), () -> {});
+        List<McpContinuation.PendingRequest> requests = List.of(
+                new McpContinuation.PendingRequest("user_name", "elicitation/create", Map.of()),
+                new McpContinuation.PendingRequest("summary", "sampling/createMessage", Map.of()));
+
+        CompletableFuture<Map<String, JsonObject>> worker1 =
+                CompletableFuture.supplyAsync(() -> c1.awaitBatch(requests));
+        CompletableFuture<Map<String, JsonObject>> worker2 =
+                CompletableFuture.supplyAsync(() -> c2.awaitBatch(requests));
+        c1.nextEvent(Duration.ofSeconds(5));
+        c2.nextEvent(Duration.ofSeconds(5));
+
+        JsonObject answerC1 = Json.createObjectBuilder()
+                .add("action", "accept")
+                .add("who", "c1")
+                .build();
+        JsonObject answerC2 = Json.createObjectBuilder()
+                .add("action", "accept")
+                .add("who", "c2")
+                .build();
+
+        // answer c1's batch only; c2's identically-keyed batch must be unaffected
+        c1.supply(Json.createObjectBuilder()
+                .add("user_name", answerC1)
+                .add("summary", answerC1)
+                .build());
+        Map<String, JsonObject> result1 = worker1.get(5, TimeUnit.SECONDS);
+        assertThat(result1.get("user_name")).isEqualTo(answerC1);
+        assertThat(c2.isWaitingFor("user_name")).isTrue();
+        assertThat(c2.isWaitingFor("summary")).isTrue();
+        assertThat(worker2.isDone()).isFalse();
+
+        c2.supply(Json.createObjectBuilder()
+                .add("user_name", answerC2)
+                .add("summary", answerC2)
+                .build());
+        Map<String, JsonObject> result2 = worker2.get(5, TimeUnit.SECONDS);
+        assertThat(result2.get("user_name")).isEqualTo(answerC2);
+        assertThat(c1.isWaitingFor("user_name")).isFalse();
+        assertThat(c2.isWaitingFor("user_name")).isFalse();
+    }
+
+    @Test
     void completionAndFailureAreDeliveredAsEvents() throws Exception {
         McpContinuation continuation = new McpContinuation("c2", Duration.ofSeconds(5), () -> {});
 

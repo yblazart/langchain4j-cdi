@@ -92,6 +92,9 @@ public class McpApiFactory {
         if (type == Elicitation.class) {
             return new CdiElicitation(requester, elicitationManager);
         }
+        if (type == McpInteractions.class) {
+            return new CdiInteractions(requester);
+        }
         throw new IllegalArgumentException("Unknown MCP framework type: " + type.getName());
     }
 }

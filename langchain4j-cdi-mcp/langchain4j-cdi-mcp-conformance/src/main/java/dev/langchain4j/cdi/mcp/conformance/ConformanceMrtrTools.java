@@ -2,6 +2,8 @@ package dev.langchain4j.cdi.mcp.conformance;
 
 import dev.langchain4j.cdi.mcp.server.api.Elicitation;
 import dev.langchain4j.cdi.mcp.server.api.ElicitationResponse;
+import dev.langchain4j.cdi.mcp.server.api.McpInteractionResults;
+import dev.langchain4j.cdi.mcp.server.api.McpInteractions;
 import dev.langchain4j.cdi.mcp.server.api.Roots;
 import dev.langchain4j.cdi.mcp.server.api.Sampling;
 import dev.langchain4j.cdi.mcp.server.api.SamplingResponse;
@@ -19,9 +21,11 @@ import org.mcpjava.server.tools.ToolResponse;
 /**
  * Multi round-trip request (MRTR / {@code input_required}, SEP-2322) fixtures.
  *
- * <p>Each method uses the ordinary blocking client-interaction API. With an MCP 2026-07-28 client the server cannot
+ * <p>Most methods use the ordinary blocking client-interaction API: with an MCP 2026-07-28 client the server cannot
  * send its own requests, so the framework turns the first pending interaction into an {@code input_required} result and
- * the client retries the call with the answer.
+ * the client retries the call with the answer. {@link #multipleInputs} instead uses {@link McpInteractions} to declare
+ * a batch of interactions and await all of their answers together, so a single {@code input_required} result can list
+ * several pending requests at once (SEP-2322 batch interactions).
  */
 @ApplicationScoped
 public class ConformanceMrtrTools {
@@ -95,26 +99,42 @@ public class ConformanceMrtrTools {
     }
 
     /**
-     * Elicitation, sampling and {@code roots/list} in one invocation.
+     * Elicitation, sampling and {@code roots/list} in one batch, awaited together (SEP-2322 batch interactions): proves
+     * an {@code input_required} result can list several requests of different methods at once, and that a retry
+     * answering all of them completes the call.
      *
+     * @param interactions the batch API
      * @param elicitation the elicitation API
      * @param sampling the sampling API
-     * @param roots the roots API
      * @return the tool response
      */
     @Tool(
             name = "test_input_required_result_multiple_inputs",
             description = "InputRequiredResult flow requiring elicitation, sampling and roots/list")
-    public ToolResponse multipleInputs(Elicitation elicitation, Sampling sampling, Roots roots) {
-        ElicitationResponse who = askName(elicitation, "What is your name?");
-        SamplingResponse greeting = sampling.requestBuilder()
-                .addMessage(ConformanceTools.userMessage("Generate a greeting"))
-                .setMaxTokens(50)
-                .build()
-                .sendAndAwait();
-        List<McpRoot> list = roots.listAndAwait();
+    public ToolResponse multipleInputs(McpInteractions interactions, Elicitation elicitation, Sampling sampling) {
+        McpInteractionResults answers = interactions
+                .batch()
+                .elicit(
+                        "user_name",
+                        elicitation
+                                .requestBuilder()
+                                .setMessage("What is your name?")
+                                .addSchemaProperty("name", () -> Map.of("type", "string"))
+                                .build())
+                .sample(
+                        "greeting",
+                        sampling.requestBuilder()
+                                .addMessage(ConformanceTools.userMessage("Generate a greeting"))
+                                .setMaxTokens(50)
+                                .build())
+                .roots("client_roots")
+                .awaitAll();
+
+        String who = name(answers.elicitation("user_name"));
+        SamplingResponse greeting = answers.sampling("greeting");
+        List<McpRoot> list = answers.roots("client_roots");
         return ToolResponse.ofText(
-                "name=" + name(who) + ", greeting=" + ConformanceTools.describe(greeting) + ", roots=" + list);
+                "name=" + who + ", greeting=" + ConformanceTools.describe(greeting) + ", roots=" + list);
     }
 
     /**
@@ -205,11 +225,16 @@ public class ConformanceMrtrTools {
                 .build();
     }
 
+    /**
+     * Asks for the caller's name under the key {@code user_name}: {@code input-required-result-basic-elicitation}
+     * (SEP-2322) requires that exact key verbatim.
+     */
     private static ElicitationResponse askName(Elicitation elicitation, String message) {
         return elicitation
                 .requestBuilder()
                 .setMessage(message)
                 .addSchemaProperty("name", () -> Map.of("type", "string"))
+                .setKey("user_name")
                 .build()
                 .sendAndAwait();
     }

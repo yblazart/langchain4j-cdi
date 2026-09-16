@@ -1,5 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
+import dev.langchain4j.cdi.mcp.server.transport.BatchRequestSpec;
 import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpElicitationManager;
 import jakarta.json.JsonObject;
@@ -76,6 +77,24 @@ public class CdiElicitationRequest implements ElicitationRequest {
             requestedSchema.forEach((name, schema) -> schemaMap.put(name, schema.asJson()));
         }
         return schemaMap;
+    }
+
+    /**
+     * Builds the batch spec for this request, under the given batch key (MRTR batch, SEP-2322): the batch key is
+     * authoritative, so a request that also carries its own, different {@code Builder.setKey} value is rejected.
+     *
+     * @param batchKey the key {@link McpInteractions.Batch#elicit(String, ElicitationRequest)} was called with
+     * @return the batch spec, ready to hand to {@code McpClientRequester.requestBatch}
+     * @throws IllegalArgumentException if this request's own key conflicts with {@code batchKey}
+     */
+    BatchRequestSpec toBatchSpec(String batchKey) {
+        if (key != null && !key.equals(batchKey)) {
+            throw new IllegalArgumentException(
+                    "Batch.elicit: request's own key '" + key + "' conflicts with batch key '" + batchKey
+                            + "'; the batch key is authoritative, so use the same key or omit setKey on the request");
+        }
+        Map<String, Object> params = McpElicitationManager.buildParams(requester.isModern(), message, schemaMap());
+        return new BatchRequestSpec(batchKey, "elicitation/create", params);
     }
 
     static class CdiBuilder implements ElicitationRequest.Builder {

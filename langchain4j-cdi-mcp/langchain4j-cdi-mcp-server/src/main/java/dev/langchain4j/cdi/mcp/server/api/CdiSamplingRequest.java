@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.server.api;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpModelPreferences;
 import dev.langchain4j.cdi.mcp.server.protocol.McpSamplingMessage;
+import dev.langchain4j.cdi.mcp.server.transport.BatchRequestSpec;
 import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpSamplingManager;
 import jakarta.json.JsonObject;
@@ -160,14 +161,34 @@ public class CdiSamplingRequest implements SamplingRequest {
      * {@link JsonObject} (it is itself a {@code Map<String, JsonValue>}); a bare string is unwrapped to a
      * {@link String} so a caller never has to unquote it.
      *
+     * <p>Package-visible so {@link CdiInteractionResults} can reuse it for a batched sampling answer.
+     *
      * @param content the raw {@code content} value, or {@code null} when absent
      * @return the content to expose on the {@link SamplingResponse}, or {@code null}
      */
-    private static Object content(JsonValue content) {
+    static Object content(JsonValue content) {
         if (content == null || content.getValueType() == JsonValue.ValueType.NULL) {
             return null;
         }
         return content instanceof JsonString s ? s.getString() : content;
+    }
+
+    /**
+     * Builds the batch spec for this request, under the given batch key (MRTR batch, SEP-2322): the batch key is
+     * authoritative, so a request that also carries its own, different {@code Builder.setKey} value is rejected.
+     *
+     * @param batchKey the key {@link McpInteractions.Batch#sample(String, SamplingRequest)} was called with
+     * @return the batch spec, ready to hand to {@code McpClientRequester.requestBatch}
+     * @throws IllegalArgumentException if this request's own key conflicts with {@code batchKey}
+     */
+    BatchRequestSpec toBatchSpec(String batchKey) {
+        if (key != null && !key.equals(batchKey)) {
+            throw new IllegalArgumentException(
+                    "Batch.sample: request's own key '" + key + "' conflicts with batch key '" + batchKey
+                            + "'; the batch key is authoritative, so use the same key or omit setKey on the request");
+        }
+        Map<String, Object> params = McpSamplingManager.buildParams(messageMaps(), modelPrefsMap(), (int) maxTokens);
+        return new BatchRequestSpec(batchKey, "sampling/createMessage", params);
     }
 
     static class CdiBuilder implements SamplingRequest.Builder {

@@ -2,6 +2,8 @@ package dev.langchain4j.cdi.mcp.server.transport;
 
 import jakarta.json.JsonObject;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Performs a client interaction (elicitation, sampling, roots) on behalf of a running server method. */
@@ -40,6 +42,25 @@ public interface McpClientRequester {
      */
     default JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
         return request(method, params, timeout);
+    }
+
+    /**
+     * Sends every member of a batch of client interactions (MRTR, SEP-2322) and returns every collected answer, keyed
+     * as declared. The default sends each member in turn via {@link #request(String, Map, Duration, String)} and blocks
+     * on each in order — the correct behaviour for a requester with no MRTR concept (legacy): "one after another". A
+     * requester that supports MRTR overrides this to declare every member before waiting on any of them, so a client
+     * can answer all of them in one round trip.
+     *
+     * @param requests the batch members, in declaration order
+     * @param timeout maximum wait per member (ignored by stateless implementations)
+     * @return every collected answer, keyed by {@link BatchRequestSpec#key()}
+     */
+    default Map<String, JsonObject> requestBatch(List<BatchRequestSpec> requests, Duration timeout) {
+        Map<String, JsonObject> result = new LinkedHashMap<>();
+        for (BatchRequestSpec spec : requests) {
+            result.put(spec.key(), request(spec.method(), spec.params(), timeout, spec.key()));
+        }
+        return result;
     }
 
     /**

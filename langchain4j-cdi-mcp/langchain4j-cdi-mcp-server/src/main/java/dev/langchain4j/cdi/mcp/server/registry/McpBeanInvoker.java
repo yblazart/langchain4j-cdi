@@ -5,6 +5,7 @@ import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
+import dev.langchain4j.cdi.mcp.server.transport.McpInputRequiredBatchSignal;
 import dev.langchain4j.cdi.mcp.server.transport.McpInputRequiredSignal;
 import dev.langchain4j.cdi.mcp.server.transport.McpSession;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -171,10 +172,11 @@ public class McpBeanInvoker {
     }
 
     /**
-     * Invokes the given call and maps its failures the same way as the reflective path: {@link McpInputRequiredSignal}
-     * and {@link McpException} are rethrown unwrapped, {@link InvocationTargetException} is unwrapped before mapping,
-     * and any other exception — including the checked exceptions {@code jakarta.enterprise.invoke.Invoker#invoke} is
-     * declared to throw — is wrapped as {@link McpErrorCode#INTERNAL_ERROR}.
+     * Invokes the given call and maps its failures the same way as the reflective path: {@link McpInputRequiredSignal},
+     * {@link McpInputRequiredBatchSignal} and {@link McpException} are rethrown unwrapped,
+     * {@link InvocationTargetException} is unwrapped before mapping, and any other exception — including the checked
+     * exceptions {@code jakarta.enterprise.invoke.Invoker#invoke} is declared to throw — is wrapped as
+     * {@link McpErrorCode#INTERNAL_ERROR}.
      *
      * @param requestId the JSON-RPC request ID for error reporting
      * @param method the method being invoked, for error messages
@@ -186,7 +188,7 @@ public class McpBeanInvoker {
             return call.invoke();
         } catch (InvocationTargetException e) {
             throw mapInvocationException(requestId, method, e.getCause());
-        } catch (McpInputRequiredSignal | McpException e) {
+        } catch (McpInputRequiredSignal | McpInputRequiredBatchSignal | McpException e) {
             throw e;
         } catch (Exception e) {
             throw mapInvocationException(requestId, method, e);
@@ -196,6 +198,9 @@ public class McpBeanInvoker {
     private RuntimeException mapInvocationException(Object requestId, Method method, Throwable cause) {
         if (cause instanceof McpInputRequiredSignal signal) {
             return signal;
+        }
+        if (cause instanceof McpInputRequiredBatchSignal batchSignal) {
+            return batchSignal;
         }
         if (cause instanceof McpException mcpException) {
             return mcpException;

@@ -10,9 +10,10 @@
 # checks of that scenario stay enforced. Warnings count as failures for the gate
 # and must be listed here too.
 #
-# Score at the time of writing: 146 passed, 2 failed.
-# Every remaining entry is a missing feature or a known API limitation, not a
-# protocol bug; see langchain4j-cdi-mcp/README.md ("Conformance").
+# Score at the time of writing: 150 passed, 0 failed.
+# The single remaining entry is warning-severity and inherent to the fixture's
+# test design, not a protocol bug or a missing feature; see
+# langchain4j-cdi-mcp/README.md ("Conformance") and the note below.
 server:
   # json-schema-2020-12 is now fully closed: `json_schema_2020_12_tool` is
   # published via @McpInputSchema with the scenario's exact
@@ -30,14 +31,27 @@ server:
   # `tools/call`, rejecting a mismatch, a missing header and a malformed
   # `=?base64?...?=` payload with HTTP 400 + JSON-RPC -32020.
 
-  # SEP-2322 MRTR: the framework names input requests by call order
-  # (`input-0`, `input-1`, ...); a fixture cannot choose the key `user_name`,
-  # which these two checks require verbatim. Needs an API change on the
-  # Elicitation / Sampling / Roots builders.
-  - input-required-result-basic-elicitation:sep-2322-elicitation-incomplete
-  - input-required-result-ignore-extra-params:sep-2322-ignore-unexpected-params
+  # SEP-2322 MRTR is now fully closed on the key/naming and batch fronts:
+  # `ElicitationRequest.Builder.setKey`/`SamplingRequest.Builder.setKey`/
+  # `Roots.listAndAwait(String)` let a tool publish `user_name` verbatim
+  # (`input-required-result-basic-elicitation`, now 3/3), and `McpInteractions`
+  # lets a tool declare a batch of interactions and await all of them together,
+  # so `input_required` can list several requests of different methods in one
+  # result (`input-required-result-multiple-input-requests`, now 3/3). The two
+  # entries that used to live here were removed.
 
-  # SEP-2322 MRTR: the blocking client-interaction API suspends on the first
-  # pending interaction, so only one `inputRequests` entry is ever returned;
-  # this check needs at least three of different methods in one result.
-  - input-required-result-multiple-input-requests:sep-2322-multiple-inputs-incomplete
+  # `input-required-result-ignore-extra-params` (warning-severity: the scenario
+  # marks a failed check WARNING, not FAILURE, but the gate still requires
+  # warnings to be baselined). The fixture sends `inputResponses` (a valid
+  # answer plus two unrecognized extra keys) WITHOUT ever obtaining or echoing
+  # a signed `requestState` from a prior round — a single, ungated call. This
+  # server requires a valid `requestState` before accepting any `inputResponses`
+  # (SEP-2322 MRTR ties an answer to the specific pending request it signed;
+  # accepting unsigned answers on a fresh call would let a client inject
+  # arbitrary "answers" the server never asked for), so the retry can never
+  # reach a complete result and this check cannot deterministically pass here.
+  # This is intrinsic to the fixture's test design colliding with the server's
+  # `requestState` gating, not something the key or batch API changes touch;
+  # confirmed it stays warning-severity after both, and the gate still exits 0
+  # with it listed (see the report for the exact `--expected-failures` run).
+  - input-required-result-ignore-extra-params:sep-2322-ignore-unexpected-params

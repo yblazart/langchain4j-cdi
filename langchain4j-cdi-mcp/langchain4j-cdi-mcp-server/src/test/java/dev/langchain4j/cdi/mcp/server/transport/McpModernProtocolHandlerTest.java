@@ -7,12 +7,20 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.cdi.mcp.server.api.CdiElicitation;
+import dev.langchain4j.cdi.mcp.server.api.CdiInteractions;
+import dev.langchain4j.cdi.mcp.server.api.CdiSampling;
+import dev.langchain4j.cdi.mcp.server.api.Elicitation;
+import dev.langchain4j.cdi.mcp.server.api.McpInteractionResults;
+import dev.langchain4j.cdi.mcp.server.api.McpInteractions;
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
+import dev.langchain4j.cdi.mcp.server.api.Sampling;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpProtocolErrors;
 import dev.langchain4j.cdi.mcp.server.logging.McpLogLevel;
 import dev.langchain4j.cdi.mcp.server.protocol.JsonRpcRequest;
 import dev.langchain4j.cdi.mcp.server.protocol.McpImplementation;
+import dev.langchain4j.cdi.mcp.server.protocol.McpSamplingMessage;
 import dev.langchain4j.cdi.mcp.server.protocol.McpServerCapabilities;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -394,6 +402,202 @@ class McpModernProtocolHandlerTest {
                                             .add("text", "Hello " + names)))
                     .build();
         });
+    }
+
+    /**
+     * Simulates a tool that declares a batch of three interactions of different methods (elicitation, sampling, roots)
+     * and awaits all of them together.
+     */
+    private void toolAskingBatch() {
+        when(features.callTool(any(), any(), any(), isNull())).thenAnswer(invocation -> {
+            McpRequestContext ctx = invocation.getArgument(2);
+            McpClientRequester requester = ctx.clientRequester();
+            Elicitation elicitation = new CdiElicitation(requester, new McpElicitationManager());
+            Sampling sampling = new CdiSampling(requester, new McpSamplingManager());
+            McpInteractions interactions = new CdiInteractions(requester);
+
+            McpInteractionResults answers = interactions
+                    .batch()
+                    .elicit(
+                            "user_name",
+                            elicitation
+                                    .requestBuilder()
+                                    .setMessage("Your name?")
+                                    .build())
+                    .sample(
+                            "summary",
+                            sampling.requestBuilder()
+                                    .addMessage(new McpSamplingMessage("user", "hi"))
+                                    .setMaxTokens(16)
+                                    .build())
+                    .roots("roots")
+                    .awaitAll();
+
+            String name = answers.elicitation("user_name").content().getString("name");
+            return Json.createObjectBuilder()
+                    .add(
+                            "content",
+                            Json.createArrayBuilder()
+                                    .add(Json.createObjectBuilder()
+                                            .add("type", "text")
+                                            .add("text", "Hello " + name)))
+                    .build();
+        });
+    }
+
+    private static JsonObject batchCallParams(String requestState, Map<String, String> answers) {
+        var params = Json.createObjectBuilder().add("name", "ask").add("arguments", Json.createObjectBuilder());
+        if (requestState != null) {
+            params.add("requestState", requestState);
+        }
+        if (!answers.isEmpty()) {
+            var inputs = Json.createObjectBuilder();
+            answers.forEach((key, name) -> {
+                if ("user_name".equals(key)) {
+                    inputs.add(key, elicitationAnswer(name));
+                } else if ("summary".equals(key)) {
+                    inputs.add(
+                            key,
+                            Json.createObjectBuilder().add("role", "assistant").add("content", "a summary"));
+                } else {
+                    inputs.add(key, Json.createObjectBuilder().add("roots", Json.createArrayBuilder()));
+                }
+            });
+            params.add("inputResponses", inputs);
+        }
+        return params.build();
+    }
+
+    private JsonObject callAllCapabilities(Object id, JsonObject params) {
+        McpReply reply = handler.handle(
+                new JsonRpcRequest(id, "tools/call", params), modern(null, "elicitation", "sampling", "roots"), false);
+        return parse(reply.body());
+    }
+
+    @Test
+    void replayBatchReportsEveryMissingRequestAtOnceNeverJustTheFirst() {
+        toolAskingBatch();
+
+        JsonObject result =
+                callAllCapabilities(100, batchCallParams(null, Map.of())).getJsonObject("result");
+
+        assertThat(result.getString("resultType")).isEqualTo("input_required");
+        JsonObject inputRequests = result.getJsonObject("inputRequests");
+        assertThat(inputRequests.keySet()).containsExactlyInAnyOrder("user_name", "summary", "roots");
+        assertThat(inputRequests.getJsonObject("user_name").getString("method")).isEqualTo("elicitation/create");
+        assertThat(inputRequests.getJsonObject("summary").getString("method")).isEqualTo("sampling/createMessage");
+        assertThat(inputRequests.getJsonObject("roots").getString("method")).isEqualTo("roots/list");
+    }
+
+    @Test
+    void replayBatchOnlyRelistsStillMissingAfterPartialAnswers() {
+        toolAskingBatch();
+
+        String state1 = callAllCapabilities(101, batchCallParams(null, Map.of()))
+                .getJsonObject("result")
+                .getString("requestState");
+
+        JsonObject round2 = callAllCapabilities(102, batchCallParams(state1, Map.of("user_name", "Ada")))
+                .getJsonObject("result");
+        assertThat(round2.getString("resultType")).isEqualTo("input_required");
+        assertThat(round2.getJsonObject("inputRequests").keySet()).containsExactlyInAnyOrder("summary", "roots");
+
+        JsonObject round3 = callAllCapabilities(
+                        103, batchCallParams(round2.getString("requestState"), Map.of("summary", "x", "roots", "x")))
+                .getJsonObject("result");
+        assertThat(round3.getString("resultType")).isEqualTo("complete");
+        assertThat(round3.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("Hello Ada");
+    }
+
+    @Test
+    void continuationBatchParksAndReportsEveryMissingRequestAtOnce() {
+        toolAskingBatch();
+        McpContinuationStore[] holder = new McpContinuationStore[1];
+        McpModernProtocolHandler continuation = continuationHandler(holder);
+        try {
+            JsonObject first = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(110, "tools/call", batchCallParams(null, Map.of())),
+                                    modern(null, "elicitation", "sampling", "roots"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            assertThat(first.getString("resultType")).isEqualTo("input_required");
+            assertThat(first.getJsonObject("inputRequests").keySet())
+                    .containsExactlyInAnyOrder("user_name", "summary", "roots");
+
+            JsonObject second = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(
+                                            111,
+                                            "tools/call",
+                                            batchCallParams(
+                                                    first.getString("requestState"),
+                                                    Map.of(
+                                                            "user_name", "Ada",
+                                                            "summary", "x",
+                                                            "roots", "x"))),
+                                    modern(null, "elicitation", "sampling", "roots"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            assertThat(second.getString("resultType")).isEqualTo("complete");
+            assertThat(second.getJsonArray("content").getJsonObject(0).getString("text"))
+                    .isEqualTo("Hello Ada");
+        } finally {
+            holder[0].shutdown();
+        }
+    }
+
+    @Test
+    void continuationBatchPartialAnswersKeepRemainingPending() {
+        toolAskingBatch();
+        McpContinuationStore[] holder = new McpContinuationStore[1];
+        McpModernProtocolHandler continuation = continuationHandler(holder);
+        try {
+            JsonObject first = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(120, "tools/call", batchCallParams(null, Map.of())),
+                                    modern(null, "elicitation", "sampling", "roots"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            JsonObject second = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(
+                                            121,
+                                            "tools/call",
+                                            batchCallParams(
+                                                    first.getString("requestState"), Map.of("user_name", "Ada"))),
+                                    modern(null, "elicitation", "sampling", "roots"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            assertThat(second.getString("resultType")).isEqualTo("input_required");
+            assertThat(second.getJsonObject("inputRequests").keySet()).containsExactlyInAnyOrder("summary", "roots");
+
+            JsonObject third = parse(continuation
+                            .handle(
+                                    new JsonRpcRequest(
+                                            122,
+                                            "tools/call",
+                                            batchCallParams(
+                                                    second.getString("requestState"),
+                                                    Map.of("summary", "x", "roots", "x"))),
+                                    modern(null, "elicitation", "sampling", "roots"),
+                                    false)
+                            .body())
+                    .getJsonObject("result");
+
+            assertThat(third.getString("resultType")).isEqualTo("complete");
+        } finally {
+            holder[0].shutdown();
+        }
     }
 
     private static JsonObject callParams(String requestState, String key, String name, int x) {

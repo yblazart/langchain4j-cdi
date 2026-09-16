@@ -641,6 +641,49 @@ The key must not be blank; `build()` rejects a blank key. A response for a key t
 ignored. This works identically in both `REPLAY` and `CONTINUATION` mode, and is a no-op with legacy (2025-03-26)
 clients, which have no MRTR and no `inputRequests`/`inputResponses` concept.
 
+#### Batching several interactions in one round (SEP-2322)
+
+`sendAndAwait()` blocks, so a tool cannot normally "keep going" to discover the *next* interaction it needs while a
+client is still stateless (REPLAY): a missing answer surfaces one interaction at a time, one round trip each. Inject
+`McpInteractions` (like `Elicitation`, `Sampling` and `Roots`) to declare several interactions as one batch and await
+all of their answers together, in one round trip:
+
+```java
+@Tool(description = "Plan a trip after collecting the traveller's details")
+public String plan(McpInteractions interactions, Elicitation elicitation, Sampling sampling, Roots roots) {
+    McpInteractionResults answers = interactions.batch()
+            .elicit("user_name", elicitation.requestBuilder().setMessage("Your name?").build())
+            .sample("summary", sampling.requestBuilder().addMessage(msg).build())
+            .roots("roots")
+            .awaitAll();
+
+    String name = answers.elicitation("user_name").content().getString("name");
+    String summary = String.valueOf(answers.sampling("summary").content());
+    List<McpRoot> clientRoots = answers.roots("roots");
+    return "Planned for " + name;
+}
+```
+
+Every rule below is enforced **before anything is sent**, each rejecting with a message naming the rule:
+
+- a duplicate key within one batch;
+- a request built with its own `setKey` that conflicts with the batch key it is added under (equal keys are fine —
+  the batch key is authoritative either way);
+- an empty batch (`awaitAll()` with no members);
+- a client capability missing for **any** member — the whole batch fails up front, the same way a single interaction
+  fails today.
+
+Asking `McpInteractionResults` for an unknown key, or for a key under the wrong accessor (`elicitation`/`sampling`/
+`roots`), throws `IllegalArgumentException` rather than returning `null`.
+
+**Semantics per mode:**
+
+| Mode | `awaitAll()` behaviour |
+|---|---|
+| `REPLAY` (default) | If every key is already answered (carried in the signed `requestState`), returns the results. Otherwise returns **one** `input_required` result listing **every missing request at once** — never just the first — and already-answered keys are not re-requested. |
+| `CONTINUATION` | Emits every missing request in one `input_required` result and parks the worker thread until **all** of them are answered; a round that answers only some of them keeps the rest pending across further rounds. |
+| Legacy (2025-03-26) | No MRTR in this era: the batch's interactions are issued one after another (`elicitation/create`, `sampling/createMessage`, `roots/list`) and their answers collected, exactly as if each had been sent with `sendAndAwait()` in turn. |
+
 With modern clients, `McpLog` messages and `Progress` notifications are sent on the SSE response stream of the current request only, and log messages only when the request carried `io.modelcontextprotocol/logLevel`.
 
 ### Server Configuration
@@ -689,7 +732,7 @@ The server is measured against the official [`@modelcontextprotocol/conformance`
 
 | Run | Score |
 |---|---|
-| `--spec-version 2026-07-28 --suite all` | **146 passed, 2 failed** |
+| `--spec-version 2026-07-28 --suite all` | **150 passed, 0 failed** |
 | `--spec-version 2025-11-25 --suite all` | **81 passed, 0 failed** |
 | `@0.1.16` (stable line, default suite) | **40 passed, 0 failed** |
 
@@ -706,9 +749,13 @@ npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:80
 
 ### Known gaps
 
-The remaining failures are missing features and API limitations, not protocol bugs. They are listed in `conformance-baseline.yml` / `conformance-baseline-legacy.yml`, so a regression anywhere else fails the gate.
+The remaining failure is listed in `conformance-baseline.yml`, so a regression anywhere else fails the gate.
 
-- **One pending input request per round** — the blocking `sendAndAwait()` API suspends the method at its first interaction, so an `input_required` result always carries a single `inputRequests` entry. Asking several questions in one round trip needs a batch interaction API.
+- **`input-required-result-ignore-extra-params` (warning-severity)** — the fixture sends `inputResponses` without
+  ever obtaining or echoing a signed `requestState` from a prior round. This server requires a valid `requestState`
+  before accepting any `inputResponses` (an answer is bound to the specific pending request it signed, so accepting
+  unsigned answers on a fresh call would let a client inject arbitrary "answers" the server never asked for), so the
+  retry can never reach a complete result. This is intrinsic to the fixture's test design, not a missing feature.
 - **Tasks extension** — not implemented.
 
 ---
