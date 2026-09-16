@@ -27,6 +27,7 @@ public class CdiSamplingRequest implements SamplingRequest {
     private final Map<String, Object> metadata;
     private final McpSamplingManager samplingManager;
     private final McpClientRequester requester;
+    private final String key;
 
     CdiSamplingRequest(
             long maxTokens,
@@ -38,7 +39,8 @@ public class CdiSamplingRequest implements SamplingRequest {
             McpModelPreferences modelPreferences,
             Map<String, Object> metadata,
             McpSamplingManager samplingManager,
-            McpClientRequester requester) {
+            McpClientRequester requester,
+            String key) {
         this.maxTokens = maxTokens;
         this.messages = messages;
         this.stopSequences = stopSequences;
@@ -49,6 +51,16 @@ public class CdiSamplingRequest implements SamplingRequest {
         this.metadata = metadata;
         this.samplingManager = samplingManager;
         this.requester = requester;
+        this.key = key;
+    }
+
+    /**
+     * Returns the key this request was configured with via {@link Builder#setKey(String)}.
+     *
+     * @return the configured key, or {@code null} if none was set
+     */
+    String key() {
+        return key;
     }
 
     @Override
@@ -100,22 +112,8 @@ public class CdiSamplingRequest implements SamplingRequest {
     @Override
     public SamplingResponse sendAndAwait() {
         requester.requireCapability("sampling");
-        List<Map<String, Object>> messageMaps = messages.stream()
-                .map(m -> {
-                    Map<String, Object> map = new LinkedHashMap<>();
-                    map.put("role", m.role().toString());
-                    map.put("content", m.content());
-                    return map;
-                })
-                .toList();
-
-        Map<String, Object> modelPrefsMap = null;
-        if (modelPreferences != null) {
-            modelPrefsMap = new LinkedHashMap<>();
-            modelPrefsMap.put("hints", modelPreferences.hints());
-        }
-
-        JsonObject result = samplingManager.createMessage(requester, messageMaps, modelPrefsMap, (int) maxTokens);
+        JsonObject result =
+                samplingManager.createMessage(requester, messageMaps(), modelPrefsMap(), (int) maxTokens, key);
         if (result == null) {
             return null;
         }
@@ -125,6 +123,36 @@ public class CdiSamplingRequest implements SamplingRequest {
                 result.getString("model", null),
                 result.getString("role", null),
                 result.getString("stopReason", null));
+    }
+
+    /**
+     * Converts {@link #messages} into the plain-JSON list the wire schema expects.
+     *
+     * @return the messages, ready to embed in {@code messages}
+     */
+    List<Map<String, Object>> messageMaps() {
+        return messages.stream()
+                .map(m -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("role", m.role().toString());
+                    map.put("content", m.content());
+                    return map;
+                })
+                .toList();
+    }
+
+    /**
+     * Converts {@link #modelPreferences} into the plain-JSON map the wire schema expects.
+     *
+     * @return the model preferences, ready to embed in {@code modelPreferences}, or {@code null}
+     */
+    Map<String, Object> modelPrefsMap() {
+        if (modelPreferences == null) {
+            return null;
+        }
+        Map<String, Object> modelPrefsMap = new LinkedHashMap<>();
+        modelPrefsMap.put("hints", modelPreferences.hints());
+        return modelPrefsMap;
     }
 
     /**
@@ -154,6 +182,7 @@ public class CdiSamplingRequest implements SamplingRequest {
         private IncludeContext includeContext;
         private McpModelPreferences modelPreferences;
         private Map<String, Object> metadata = Map.of();
+        private String key;
 
         CdiBuilder(McpSamplingManager samplingManager, McpClientRequester requester) {
             this.samplingManager = samplingManager;
@@ -215,12 +244,21 @@ public class CdiSamplingRequest implements SamplingRequest {
         }
 
         @Override
+        public Builder setKey(String key) {
+            this.key = key;
+            return this;
+        }
+
+        @Override
         public SamplingRequest build() {
             if (messages.isEmpty()) {
                 throw new IllegalStateException("At least one sampling message is required");
             }
             if (maxTokens <= 0) {
                 throw new IllegalStateException("maxTokens must be positive");
+            }
+            if (key != null && key.isBlank()) {
+                throw new IllegalArgumentException("SamplingRequest.Builder.setKey: key must not be blank");
             }
             return new CdiSamplingRequest(
                     maxTokens,
@@ -232,7 +270,8 @@ public class CdiSamplingRequest implements SamplingRequest {
                     modelPreferences,
                     Map.copyOf(metadata),
                     samplingManager,
-                    requester);
+                    requester,
+                    key);
         }
     }
 }

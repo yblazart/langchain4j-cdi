@@ -26,6 +26,23 @@ public interface McpClientRequester {
     JsonObject request(String method, Map<String, Object> params, Duration timeout);
 
     /**
+     * Sends a request to the client under a caller-chosen key (MRTR, SEP-2322): the key the request is emitted under in
+     * {@code inputRequests}, and the key its answer is looked up by in {@code inputResponses}. The default delegates to
+     * {@link #request(String, Map, Duration)}, silently ignoring {@code key} — implementations that support MRTR
+     * override this method; a {@code null} key means "let the server assign one by call order", exactly
+     * {@link #request(String, Map, Duration)}'s existing behaviour.
+     *
+     * @param method JSON-RPC method, e.g. {@code elicitation/create}
+     * @param params request params
+     * @param timeout maximum wait (ignored by stateless implementations)
+     * @param key the key to emit the request under, or {@code null} to let the server assign one
+     * @return the client result, or {@code null} on timeout (legacy)
+     */
+    default JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
+        return request(method, params, timeout);
+    }
+
+    /**
      * Returns whether requests are issued with MCP 2026-07-28 semantics.
      *
      * @return {@code true} for modern requests

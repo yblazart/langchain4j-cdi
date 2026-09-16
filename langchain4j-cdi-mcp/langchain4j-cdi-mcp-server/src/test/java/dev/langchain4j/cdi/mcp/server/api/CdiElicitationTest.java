@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
 import dev.langchain4j.cdi.mcp.server.transport.McpElicitationManager;
@@ -32,6 +33,29 @@ class CdiElicitationTest {
         }
     }
 
+    static final class KeyCapturingRequester implements McpClientRequester {
+        String key;
+
+        @Override
+        public boolean supports(String capability) {
+            return true;
+        }
+
+        @Override
+        public JsonObject request(String method, Map<String, Object> params, Duration timeout) {
+            return request(method, params, timeout, null);
+        }
+
+        @Override
+        public JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
+            this.key = key;
+            return Json.createObjectBuilder()
+                    .add("action", "accept")
+                    .add("content", Json.createObjectBuilder().add("name", "Ada"))
+                    .build();
+        }
+    }
+
     @Test
     void legacyElicitationSendsWrappedObjectSchema() {
         CapturingLegacyRequester requester = new CapturingLegacyRequester();
@@ -52,5 +76,43 @@ class CdiElicitationTest {
                         Map.of("type", "object", "properties", Map.of("name", Map.of("type", "string"))));
         assertThat(response.action()).isEqualTo(ElicitationResponse.Action.ACCEPT);
         assertThat(response.content().getString("name")).isEqualTo("Ada");
+    }
+
+    @Test
+    void setKeyIsSentAsTheEffectiveInputRequestKey() {
+        KeyCapturingRequester requester = new KeyCapturingRequester();
+        Elicitation elicitation = new CdiElicitation(requester, new McpElicitationManager());
+
+        elicitation
+                .requestBuilder()
+                .setMessage("Your name?")
+                .setKey("user_name")
+                .build()
+                .sendAndAwait();
+
+        assertThat(requester.key).isEqualTo("user_name");
+    }
+
+    @Test
+    void noKeyGivenLeavesTheKeyAbsent() {
+        KeyCapturingRequester requester = new KeyCapturingRequester();
+        Elicitation elicitation = new CdiElicitation(requester, new McpElicitationManager());
+
+        elicitation.requestBuilder().setMessage("Your name?").build().sendAndAwait();
+
+        assertThat(requester.key).isNull();
+    }
+
+    @Test
+    void blankKeyIsRejectedAtBuildTime() {
+        Elicitation elicitation = new CdiElicitation(new KeyCapturingRequester(), new McpElicitationManager());
+
+        assertThatThrownBy(() -> elicitation
+                        .requestBuilder()
+                        .setMessage("m")
+                        .setKey("   ")
+                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("key");
     }
 }

@@ -57,7 +57,18 @@ public class McpRootsManager {
      * @return the list of roots, or empty list on timeout/error
      */
     public List<McpRoot> requestRoots(McpClientRequester requester) {
-        JsonObject result = requester.request("roots/list", Map.of(), Duration.ofSeconds(30));
+        return requestRoots(requester, null);
+    }
+
+    /**
+     * Requests the list of roots from a client via the given requester, under the given key (MRTR, SEP-2322).
+     *
+     * @param requester the client requester to send the request through
+     * @param key the key to emit the request under, or {@code null} to let the server assign one
+     * @return the list of roots, or empty list on timeout/error
+     */
+    public List<McpRoot> requestRoots(McpClientRequester requester, String key) {
+        JsonObject result = requester.request("roots/list", Map.of(), Duration.ofSeconds(30), key);
         if (result == null) {
             return Collections.emptyList();
         }
@@ -105,7 +116,13 @@ public class McpRootsManager {
         rootsBySession.remove(sessionId);
     }
 
-    private List<McpRoot> parseRoots(JsonObject result) {
+    /**
+     * Parses a {@code roots/list} result into {@link McpRoot}s.
+     *
+     * @param result the raw {@code roots/list} result
+     * @return the parsed roots, or an empty list if {@code result} carries no {@code roots} array
+     */
+    public static List<McpRoot> parseRoots(JsonObject result) {
         if (!result.containsKey("roots")) {
             return Collections.emptyList();
         }

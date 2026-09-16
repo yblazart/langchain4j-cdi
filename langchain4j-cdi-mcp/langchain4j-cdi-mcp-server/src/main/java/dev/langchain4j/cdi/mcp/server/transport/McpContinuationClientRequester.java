@@ -33,6 +33,11 @@ public class McpContinuationClientRequester implements McpClientRequester {
     }
 
     @Override
+    public JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
+        return continuation.awaitInput(method, params, key);
+    }
+
+    @Override
     public boolean isModern() {
         return true;
     }

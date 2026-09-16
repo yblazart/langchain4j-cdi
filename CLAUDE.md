@@ -94,6 +94,7 @@ A self-contained sub-tree that turns CDI beans into a **Model Context Protocol (
 - **langchain4j-cdi-mcp-portable-ext**: Discovers `@Tool`/`@Prompt`/`@Resource` beans at deployment time (WildFly, Payara, GlassFish, Liberty)
 - **langchain4j-cdi-mcp-build-compatible-ext**: Discovers them at build time (Quarkus, Helidon)
 - **Reflection-free invocation (optional)**: `langchain4j-cdi-mcp-server` defines a container-agnostic invocation SPI (`McpMethodInvoker`/`McpInvokerProvider`, CDI 4.0.1, no `jakarta.enterprise.invoke` import) that `McpBeanInvoker` consults before falling back to `Method.invoke`. The optional `langchain4j-cdi-mcp-invoker-cdi41` module implements it with the CDI 4.1 invoker API (verified on Quarkus/ArC only) — **CDI 4.1 is a hard prerequisite**: adding it to a CDI 4.0 host (e.g. Helidon, which ships Weld 5.1.6) breaks the deployment rather than degrading gracefully.
+- **MRTR server-chosen input keys (SEP-2322)**: `ElicitationRequest.Builder.setKey`/`SamplingRequest.Builder.setKey`/`Roots.listAndAwait(String key)` let a tool publish a client interaction under a key of its choosing (e.g. `user_name`) instead of the default call-order `input-N`; see `langchain4j-cdi-mcp/README.md`, "Choosing the input-request key".
 - **langchain4j-cdi-mcp-integration-tests**: `...-common` (shared test beans/helpers), plus Quarkus, Helidon, WildFly, and OpenLiberty (Arquillian) suites
 - **langchain4j-cdi-mcp-example-helidon**: Standalone usage example
 

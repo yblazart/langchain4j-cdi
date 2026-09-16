@@ -28,6 +28,22 @@ public interface ElicitationRequest {
 
         Builder setTimeout(Duration timeout);
 
+        /**
+         * Sets the key this request is emitted under in {@code inputRequests}, and the key its answer is looked up by
+         * in {@code inputResponses} (MRTR, SEP-2322). When no key is set, the server assigns one by call order
+         * ({@code input-0}, {@code input-1}, …), exactly as before this method existed.
+         *
+         * @param key the key to use; must not be blank
+         * @return this builder
+         */
+        Builder setKey(String key);
+
+        /**
+         * Builds the request.
+         *
+         * @return the built request
+         * @throws IllegalArgumentException if {@link #setKey(String)} was called with a blank key
+         */
         ElicitationRequest build();
     }
 }

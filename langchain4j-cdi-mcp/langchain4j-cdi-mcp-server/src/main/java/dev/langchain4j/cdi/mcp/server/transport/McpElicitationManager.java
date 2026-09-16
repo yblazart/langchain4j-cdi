@@ -61,14 +61,46 @@ public class McpElicitationManager {
      */
     public JsonObject createElicitation(
             McpClientRequester requester, String message, Map<String, Object> properties, long timeoutSeconds) {
+        return createElicitation(requester, message, properties, timeoutSeconds, null);
+    }
+
+    /**
+     * Sends an elicitation request to the client via the given requester, under the given key (MRTR, SEP-2322).
+     *
+     * @param requester the client requester to send the request through
+     * @param message the message to display to the user
+     * @param properties the JSON schema properties for the expected response
+     * @param timeoutSeconds how long to wait for the response (ignored by stateless requesters)
+     * @param key the key to emit the request under, or {@code null} to let the server assign one
+     * @return the client's response as a JsonObject, or null on timeout/error
+     */
+    public JsonObject createElicitation(
+            McpClientRequester requester,
+            String message,
+            Map<String, Object> properties,
+            long timeoutSeconds,
+            String key) {
+        Map<String, Object> params = buildParams(requester.isModern(), message, properties);
+        return requester.request("elicitation/create", params, Duration.ofSeconds(timeoutSeconds), key);
+    }
+
+    /**
+     * Builds the {@code elicitation/create} params, shared between the direct send path and MRTR batch construction.
+     *
+     * @param modern whether the requester uses MCP 2026-07-28 semantics
+     * @param message the message to display to the user
+     * @param properties the JSON schema properties for the expected response
+     * @return the request params
+     */
+    public static Map<String, Object> buildParams(boolean modern, String message, Map<String, Object> properties) {
         Map<String, Object> params = new LinkedHashMap<>();
-        if (requester.isModern()) {
+        if (modern) {
             params.put("mode", "form");
         }
         params.put("message", message);
         params.put(
                 "requestedSchema", Map.of("type", "object", "properties", properties != null ? properties : Map.of()));
-        return requester.request("elicitation/create", params, Duration.ofSeconds(timeoutSeconds));
+        return params;
     }
 
     /**

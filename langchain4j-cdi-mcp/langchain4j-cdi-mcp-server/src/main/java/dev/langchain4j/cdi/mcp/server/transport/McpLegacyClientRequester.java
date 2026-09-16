@@ -32,6 +32,15 @@ public class McpLegacyClientRequester implements McpClientRequester {
     }
 
     /**
+     * Legacy (2025-03-26) has no MRTR: the request is sent and answered directly, so a key is meaningless here and is
+     * ignored.
+     */
+    @Override
+    public JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
+        return request(method, params, timeout);
+    }
+
+    /**
      * Returns the session id.
      *
      * @return the session id, or {@code null}

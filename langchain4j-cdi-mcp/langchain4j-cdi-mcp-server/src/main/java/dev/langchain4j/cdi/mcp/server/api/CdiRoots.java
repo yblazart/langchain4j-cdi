@@ -53,4 +53,13 @@ public class CdiRoots implements Roots {
         requester.requireCapability("roots");
         return rootsManager.requestRoots(requester);
     }
+
+    @Override
+    public List<McpRoot> listAndAwait(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Roots.listAndAwait: key must not be blank");
+        }
+        requester.requireCapability("roots");
+        return rootsManager.requestRoots(requester, key);
+    }
 }

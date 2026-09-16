@@ -69,12 +69,14 @@ public class DocumentedMcpApiConsumer {
             return "cancelled";
         }
 
-        List<McpRoot> clientRoots = roots.isSupported() ? roots.listAndAwait() : List.of();
+        List<McpRoot> clientRoots =
+                roots.isSupported() ? roots.listAndAwait("workspace-roots") : List.of();
 
         if (sampling.isSupported()) {
             SamplingResponse response = sampling.requestBuilder()
                     .addMessage(new McpSamplingMessage("user", input))
                     .setMaxTokens(16L)
+                    .setKey("summary")
                     .build()
                     .sendAndAwait();
             return response.model() + " saw " + clientRoots.size() + " roots";
@@ -84,6 +86,7 @@ public class DocumentedMcpApiConsumer {
             ElicitationResponse response = elicitation
                     .requestBuilder()
                     .setMessage("Confirm?")
+                    .setKey("user_name")
                     .build()
                     .sendAndAwait();
             return String.valueOf(response.action());

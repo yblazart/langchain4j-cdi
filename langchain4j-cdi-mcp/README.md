@@ -622,6 +622,25 @@ public String book(@ToolArg(description = "Car id") String carId, Elicitation el
 
 If the client did not declare the needed capability (`elicitation`, `sampling`, `roots`) in `_meta.io.modelcontextprotocol/clientCapabilities`, the call fails with `MissingRequiredClientCapability`; check `elicitation.isSupported()` first to degrade gracefully. Note that MCP 2026-07-28 deprecates Roots, Sampling and Logging: they keep working but new servers should prefer tool arguments, direct LLM calls and OpenTelemetry.
 
+#### Choosing the input-request key (SEP-2322)
+
+By default, each client interaction is published in `inputRequests`/looked up in `inputResponses` under a key the
+server assigns by call order (`input-0`, `input-1`, …). Call `setKey(String)` on the `ElicitationRequest.Builder` or
+`SamplingRequest.Builder`, or use `Roots.listAndAwait(String key)`, to publish it under a key of your choosing
+instead — useful when a client needs to recognise a specific field (e.g. `user_name`) across retries:
+
+```java
+ElicitationResponse answer = elicitation.requestBuilder()
+        .setMessage("What is your name?")
+        .setKey("user_name")
+        .build()
+        .sendAndAwait();
+```
+
+The key must not be blank; `build()` rejects a blank key. A response for a key the server never requested is
+ignored. This works identically in both `REPLAY` and `CONTINUATION` mode, and is a no-op with legacy (2025-03-26)
+clients, which have no MRTR and no `inputRequests`/`inputResponses` concept.
+
 With modern clients, `McpLog` messages and `Progress` notifications are sent on the SSE response stream of the current request only, and log messages only when the request carried `io.modelcontextprotocol/logLevel`.
 
 ### Server Configuration
@@ -689,7 +708,6 @@ npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:80
 
 The remaining failures are missing features and API limitations, not protocol bugs. They are listed in `conformance-baseline.yml` / `conformance-baseline-legacy.yml`, so a regression anywhere else fails the gate.
 
-- **SEP-2322 input-request names** — multi-round-trip input requests are named by call order (`input-0`, `input-1`, …); a server cannot choose the key it publishes. Needs an API change on the `Elicitation` / `Sampling` / `Roots` builders.
 - **One pending input request per round** — the blocking `sendAndAwait()` API suspends the method at its first interaction, so an `input_required` result always carries a single `inputRequests` entry. Asking several questions in one round trip needs a batch interaction API.
 - **Tasks extension** — not implemented.
 

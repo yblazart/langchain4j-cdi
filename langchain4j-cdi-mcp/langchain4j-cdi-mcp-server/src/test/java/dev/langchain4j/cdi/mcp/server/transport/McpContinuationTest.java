@@ -47,6 +47,40 @@ class McpContinuationTest {
     }
 
     @Test
+    void explicitKeyIsUsedVerbatim() throws Exception {
+        McpContinuation continuation = new McpContinuation("k1", Duration.ofSeconds(5), () -> {});
+        CompletableFuture<JsonObject> worker = CompletableFuture.supplyAsync(
+                () -> continuation.awaitInput("elicitation/create", Map.of("message", "Name?"), "user_name"));
+
+        McpContinuation.Event event = continuation.nextEvent(Duration.ofSeconds(5));
+        assertThat(event).isInstanceOf(McpContinuation.Input.class);
+        String key = ((McpContinuation.Input) event).request().key();
+        assertThat(key).isEqualTo("user_name");
+        assertThat(continuation.isWaitingFor("user_name")).isTrue();
+
+        JsonObject answer = Json.createObjectBuilder().add("action", "accept").build();
+        assertThat(continuation.supply(
+                        Json.createObjectBuilder().add("user_name", answer).build()))
+                .isEqualTo(1);
+        assertThat(worker.get(5, TimeUnit.SECONDS)).isEqualTo(answer);
+    }
+
+    @Test
+    void nullKeyFallsBackToAutoNumbering() throws Exception {
+        McpContinuation continuation = new McpContinuation("k2", Duration.ofSeconds(5), () -> {});
+        CompletableFuture<JsonObject> worker =
+                CompletableFuture.supplyAsync(() -> continuation.awaitInput("elicitation/create", Map.of(), null));
+
+        McpContinuation.Event event = continuation.nextEvent(Duration.ofSeconds(5));
+        String key = ((McpContinuation.Input) event).request().key();
+        assertThat(key).isEqualTo("input-0");
+
+        JsonObject answer = Json.createObjectBuilder().add("action", "accept").build();
+        continuation.supply(Json.createObjectBuilder().add(key, answer).build());
+        assertThat(worker.get(5, TimeUnit.SECONDS)).isEqualTo(answer);
+    }
+
+    @Test
     void completionAndFailureAreDeliveredAsEvents() throws Exception {
         McpContinuation continuation = new McpContinuation("c2", Duration.ofSeconds(5), () -> {});
 

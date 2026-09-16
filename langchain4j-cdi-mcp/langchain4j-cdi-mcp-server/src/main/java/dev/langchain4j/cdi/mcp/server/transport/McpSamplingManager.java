@@ -66,13 +66,48 @@ public class McpSamplingManager {
             List<Map<String, Object>> messages,
             Map<String, Object> modelPreferences,
             int maxTokens) {
+        return createMessage(requester, messages, modelPreferences, maxTokens, null);
+    }
+
+    /**
+     * Requests the client to create a message using its LLM, via the given requester, under the given key (MRTR,
+     * SEP-2322).
+     *
+     * @param requester the client requester to send the request through
+     * @param messages the conversation messages (list of maps with "role" and "content")
+     * @param modelPreferences optional model preferences (can be null)
+     * @param maxTokens maximum tokens in the response
+     * @param key the key to emit the request under, or {@code null} to let the server assign one
+     * @return the client's response as a JsonObject, or null on timeout/error
+     */
+    public JsonObject createMessage(
+            McpClientRequester requester,
+            List<Map<String, Object>> messages,
+            Map<String, Object> modelPreferences,
+            int maxTokens,
+            String key) {
+        Map<String, Object> params = buildParams(messages, modelPreferences, maxTokens);
+        return requester.request("sampling/createMessage", params, Duration.ofSeconds(30), key);
+    }
+
+    /**
+     * Builds the {@code sampling/createMessage} params, shared between the direct send path and MRTR batch
+     * construction.
+     *
+     * @param messages the conversation messages (list of maps with "role" and "content")
+     * @param modelPreferences optional model preferences (can be null)
+     * @param maxTokens maximum tokens in the response
+     * @return the request params
+     */
+    public static Map<String, Object> buildParams(
+            List<Map<String, Object>> messages, Map<String, Object> modelPreferences, int maxTokens) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("messages", messages);
         if (modelPreferences != null) {
             params.put("modelPreferences", modelPreferences);
         }
         params.put("maxTokens", maxTokens);
-        return requester.request("sampling/createMessage", params, Duration.ofSeconds(30));
+        return params;
     }
 
     /**

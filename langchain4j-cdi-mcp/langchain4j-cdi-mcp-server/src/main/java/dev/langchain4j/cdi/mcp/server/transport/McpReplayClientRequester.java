@@ -38,6 +38,23 @@ public class McpReplayClientRequester implements McpClientRequester {
         throw new McpInputRequiredSignal(key, method, params);
     }
 
+    /**
+     * Sends a request under the given key, or falls back to the unchanged auto-numbered behaviour of
+     * {@link #request(String, Map, Duration)} when {@code key} is {@code null}. A keyed call never advances the
+     * auto-numbering counter.
+     */
+    @Override
+    public JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
+        if (key == null) {
+            return request(method, params, timeout);
+        }
+        JsonObject response = responses.get(key);
+        if (response != null) {
+            return response;
+        }
+        throw new McpInputRequiredSignal(key, method, params);
+    }
+
     @Override
     public boolean isModern() {
         return true;

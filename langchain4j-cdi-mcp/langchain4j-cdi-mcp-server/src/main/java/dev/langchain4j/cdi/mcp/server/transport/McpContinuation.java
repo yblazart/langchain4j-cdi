@@ -80,9 +80,23 @@ public final class McpContinuation {
      */
     public JsonObject awaitInput(String method, Map<String, Object> params) {
         String key = "input-" + next.getAndIncrement();
+        return awaitInput(method, params, key);
+    }
+
+    /**
+     * Called by the worker thread: blocks until the client answers this client request or {@code inputTimeout} elapses,
+     * under the given key (MRTR, SEP-2322).
+     *
+     * @param method the JSON-RPC method sent to the client, e.g. {@code elicitation/create}
+     * @param params the request params
+     * @param key the key to emit the request under, or {@code null} to let the server assign one by call order
+     * @return the client's answer
+     */
+    public JsonObject awaitInput(String method, Map<String, Object> params, String key) {
+        String effectiveKey = key != null ? key : "input-" + next.getAndIncrement();
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
-        pending.put(key, future);
-        McpInputRequiredSignal input = new McpInputRequiredSignal(key, method, params);
+        pending.put(effectiveKey, future);
+        McpInputRequiredSignal input = new McpInputRequiredSignal(effectiveKey, method, params);
         lastInput = input;
         events.add(new Input(input));
         try {
@@ -98,7 +112,7 @@ public final class McpContinuation {
             onAbandon.run();
             throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "No client input received for " + method);
         } finally {
-            pending.remove(key);
+            pending.remove(effectiveKey);
         }
     }
 

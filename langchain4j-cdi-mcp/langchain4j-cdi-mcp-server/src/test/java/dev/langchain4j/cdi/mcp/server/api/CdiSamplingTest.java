@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpSamplingMessage;
 import dev.langchain4j.cdi.mcp.server.transport.McpClientRequester;
@@ -28,6 +29,31 @@ class CdiSamplingTest {
 
         @Override
         public JsonObject request(String method, Map<String, Object> params, Duration timeout) {
+            return result;
+        }
+    }
+
+    static final class KeyCapturingRequester implements McpClientRequester {
+        String key;
+        private final JsonObject result;
+
+        KeyCapturingRequester(JsonObject result) {
+            this.result = result;
+        }
+
+        @Override
+        public boolean supports(String capability) {
+            return true;
+        }
+
+        @Override
+        public JsonObject request(String method, Map<String, Object> params, Duration timeout) {
+            return request(method, params, timeout, null);
+        }
+
+        @Override
+        public JsonObject request(String method, Map<String, Object> params, Duration timeout, String key) {
+            this.key = key;
             return result;
         }
     }
@@ -80,5 +106,37 @@ class CdiSamplingTest {
         SamplingResponse response = sample(clientResult);
 
         assertThat(response.content()).isEqualTo("plain text answer");
+    }
+
+    @Test
+    void setKeyIsSentAsTheEffectiveInputRequestKey() {
+        JsonObject clientResult = Json.createObjectBuilder()
+                .add("role", "assistant")
+                .add("content", "hi")
+                .build();
+        KeyCapturingRequester requester = new KeyCapturingRequester(clientResult);
+        Sampling sampling = new CdiSampling(requester, new McpSamplingManager());
+
+        sampling.requestBuilder()
+                .addMessage(new McpSamplingMessage("user", Map.of("type", "text", "text", "hi")))
+                .setMaxTokens(64)
+                .setKey("summary")
+                .build()
+                .sendAndAwait();
+
+        assertThat(requester.key).isEqualTo("summary");
+    }
+
+    @Test
+    void blankKeyIsRejectedAtBuildTime() {
+        Sampling sampling = new CdiSampling(new KeyCapturingRequester(null), new McpSamplingManager());
+
+        assertThatThrownBy(() -> sampling.requestBuilder()
+                        .addMessage(new McpSamplingMessage("user", Map.of("type", "text", "text", "hi")))
+                        .setMaxTokens(64)
+                        .setKey("  ")
+                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("key");
     }
 }

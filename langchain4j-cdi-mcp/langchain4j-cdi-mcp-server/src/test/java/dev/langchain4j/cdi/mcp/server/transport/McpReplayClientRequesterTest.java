@@ -38,6 +38,41 @@ class McpReplayClientRequesterTest {
     }
 
     @Test
+    void explicitKeyIsUsedVerbatimAndDoesNotConsumeTheAutoCounter() {
+        JsonObject answer = Json.createObjectBuilder().add("action", "accept").build();
+        McpReplayClientRequester requester = new McpReplayClientRequester(PROTOCOL, Map.of("user_name", answer));
+
+        assertThat(requester.request("elicitation/create", Map.of(), Duration.ZERO, "user_name"))
+                .isSameAs(answer);
+        // the keyed call above must not have consumed the auto counter used for unkeyed calls
+        assertThatThrownBy(() -> requester.request("sampling/createMessage", Map.of(), Duration.ZERO))
+                .isInstanceOfSatisfying(
+                        McpInputRequiredSignal.class,
+                        signal -> assertThat(signal.key()).isEqualTo("input-0"));
+    }
+
+    @Test
+    void missingExplicitKeyThrowsSignalUnderThatKey() {
+        McpReplayClientRequester requester = new McpReplayClientRequester(PROTOCOL, Map.of());
+
+        assertThatThrownBy(() ->
+                        requester.request("elicitation/create", Map.of("message", "hi"), Duration.ZERO, "user_name"))
+                .isInstanceOfSatisfying(McpInputRequiredSignal.class, signal -> {
+                    assertThat(signal.key()).isEqualTo("user_name");
+                    assertThat(signal.method()).isEqualTo("elicitation/create");
+                });
+    }
+
+    @Test
+    void nullKeyFallsBackToUnchangedAutoNumberedBehaviour() {
+        JsonObject first = Json.createObjectBuilder().add("action", "accept").build();
+        McpReplayClientRequester requester = new McpReplayClientRequester(PROTOCOL, Map.of("input-0", first));
+
+        assertThat(requester.request("elicitation/create", Map.of(), Duration.ZERO, null))
+                .isSameAs(first);
+    }
+
+    @Test
     void capabilitiesComeFromRequestMetadata() {
         McpReplayClientRequester requester = new McpReplayClientRequester(PROTOCOL, Map.of());
 

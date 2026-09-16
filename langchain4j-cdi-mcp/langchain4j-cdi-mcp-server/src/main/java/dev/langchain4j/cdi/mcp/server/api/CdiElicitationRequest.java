@@ -15,18 +15,30 @@ public class CdiElicitationRequest implements ElicitationRequest {
     private final McpElicitationManager elicitationManager;
     private final McpClientRequester requester;
     private final long timeoutSeconds;
+    private final String key;
 
     CdiElicitationRequest(
             String message,
             Map<String, PrimitiveSchema> requestedSchema,
             McpElicitationManager elicitationManager,
             McpClientRequester requester,
-            long timeoutSeconds) {
+            long timeoutSeconds,
+            String key) {
         this.message = message;
         this.requestedSchema = requestedSchema;
         this.elicitationManager = elicitationManager;
         this.requester = requester;
         this.timeoutSeconds = timeoutSeconds;
+        this.key = key;
+    }
+
+    /**
+     * Returns the key this request was configured with via {@link Builder#setKey(String)}.
+     *
+     * @return the configured key, or {@code null} if none was set
+     */
+    String key() {
+        return key;
     }
 
     @Override
@@ -48,12 +60,22 @@ public class CdiElicitationRequest implements ElicitationRequest {
     @Override
     public ElicitationResponse sendAndAwait() {
         requester.requireCapability("elicitation");
+        Map<String, Object> schemaMap = schemaMap();
+        JsonObject result = elicitationManager.createElicitation(requester, message, schemaMap, timeoutSeconds, key);
+        return result == null ? null : new CdiElicitationResponse(result);
+    }
+
+    /**
+     * Converts {@link #requestedSchema} into the plain-JSON map the wire schema expects.
+     *
+     * @return the schema properties, ready to embed in {@code requestedSchema.properties}
+     */
+    Map<String, Object> schemaMap() {
         Map<String, Object> schemaMap = new LinkedHashMap<>();
         if (requestedSchema != null) {
-            requestedSchema.forEach((key, schema) -> schemaMap.put(key, schema.asJson()));
+            requestedSchema.forEach((name, schema) -> schemaMap.put(name, schema.asJson()));
         }
-        JsonObject result = elicitationManager.createElicitation(requester, message, schemaMap, timeoutSeconds);
-        return result == null ? null : new CdiElicitationResponse(result);
+        return schemaMap;
     }
 
     static class CdiBuilder implements ElicitationRequest.Builder {
@@ -65,6 +87,7 @@ public class CdiElicitationRequest implements ElicitationRequest {
         private String message;
         private final Map<String, PrimitiveSchema> requestedSchema = new LinkedHashMap<>();
         private long timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
+        private String key;
 
         CdiBuilder(McpElicitationManager elicitationManager, McpClientRequester requester) {
             this.elicitationManager = elicitationManager;
@@ -93,9 +116,18 @@ public class CdiElicitationRequest implements ElicitationRequest {
         }
 
         @Override
+        public Builder setKey(String key) {
+            this.key = key;
+            return this;
+        }
+
+        @Override
         public ElicitationRequest build() {
+            if (key != null && key.isBlank()) {
+                throw new IllegalArgumentException("ElicitationRequest.Builder.setKey: key must not be blank");
+            }
             return new CdiElicitationRequest(
-                    message, Map.copyOf(requestedSchema), elicitationManager, requester, timeoutSeconds);
+                    message, Map.copyOf(requestedSchema), elicitationManager, requester, timeoutSeconds, key);
         }
     }
 }
