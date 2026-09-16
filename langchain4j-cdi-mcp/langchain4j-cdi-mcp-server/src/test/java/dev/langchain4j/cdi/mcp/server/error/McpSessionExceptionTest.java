@@ -20,4 +20,17 @@ class McpSessionExceptionTest {
 
         assertThat(ex.getRequestId()).isEqualTo(5L);
     }
+
+    @Test
+    void shouldDefaultToHttp404() {
+        // an unknown or terminated session id is a 404 for the Streamable HTTP transport, not the generic 200
+        assertThat(new McpSessionException("req-1", "session not found").getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void shouldKeepAnExplicitHttpStatus() {
+        assertThat(new McpSessionException("req-1", "no session id", McpSessionException.BAD_REQUEST).getHttpStatus())
+                .isEqualTo(400);
+    }
 }

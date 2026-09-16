@@ -70,6 +70,19 @@
             <groupId>dev.langchain4j.cdi.mcp</groupId>
             <artifactId>langchain4j-cdi-mcp-build-compatible-ext</artifactId>
         </dependency>
+        <!--
+            langchain4j-cdi-mcp-invoker-cdi41 is deliberately NOT on this classpath. Helidon 4.3.4 is a Jakarta EE 10
+            / MicroProfile stack: it ships Weld 5.1.6 and weld-lite-extension-translator 5.1.6, which implement CDI
+            4.0 and know nothing of jakarta.enterprise.invoke. Adding the module fails the deployment outright, in
+            two different ways depending on which CDI API is resolved:
+              - with cdi-api 4.0.1 (the inherited version): NoClassDefFoundError
+                jakarta/enterprise/inject/build/compatible/spi/InvokerFactory while loading the extension;
+              - with cdi-api 4.1.0 forced: LITE-EXTENSION-TRANSLATOR-000017 ... during phase @Registration ...
+                NullPointerException: Cannot invoke "Object.equals(Object)" because "candidate.type" is null,
+                because the 5.1.6 translator has no candidate for an InvokerFactory extension parameter.
+            Both were reproduced on 2026-09-14; see docs/superpowers/plans/2026-09-14-mcp-invokers-cdi41.md.
+            Revisit when Helidon moves to Weld 6 / Jakarta EE 11.
+        -->
         <!-- Helidon -->
         <dependency>
             <groupId>io.helidon.microprofile.bundles</groupId>
@@ -142,6 +155,14 @@
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${surefire-plugin.version}</version>
+                <configuration>
+                    <!-- The injected WebTarget uses Jersey's HttpUrlConnection-based client, which silently drops
+                         the "Origin" header unless this JDK-internal restriction is lifted; needed for the Origin
+                         validation tests to exercise the real header. -->
+                    <systemPropertyVariables>
+                        <sun.net.http.allowRestrictedHeaders>true</sun.net.http.allowRestrictedHeaders>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
         </plugins>
     </build>

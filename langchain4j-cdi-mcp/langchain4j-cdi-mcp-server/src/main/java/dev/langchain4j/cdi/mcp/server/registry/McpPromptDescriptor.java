@@ -1,9 +1,12 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
+import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
+import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
+import org.mcpjava.server.FeatureType;
 import org.mcpjava.server.prompts.Prompt;
 import org.mcpjava.server.prompts.PromptArg;
 
@@ -20,9 +23,10 @@ public class McpPromptDescriptor {
     private final List<PromptArgument> arguments;
     private final Class<?> beanType;
     private final Method method;
+    private final List<McpIconModel> icons;
 
     /**
-     * Creates a new prompt descriptor.
+     * Creates a new prompt descriptor carrying no icons.
      *
      * @param name the prompt name
      * @param description the prompt description
@@ -32,11 +36,32 @@ public class McpPromptDescriptor {
      */
     public McpPromptDescriptor(
             String name, String description, List<PromptArgument> arguments, Class<?> beanType, Method method) {
+        this(name, description, arguments, beanType, method, null);
+    }
+
+    /**
+     * Creates a new prompt descriptor.
+     *
+     * @param name the prompt name
+     * @param description the prompt description
+     * @param arguments the list of prompt arguments
+     * @param beanType the CDI bean class that declares the prompt method
+     * @param method the annotated method
+     * @param icons the icons resolved from {@code @Icons} at registration time, or {@code null} when there are none
+     */
+    public McpPromptDescriptor(
+            String name,
+            String description,
+            List<PromptArgument> arguments,
+            Class<?> beanType,
+            Method method,
+            List<McpIconModel> icons) {
         this.name = name;
         this.description = description;
         this.arguments = arguments;
         this.beanType = beanType;
         this.method = method;
+        this.icons = icons;
     }
 
     /**
@@ -52,13 +77,45 @@ public class McpPromptDescriptor {
 
         List<PromptArgument> args = new ArrayList<>();
         for (Parameter param : method.getParameters()) {
+            if (McpFrameworkTypes.isFrameworkType(param.getType())) {
+                // injected by the runtime (McpLog, Progress, Elicitation, ...), never asked of the client
+                continue;
+            }
             PromptArg argAnnotation = param.getAnnotation(PromptArg.class);
             String argDescription = argAnnotation != null ? argAnnotation.description() : "";
             boolean required = argAnnotation == null || argAnnotation.required();
-            args.add(new PromptArgument(param.getName(), argDescription, required));
+            args.add(new PromptArgument(argumentName(param, argAnnotation), argDescription, required));
         }
 
-        return new McpPromptDescriptor(name, annotation.description(), args, beanClass, method);
+        return new McpPromptDescriptor(
+                name,
+                annotation.description(),
+                args,
+                beanClass,
+                method,
+                McpIconResolver.resolve(FeatureType.PROMPT, name, beanClass, method));
+    }
+
+    /**
+     * Returns the icons resolved from an {@code org.mcpjava.server.Icons} annotation at registration time.
+     *
+     * @return the icons, or {@code null} when the prompt declares none
+     */
+    public List<McpIconModel> getIcons() {
+        return icons;
+    }
+
+    /**
+     * Returns the wire name of a prompt argument: the {@code name} of its {@code @PromptArg} when it sets one,
+     * otherwise the Java parameter name (which needs the declaring module to be compiled with {@code -parameters}, or
+     * it is {@code arg0}).
+     *
+     * @param param the prompt method parameter
+     * @param annotation the parameter's {@code @PromptArg}, or {@code null}
+     * @return the argument name to advertise
+     */
+    private static String argumentName(Parameter param, PromptArg annotation) {
+        return annotation != null && !DEFAULT_NAME.equals(annotation.name()) ? annotation.name() : param.getName();
     }
 
     /**

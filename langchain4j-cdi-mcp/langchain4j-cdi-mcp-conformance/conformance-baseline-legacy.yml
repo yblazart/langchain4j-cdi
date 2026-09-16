@@ -1,0 +1,23 @@
+# Known failures of langchain4j-cdi-mcp against @modelcontextprotocol/conformance
+# for the legacy (stateful) runs:
+#
+#   npx -y @modelcontextprotocol/conformance@alpha server \
+#       --url http://localhost:8080/mcp --spec-version 2025-11-25 --suite all \
+#       --expected-failures conformance-baseline-legacy.yml
+#   npx -y @modelcontextprotocol/conformance@0.1.16 server \
+#       --url http://localhost:8080/mcp \
+#       --expected-failures conformance-baseline-legacy.yml
+#
+# Note: the legacy era implemented by this server is MCP 2025-03-26, while these
+# scenarios target 2025-06-18 / 2025-11-25. Not one failure is attributable to
+# that difference.
+#
+# Scores at the time of writing: 2025-11-25 -> 81 passed, 0 failed (a clean
+# sweep); stable line @0.1.16 -> 40 passed, 0 failed (a clean sweep; the
+# scenario below is absent from the @0.1.16 suite).
+#
+# json-schema-2020-12 is now fully closed: `json_schema_2020_12_tool` is
+# published via @McpInputSchema with the scenario's exact
+# JSON_SCHEMA_2020_12_FIXTURE, verbatim. All 8 checks pass, so no entry is
+# baselined here any more.
+server: []

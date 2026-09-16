@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,9 @@ public class McpRootsManager {
      *
      * @param sessionId the target session
      * @return the list of roots, or empty list on timeout/error
+     * @deprecated use {@link #requestRoots(McpClientRequester)}
      */
+    @Deprecated
     public List<McpRoot> requestRoots(String sessionId) {
         JsonObject result = requestManager.sendRequest(sessionId, "roots/list", Map.of());
         if (result == null) {
@@ -45,6 +48,44 @@ public class McpRootsManager {
         rootsBySession.put(sessionId, roots);
         LOGGER.info("MCP: Received " + roots.size() + " root(s) from session " + sessionId);
         return roots;
+    }
+
+    /**
+     * Requests the list of roots from a client via the given requester.
+     *
+     * @param requester the client requester to send the request through
+     * @return the list of roots, or empty list on timeout/error
+     */
+    public List<McpRoot> requestRoots(McpClientRequester requester) {
+        return requestRoots(requester, null);
+    }
+
+    /**
+     * Requests the list of roots from a client via the given requester, under the given key (MRTR, SEP-2322).
+     *
+     * @param requester the client requester to send the request through
+     * @param key the key to emit the request under, or {@code null} to let the server assign one
+     * @return the list of roots, or empty list on timeout/error
+     */
+    public List<McpRoot> requestRoots(McpClientRequester requester, String key) {
+        JsonObject result = requester.request("roots/list", Map.of(), Duration.ofSeconds(30), key);
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        List<McpRoot> roots = parseRoots(result);
+        if (requester instanceof McpLegacyClientRequester legacy && legacy.sessionId() != null) {
+            rootsBySession.put(legacy.sessionId(), roots);
+        }
+        return roots;
+    }
+
+    /**
+     * Returns the server request manager used for legacy client requests.
+     *
+     * @return the server request manager
+     */
+    public McpServerRequestManager getRequestManager() {
+        return requestManager;
     }
 
     /**
@@ -75,7 +116,13 @@ public class McpRootsManager {
         rootsBySession.remove(sessionId);
     }
 
-    private List<McpRoot> parseRoots(JsonObject result) {
+    /**
+     * Parses a {@code roots/list} result into {@link McpRoot}s.
+     *
+     * @param result the raw {@code roots/list} result
+     * @return the parsed roots, or an empty list if {@code result} carries no {@code roots} array
+     */
+    public static List<McpRoot> parseRoots(JsonObject result) {
         if (!result.containsKey("roots")) {
             return Collections.emptyList();
         }

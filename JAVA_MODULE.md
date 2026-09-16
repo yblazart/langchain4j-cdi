@@ -123,7 +123,7 @@ mvn -Pjlink-vidocq -pl langchain4j-cdi-jlink clean verify
 (`clean` matters: `target/modules/` is not purged between runs, so a version bump would otherwise leave stale
 patched jars next to the fresh ones.)
 
-It performs three steps:
+It performs four steps:
 
 ### 1. License gate (redistribution safety)
 
@@ -154,6 +154,21 @@ same module names the first-party descriptors already `require`, so those names 
 jars patched in step 2) to `langchain4j-cdi-jlink/target/module-path/`, then `exec-maven-plugin` runs
 `java --module-path=target/modules:target/module-path --add-modules <first-party roots> -version` in the `verify`
 phase. See [Verifying the module graph](#verifying-the-module-graph).
+
+### 4. Public-API readability (stand-in consumer)
+
+Step 3 proves the modules *resolve*; it does not prove an application can *compile* against them. Every first-party
+descriptor is an `open module`, so reflective access keeps working even for a package that is never `exports`-ed —
+which is why a missing export is invisible to the class-path integration suites, and why one shipped unnoticed
+(`…mcp.server.api`, `…mcp.server.protocol` and `…mcp.server.transport` were all unreachable at compile time until a
+downstream module-path build had to work around it with `--add-exports`).
+
+`exec-maven-plugin` therefore compiles `langchain4j-cdi-jlink/src/module-path-consumer/` — a small stand-in
+application module that touches exactly the types `langchain4j-cdi-mcp/README.md` documents as user-facing — with
+`javac --module-path=target/modules:target/module-path --release 17`, in the `verify` phase. A package that is used
+but not exported fails the build with `package … is not visible`. Nothing is packaged or deployed from it.
+
+When a first-party module gains a new application-facing type, add a reference to it in the stand-in consumer.
 
 ### Extending to a full jlink image
 

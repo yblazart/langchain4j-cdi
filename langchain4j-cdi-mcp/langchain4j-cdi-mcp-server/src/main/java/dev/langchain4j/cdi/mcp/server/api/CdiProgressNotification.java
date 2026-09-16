@@ -1,6 +1,6 @@
 package dev.langchain4j.cdi.mcp.server.api;
 
-import dev.langchain4j.cdi.mcp.server.transport.McpProgressReporter;
+import dev.langchain4j.cdi.mcp.server.transport.McpProgressSink;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
@@ -8,7 +8,7 @@ import java.util.Optional;
 import org.mcpjava.server.progress.ProgressNotification;
 import org.mcpjava.server.progress.ProgressToken;
 
-/** Implementation of {@link ProgressNotification} that delegates to {@link McpProgressReporter}. */
+/** Implementation of {@link ProgressNotification} that delegates to an {@link McpProgressSink}. */
 public class CdiProgressNotification implements ProgressNotification {
 
     private final Object rawToken;
@@ -16,7 +16,7 @@ public class CdiProgressNotification implements ProgressNotification {
     private final BigDecimal totalValue;
     private final String message;
     private final Map<String, Object> metadata;
-    private final McpProgressReporter progressReporter;
+    private final McpProgressSink progressReporter;
 
     /**
      * @param rawToken the raw progress token from the request, or {@code null} if none
@@ -32,7 +32,7 @@ public class CdiProgressNotification implements ProgressNotification {
             BigDecimal totalValue,
             String message,
             Map<String, Object> metadata,
-            McpProgressReporter progressReporter) {
+            McpProgressSink progressReporter) {
         this.rawToken = rawToken;
         this.progressValue = progressValue;
         this.totalValue = totalValue;
@@ -84,13 +84,13 @@ public class CdiProgressNotification implements ProgressNotification {
     static class CdiBuilder implements ProgressNotification.Builder {
 
         private final Object rawToken;
-        private final McpProgressReporter progressReporter;
+        private final McpProgressSink progressReporter;
         private BigDecimal progressValue = BigDecimal.ZERO;
         private BigDecimal totalValue = null;
         private String message = null;
         private final Map<String, Object> metadata = new HashMap<>();
 
-        CdiBuilder(Object rawToken, McpProgressReporter progressReporter) {
+        CdiBuilder(Object rawToken, McpProgressSink progressReporter) {
             this.rawToken = rawToken;
             this.progressReporter = progressReporter;
         }

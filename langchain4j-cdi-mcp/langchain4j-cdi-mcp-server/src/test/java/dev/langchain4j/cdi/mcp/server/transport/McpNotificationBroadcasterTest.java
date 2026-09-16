@@ -9,6 +9,102 @@ import org.junit.jupiter.api.Test;
 class McpNotificationBroadcasterTest {
 
     @Test
+    void registeringASecondChannelForASessionClosesTheFirstAndKeepsTheSecond() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink firstSink = new FakeSseEventSink();
+        FakeSseEventSink secondSink = new FakeSseEventSink();
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(firstSink, new FakeSse(), null));
+
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(secondSink, new FakeSse(), null));
+        broadcaster.broadcast(JsonRpcNotification.toolsListChanged());
+
+        assertThat(firstSink.isClosed()).isTrue();
+        assertThat(firstSink.events()).isEmpty();
+        assertThat(secondSink.isClosed()).isFalse();
+        assertThat(secondSink.rendered()).contains("notifications/tools/list_changed");
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+    }
+
+    @Test
+    void reRegisteringTheSameChannelDoesNotCloseIt() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        McpSseEventSinkChannel channel = new McpSseEventSinkChannel(sink, new FakeSse(), null);
+        broadcaster.registerStream("s1", channel);
+
+        broadcaster.registerStream("s1", channel);
+
+        assertThat(sink.isClosed()).isFalse();
+        assertThat(channel.isOpen()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+    }
+
+    @Test
+    void closeStreamClosesAndRemovesTheSessionChannel() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(sink, new FakeSse(), null));
+
+        broadcaster.closeStream("s1");
+        broadcaster.closeStream("unknown");
+
+        assertThat(sink.isClosed()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+    }
+
+    @Test
+    void shouldBroadcastToRegisteredChannelsWithSseFraming() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(sink, new FakeSse(), null));
+        broadcaster.broadcast(JsonRpcNotification.toolsListChanged());
+
+        assertThat(sink.rendered())
+                .isEqualTo("event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}"
+                        + "\n\n");
+    }
+
+    @Test
+    void shouldRemoveAndCloseChannelsWhoseSendFails() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        McpSseEventSinkChannel channel = new McpSseEventSinkChannel(sink, new FakeSse(), null);
+        broadcaster.registerStream("s1", channel);
+        sink.failSends(new java.io.IOException("disconnected"));
+
+        broadcaster.sendToSession("s1", JsonRpcNotification.toolsListChanged());
+
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+        assertThat(channel.isOpen()).isFalse();
+    }
+
+    @Test
+    void shouldOnlyUnregisterTheGivenChannel() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        McpSseEventSinkChannel first = new McpSseEventSinkChannel(new FakeSseEventSink(), new FakeSse(), null);
+        McpSseEventSinkChannel second = new McpSseEventSinkChannel(new FakeSseEventSink(), new FakeSse(), null);
+        broadcaster.registerStream("s1", first);
+        broadcaster.registerStream("s1", second);
+
+        broadcaster.unregisterStream("s1", first);
+
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+    }
+
+    @Test
+    void shutdownClosesRegisteredChannels() {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        FakeSseEventSink sink = new FakeSseEventSink();
+        broadcaster.registerStream("s1", new McpSseEventSinkChannel(sink, new FakeSse(), null));
+
+        broadcaster.shutdown();
+
+        assertThat(sink.isClosed()).isTrue();
+        assertThat(broadcaster.connectedStreamCount()).isZero();
+    }
+
+    @Test
     void shouldBroadcastToRegisteredStreams() {
         McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
         ByteArrayOutputStream out1 = new ByteArrayOutputStream();
@@ -64,5 +160,27 @@ class McpNotificationBroadcasterTest {
         // Should not throw
         broadcaster.broadcast(JsonRpcNotification.toolsListChanged());
         assertThat(broadcaster.connectedStreamCount()).isEqualTo(0);
+    }
+
+    @Test
+    void broadcastAlsoReachesModernSubscriptions() throws Exception {
+        McpNotificationBroadcaster broadcaster = new McpNotificationBroadcaster();
+        McpSubscriptionRegistry registry = new McpSubscriptionRegistry();
+        java.lang.reflect.Field field = McpNotificationBroadcaster.class.getDeclaredField("subscriptionRegistry");
+        field.setAccessible(true);
+        field.set(broadcaster, registry);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        registry.open(
+                1L,
+                McpNotificationFilter.from(jakarta.json.Json.createObjectBuilder()
+                        .add("toolsListChanged", true)
+                        .build()),
+                new McpSseResponseChannel(out, new java.util.concurrent.atomic.AtomicBoolean()));
+
+        assertThat(broadcaster.connectedStreamCount()).isEqualTo(1);
+        broadcaster.broadcast(dev.langchain4j.cdi.mcp.server.protocol.JsonRpcNotification.toolsListChanged());
+
+        assertThat(out.toString(java.nio.charset.StandardCharsets.UTF_8)).contains("notifications/tools/list_changed");
+        registry.shutdown();
     }
 }

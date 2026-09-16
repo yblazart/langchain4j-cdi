@@ -13,8 +13,10 @@
     <description>Opt-in tooling (profile jlink-vidocq) that prepares a fully-modular (Java module) dependency set for
         downstream consumers such as vidocq. It (1) enforces a permissive-license allow-list on the whole dependency
         closure, (2) patches the non-modular third-party jars with a generated module-info via ModiTect, and (3)
-        verifies that the resulting module graph resolves on a strict module path. Producing the actual jlink image
-        is a manual extension step (see JAVA_MODULE.md). This module is never deployed to Maven Central.</description>
+        verifies that the resulting module graph resolves on a strict module path, and (4) compiles a stand-in consumer
+        module against the documented public API so that a missing 'exports' is caught here instead of downstream.
+        Producing the actual jlink image is a manual extension step (see JAVA_MODULE.md). This module is never deployed
+        to Maven Central.</description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -23,6 +25,9 @@
         <!-- Assembled module path used by the (3) verification step. -->
         <module-path.deps>${project.build.directory}/module-path</module-path.deps>
         <module-path.patched>${project.build.directory}/modules</module-path.patched>
+        <!-- Stand-in downstream consumer compiled by the (4) verification step. -->
+        <module-path.consumer.src>${project.basedir}/src/module-path-consumer/java</module-path.consumer.src>
+        <module-path.consumer.out>${project.build.directory}/module-path-consumer-classes</module-path.consumer.out>
         <!-- First-party roots that must resolve on the strict module path (mirrors JAVA_MODULE.md). -->
         <module-path.roots>dev.langchain4j.cdi.core,dev.langchain4j.cdi.portable,dev.langchain4j.cdi.el,dev.langchain4j.cdi.mp.config,dev.langchain4j.cdi.mp.faulttolerance,dev.langchain4j.cdi.mp.telemetry,dev.langchain4j.cdi.mcp.server,dev.langchain4j.cdi.mcp.portable</module-path.roots>
     </properties>
@@ -301,6 +306,35 @@
                                 <argument>--add-modules</argument>
                                 <argument>${module-path.roots}</argument>
                                 <argument>-version</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <!--
+                        (4) PUBLIC-API READABILITY. Resolving the module graph (3) proves the modules load; it does NOT
+                        prove an application can *compile* against them. Because every first-party descriptor is an
+                        'open module', reflection keeps working at runtime even when a package is not exported, so a
+                        missing 'exports' is invisible to the class-path integration suites and to (3) alike. This step
+                        compiles src/module-path-consumer — a stand-in application that touches exactly the types
+                        langchain4j-cdi-mcp/README.md documents as user-facing — on the same strict module path. A
+                        package that is used but not exported fails here with "package ... is not visible".
+                    -->
+                    <execution>
+                        <id>verify-module-path-consumer-compiles</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>verify</phase>
+                        <configuration>
+                            <executable>${java.home}/bin/javac</executable>
+                            <arguments>
+                                <argument>--release</argument>
+                                <argument>${maven.compiler.release}</argument>
+                                <argument>--module-path=${module-path.patched}${path.separator}${module-path.deps}</argument>
+                                <argument>-d</argument>
+                                <argument>${module-path.consumer.out}</argument>
+                                <argument>-Xlint:all,-processing</argument>
+                                <argument>${module-path.consumer.src}/module-info.java</argument>
+                                <argument>${module-path.consumer.src}/dev/langchain4j/cdi/mcp/modulepathconsumer/DocumentedMcpApiConsumer.java</argument>
                             </arguments>
                         </configuration>
                     </execution>

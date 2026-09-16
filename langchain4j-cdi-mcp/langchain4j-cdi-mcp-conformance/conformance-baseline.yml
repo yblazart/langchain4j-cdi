@@ -1,0 +1,57 @@
+# Known failures of langchain4j-cdi-mcp against @modelcontextprotocol/conformance
+# for the MCP 2026-07-28 (modern / stateless) run:
+#
+#   npx -y @modelcontextprotocol/conformance@alpha server \
+#       --url http://localhost:8080/mcp --spec-version 2026-07-28 --suite all \
+#       --expected-failures conformance-baseline.yml
+#
+# Use conformance-baseline-legacy.yml for the 2025-11-25 / stable-line runs.
+# Entries are per-check where only one check of a scenario fails, so the other
+# checks of that scenario stay enforced. Warnings count as failures for the gate
+# and must be listed here too.
+#
+# Score at the time of writing: 150 passed, 0 failed.
+# The single remaining entry is warning-severity and inherent to the fixture's
+# test design, not a protocol bug or a missing feature; see
+# langchain4j-cdi-mcp/README.md ("Conformance") and the note below.
+server:
+  # json-schema-2020-12 is now fully closed: `json_schema_2020_12_tool` is
+  # published via @McpInputSchema with the scenario's exact
+  # JSON_SCHEMA_2020_12_FIXTURE, verbatim. All 8 checks of the scenario pass
+  # ($schema, $defs, additionalProperties, the allOf/anyOf composition
+  # keywords, the if/then/else conditional keywords, and the $anchor inside
+  # $defs), so no entry is baselined here any more.
+
+  # SEP-2243 is fully closed, both halves. `http-custom-header-server-validation`
+  # emits 10 checks and all 10 pass, so the three entries that used to live here
+  # (sep-2243-server-reject-invalid-param-chars,
+  # sep-2243-server-reject-param-mismatch, sep-2243-server-validate-param-match)
+  # were removed: `McpModernProtocolHandler` now validates the `Mcp-Param-*`
+  # headers a client mirrors back against the request body before dispatching
+  # `tools/call`, rejecting a mismatch, a missing header and a malformed
+  # `=?base64?...?=` payload with HTTP 400 + JSON-RPC -32020.
+
+  # SEP-2322 MRTR is now fully closed on the key/naming and batch fronts:
+  # `ElicitationRequest.Builder.setKey`/`SamplingRequest.Builder.setKey`/
+  # `Roots.listAndAwait(String)` let a tool publish `user_name` verbatim
+  # (`input-required-result-basic-elicitation`, now 3/3), and `McpInteractions`
+  # lets a tool declare a batch of interactions and await all of them together,
+  # so `input_required` can list several requests of different methods in one
+  # result (`input-required-result-multiple-input-requests`, now 3/3). The two
+  # entries that used to live here were removed.
+
+  # `input-required-result-ignore-extra-params` (warning-severity: the scenario
+  # marks a failed check WARNING, not FAILURE, but the gate still requires
+  # warnings to be baselined). The fixture sends `inputResponses` (a valid
+  # answer plus two unrecognized extra keys) WITHOUT ever obtaining or echoing
+  # a signed `requestState` from a prior round — a single, ungated call. This
+  # server requires a valid `requestState` before accepting any `inputResponses`
+  # (SEP-2322 MRTR ties an answer to the specific pending request it signed;
+  # accepting unsigned answers on a fresh call would let a client inject
+  # arbitrary "answers" the server never asked for), so the retry can never
+  # reach a complete result and this check cannot deterministically pass here.
+  # This is intrinsic to the fixture's test design colliding with the server's
+  # `requestState` gating, not something the key or batch API changes touch;
+  # confirmed it stays warning-severity after both, and the gate still exits 0
+  # with it listed (see the report for the exact `--expected-failures` run).
+  - input-required-result-ignore-extra-params:sep-2322-ignore-unexpected-params

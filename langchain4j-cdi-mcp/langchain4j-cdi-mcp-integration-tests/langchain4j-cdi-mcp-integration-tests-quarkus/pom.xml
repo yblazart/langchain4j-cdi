@@ -27,6 +27,30 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!--
+                jakarta.enterprise.cdi-api has to be 4.1.0 *everywhere* in this module, transitive paths
+                included, so the version is managed here rather than pinned on the direct dependency below.
+
+                The reactor parent manages cdi-api at 4.0.1 for the Jakarta EE 10 core, and an inherited
+                managed version beats both the imported Quarkus BOM and any direct <dependency> version further
+                down the file. A direct pin only fixes the single edge Maven walks out of this POM: the Quarkus
+                augmentation classpath assembled by quarkus:build reaches cdi-api *transitively*, through the
+                *-deployment artifacts, where the inherited 4.0.1 still won - so `mvn test` passed while
+                `mvn install`/`mvn verify` failed in quarkus:build with NoSuchMethodError on
+                SyntheticBeanBuilder.withParam(String, InvokerInfo[]), a method that exists only in 4.1.0.
+                A module's own dependencyManagement entry overrides the inherited one on every path, which a
+                direct dependency cannot do.
+
+                ArC 3.21 is a CDI 4.1 container and jakarta.enterprise.invoke lives in the 4.1.0 API jar, so
+                this module - and only this module - needs 4.1.0; the Jakarta EE 10 modules stay on 4.0.1.
+                Scope provided is kept from the inherited entry: the container supplies the API at runtime.
+            -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>4.1.0</version>
+                <scope>provided</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -63,6 +87,18 @@
             <groupId>dev.langchain4j.cdi.mcp</groupId>
             <artifactId>langchain4j-cdi-mcp-portable-ext</artifactId>
         </dependency>
+        <!--
+            Opt-in reflection-free invocation. The module is a build-compatible extension that builds a CDI 4.1
+            Invoker per @Tool/@Prompt/@Resource method; McpBeanInvoker picks it up through the McpInvokerProvider
+            SPI and skips Method.invoke entirely. Adding this artifact is the whole opt-in.
+        -->
+        <dependency>
+            <groupId>dev.langchain4j.cdi.mcp</groupId>
+            <artifactId>langchain4j-cdi-mcp-invoker-cdi41</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Version (4.1.0) and scope come from this module's own dependencyManagement above - see the
+             comment there for why a direct pin is not enough. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>

@@ -53,6 +53,7 @@ class CdiMcpLogTest {
     @Test
     void shouldReturnCurrentLevel() {
         when(mcpLogger.getMinimumLevel()).thenReturn(McpLogLevel.error);
+        when(mcpLogger.minimumLevel()).thenReturn(McpLogLevel.error);
         org.assertj.core.api.Assertions.assertThat(log.level()).isEqualTo(McpLog.LogLevel.ERROR);
     }
 }

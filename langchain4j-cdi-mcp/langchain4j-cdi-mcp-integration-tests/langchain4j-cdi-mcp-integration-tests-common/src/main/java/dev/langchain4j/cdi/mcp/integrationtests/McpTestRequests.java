@@ -29,6 +29,17 @@ public final class McpTestRequests {
     }
 
     /**
+     * Builds an {@code initialize} sent without a JSON-RPC {@code id}, i.e. as a notification. A conformant client
+     * never sends this; the server must reject it rather than silently create an unreachable session.
+     *
+     * @return the request body
+     */
+    @SuppressWarnings("java:S3400")
+    public static String initializeNotification() {
+        return "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test-client\",\"version\":\"1.0\"}}}";
+    }
+
+    /**
      * Builds a {@code ping} request.
      *
      * @param id the JSON-RPC request id
@@ -36,6 +47,17 @@ public final class McpTestRequests {
      */
     public static String pingRequest(Object id) {
         return "{\"jsonrpc\":\"2.0\",\"id\":%s,\"method\":\"ping\",\"params\":{}}".formatted(formatId(id));
+    }
+
+    /**
+     * Builds a {@code ping} sent as a notification, i.e. without a JSON-RPC {@code id}. The Streamable HTTP transport
+     * keys its {@code 202 Accepted} answer on that shape, not on the method name.
+     *
+     * @return the notification body
+     */
+    @SuppressWarnings("java:S3400")
+    public static String pingNotification() {
+        return "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"params\":{}}";
     }
 
     // --- Tools ---

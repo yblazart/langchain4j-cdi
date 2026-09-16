@@ -35,6 +35,9 @@ public class McpSessionManager {
     @Inject
     McpRootsManager rootsManager;
 
+    @Inject
+    McpNotificationBroadcaster broadcaster;
+
     /** CDI-required default constructor. Uses the default 30-minute session timeout. */
     public McpSessionManager() {
         this(DEFAULT_SESSION_TIMEOUT);
@@ -82,8 +85,13 @@ public class McpSessionManager {
      * @throws McpSessionException if the session does not exist
      */
     public McpSession requireSession(Object requestId, String sessionId) {
-        if (sessionId == null || !sessions.containsKey(sessionId)) {
-            throw new McpSessionException(requestId, "Invalid or missing Mcp-Session-Id");
+        if (sessionId == null) {
+            throw new McpSessionException(
+                    requestId, "Invalid or missing Mcp-Session-Id", McpSessionException.BAD_REQUEST);
+        }
+        if (!sessions.containsKey(sessionId)) {
+            throw new McpSessionException(
+                    requestId, "Invalid or missing Mcp-Session-Id", McpSessionException.NOT_FOUND);
         }
         McpSession session = sessions.get(sessionId);
         session.touch();
@@ -91,16 +99,24 @@ public class McpSessionManager {
     }
 
     /**
-     * Terminates and removes a session, cleaning up associated subscriptions and roots.
+     * Terminates and removes a session, cleaning up associated subscriptions and roots and closing its notification
+     * stream.
      *
      * @param sessionId the session identifier to terminate
      */
     public void terminateSession(String sessionId) {
         McpSession removed = sessions.remove(sessionId);
         if (removed != null) {
-            subscriptionManager.removeSession(sessionId);
-            rootsManager.removeSession(sessionId);
+            releaseSession(sessionId);
             LOGGER.fine("MCP: Session terminated: " + sessionId);
+        }
+    }
+
+    private void releaseSession(String sessionId) {
+        subscriptionManager.removeSession(sessionId);
+        rootsManager.removeSession(sessionId);
+        if (broadcaster != null) {
+            broadcaster.closeStream(sessionId);
         }
     }
 
@@ -118,8 +134,7 @@ public class McpSessionManager {
         sessions.entrySet().removeIf(entry -> {
             if (entry.getValue().getLastAccessedAt().isBefore(cutoff)) {
                 String sessionId = entry.getKey();
-                subscriptionManager.removeSession(sessionId);
-                rootsManager.removeSession(sessionId);
+                releaseSession(sessionId);
                 LOGGER.info("MCP: Session expired: " + sessionId);
                 return true;
             }

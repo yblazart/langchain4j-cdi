@@ -2,6 +2,8 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mcpjava.server.resources.Resource;
 
@@ -34,5 +36,43 @@ class McpResourceRegistryTest {
         registry.register(descriptor);
 
         assertThat(registry.listResources()).hasSize(1);
+    }
+
+    private static McpResourceTemplateDescriptor template(String uriTemplate) {
+        return new McpResourceTemplateDescriptor(
+                uriTemplate, uriTemplate, "d", "text/plain", McpResourceRegistryTest.class, null);
+    }
+
+    @Test
+    void shouldMatchARegisteredTemplateAgainstAnInstanceUri() {
+        McpResourceRegistry registry = new McpResourceRegistry();
+        registry.registerTemplate(template("test://template/{id}/data"));
+
+        Optional<McpResourceRegistry.TemplateMatch> match = registry.matchTemplate("test://template/7/data");
+
+        assertThat(match).isPresent();
+        assertThat(match.get().template().getUriTemplate()).isEqualTo("test://template/{id}/data");
+        assertThat(match.get().variables()).containsExactly(Map.entry("id", "7"));
+    }
+
+    @Test
+    void shouldReturnNoMatchForAUriNoTemplateDescribes() {
+        McpResourceRegistry registry = new McpResourceRegistry();
+        registry.registerTemplate(template("test://template/{id}/data"));
+
+        assertThat(registry.matchTemplate("other://thing")).isEmpty();
+        assertThat(registry.matchTemplate(null)).isEmpty();
+    }
+
+    @Test
+    void shouldPreferTheMoreSpecificTemplateWhenSeveralMatch() {
+        McpResourceRegistry registry = new McpResourceRegistry();
+        registry.registerTemplate(template("test://{a}/{b}"));
+        registry.registerTemplate(template("test://fixed/{b}"));
+
+        Optional<McpResourceRegistry.TemplateMatch> match = registry.matchTemplate("test://fixed/x");
+
+        assertThat(match).isPresent();
+        assertThat(match.get().template().getUriTemplate()).isEqualTo("test://fixed/{b}");
     }
 }

@@ -15,7 +15,13 @@ public enum McpErrorCode {
     /** The referenced MCP session was not found or has expired. */
     SESSION_NOT_FOUND(-32001),
     /** The requested tool was not found in the registry. */
-    TOOL_NOT_FOUND(-32002);
+    TOOL_NOT_FOUND(-32002),
+    /** HTTP header validation failed during protocol negotiation. */
+    HEADER_MISMATCH(-32020),
+    /** Client lacks a required capability for the request. */
+    MISSING_REQUIRED_CLIENT_CAPABILITY(-32021),
+    /** The requested MCP protocol version is not supported. */
+    UNSUPPORTED_PROTOCOL_VERSION(-32022);
 
     private final int code;
 

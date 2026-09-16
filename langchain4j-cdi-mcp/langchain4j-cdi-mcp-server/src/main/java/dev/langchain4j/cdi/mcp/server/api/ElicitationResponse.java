@@ -6,10 +6,11 @@ import java.util.Map;
 /** Holds the result of a user elicitation request. */
 public interface ElicitationResponse {
 
-    /** Whether the user accepted or declined the elicitation. */
+    /** Whether the user accepted, declined, or cancelled the elicitation. */
     enum Action {
         ACCEPT,
-        DECLINE
+        DECLINE,
+        CANCEL
     }
 
     /** Typed accessors for the values returned by the user. */

@@ -18,7 +18,8 @@ public final class McpFrameworkTypes {
             Cancellation.class,
             Roots.class,
             Sampling.class,
-            Elicitation.class);
+            Elicitation.class,
+            McpInteractions.class);
 
     private McpFrameworkTypes() {}
 

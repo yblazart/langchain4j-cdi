@@ -9,7 +9,7 @@ import jakarta.inject.Inject;
  * send {@code notifications/progress} to the client via SSE.
  */
 @ApplicationScoped
-public class McpProgressReporter {
+public class McpProgressReporter implements McpProgressSink {
 
     /** CDI-required default constructor. */
     public McpProgressReporter() {}
@@ -37,6 +37,7 @@ public class McpProgressReporter {
      * @param total total expected value (0 if unknown)
      * @param message optional human-readable progress message
      */
+    @Override
     public void reportProgress(Object progressToken, double progress, double total, String message) {
         if (progressToken == null || broadcaster == null || broadcaster.connectedStreamCount() == 0) {
             return;

@@ -81,6 +81,7 @@ public class McpResourceRegistry {
         for (String sessionId : subscriptionManager.getSubscribedSessions(uri)) {
             broadcaster.sendToSession(sessionId, notification);
         }
+        broadcaster.dispatchToSubscriptions(notification);
     }
 
     private void notifyListChanged() {
@@ -126,6 +127,50 @@ public class McpResourceRegistry {
     public Optional<McpResourceTemplateDescriptor> findTemplate(String uriTemplate) {
         return Optional.ofNullable(templates.get(uriTemplate));
     }
+
+    /**
+     * Finds the resource template that a concrete URI is an instance of, and extracts its variables.
+     *
+     * <p>Only useful once an exact {@link #findResource(String)} lookup has come up empty. When several templates match
+     * the URI, the most specific one wins: fewest variables first, then the longest URI template.
+     *
+     * @param uri the requested resource URI
+     * @return the matching template and its variables, or an empty {@link Optional} if no template matches
+     */
+    public Optional<TemplateMatch> matchTemplate(String uri) {
+        if (uri == null) {
+            return Optional.empty();
+        }
+        TemplateMatch best = null;
+        for (McpResourceTemplateDescriptor template : templates.values()) {
+            Optional<Map<String, String>> variables = template.match(uri);
+            if (variables.isEmpty()) {
+                continue;
+            }
+            TemplateMatch candidate = new TemplateMatch(template, variables.get());
+            if (best == null || isMoreSpecific(candidate.template(), best.template())) {
+                best = candidate;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    private static boolean isMoreSpecific(McpResourceTemplateDescriptor candidate, McpResourceTemplateDescriptor best) {
+        int variables =
+                candidate.getVariableNames().size() - best.getVariableNames().size();
+        if (variables != 0) {
+            return variables < 0;
+        }
+        return candidate.getUriTemplate().length() > best.getUriTemplate().length();
+    }
+
+    /**
+     * A resource template matched against a concrete URI.
+     *
+     * @param template the matched resource template
+     * @param variables the template variables extracted from the URI, by name
+     */
+    public record TemplateMatch(McpResourceTemplateDescriptor template, Map<String, String> variables) {}
 
     /**
      * Returns the number of registered resources.
