@@ -1,11 +1,13 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
+import dev.langchain4j.cdi.mcp.server.api.McpInputSchema;
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolAnnotationsModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolModel;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderDesignations;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderValidator;
+import dev.langchain4j.cdi.mcp.server.schema.McpInputSchemaValidator;
 import jakarta.json.JsonObject;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -134,17 +136,32 @@ public class McpToolDescriptor {
      *     {@link dev.langchain4j.cdi.mcp.server.api.McpHeader} designation violates SEP-2243
      * @throws dev.langchain4j.cdi.mcp.server.error.McpIconProviderException if an {@code @Icons} annotation names an
      *     icon provider that cannot be resolved
+     * @throws dev.langchain4j.cdi.mcp.server.error.McpInputSchemaDefinitionException if an {@link McpInputSchema}
+     *     document violates one of its three consistency rules
      */
     public static McpToolDescriptor fromMethod(Class<?> beanClass, Method method) {
         Tool tool = method.getAnnotation(Tool.class);
         String toolName = DEFAULT_NAME.equals(tool.name()) ? method.getName() : tool.name();
         String toolDescription = tool.description();
         McpHeaderValidator.validate(toolName, method);
+
+        McpInputSchema schemaOverride = method.getAnnotation(McpInputSchema.class);
+        JsonObject legacySchema;
+        JsonObject modernSchema;
+        if (schemaOverride != null) {
+            JsonObject supplied = McpInputSchemaValidator.parseAndValidate(toolName, method, schemaOverride.value());
+            legacySchema = supplied;
+            modernSchema = supplied;
+        } else {
+            legacySchema = JsonSchemaGenerator.fromMethod(method, false);
+            modernSchema = JsonSchemaGenerator.fromMethod(method, true);
+        }
+
         return new McpToolDescriptor(
                 toolName,
                 toolDescription,
-                JsonSchemaGenerator.fromMethod(method, false),
-                JsonSchemaGenerator.fromMethod(method, true),
+                legacySchema,
+                modernSchema,
                 beanClass,
                 method,
                 McpIconResolver.resolve(FeatureType.TOOL, toolName, beanClass, method),
