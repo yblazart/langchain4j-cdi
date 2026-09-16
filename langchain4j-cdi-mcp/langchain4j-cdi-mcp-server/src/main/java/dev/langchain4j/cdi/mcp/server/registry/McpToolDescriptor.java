@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
+import dev.langchain4j.cdi.mcp.server.protocol.McpToolAnnotationsModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolModel;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderDesignations;
@@ -25,6 +26,8 @@ public class McpToolDescriptor {
     private final Method method;
     private final List<McpIconModel> icons;
     private final Map<String, String> headerDesignations;
+    private final String title;
+    private final McpToolAnnotationsModel annotations;
 
     /**
      * Creates a tool descriptor with the given metadata, using the same input schema in both protocol eras.
@@ -81,6 +84,34 @@ public class McpToolDescriptor {
             Class<?> beanType,
             Method method,
             List<McpIconModel> icons) {
+        this(name, description, inputSchema, modernInputSchema, beanType, method, icons, null, null);
+    }
+
+    /**
+     * Creates a tool descriptor carrying one input schema per protocol era, a resolved icon list, and the resolved
+     * {@code @Tool.title()} / {@code @Tool.annotations()} wire values.
+     *
+     * @param name the tool name
+     * @param description a human-readable description of the tool
+     * @param inputSchema the JSON Schema served to the 2025-03-26 legacy era
+     * @param modernInputSchema the JSON Schema served to the 2026-07-28 era, which carries the SEP-2243
+     *     {@code x-mcp-header} argument designations
+     * @param beanType the CDI bean class that declares the tool method
+     * @param method the reflective method reference to invoke
+     * @param icons the icons resolved from {@code @Icons} at registration time, or {@code null} when there are none
+     * @param title the resolved {@code @Tool.title()}, or {@code null} when it equals the default ({@code ""})
+     * @param annotations the resolved {@code @Tool.annotations()}, or {@code null} when every member equals its default
+     */
+    public McpToolDescriptor(
+            String name,
+            String description,
+            JsonObject inputSchema,
+            JsonObject modernInputSchema,
+            Class<?> beanType,
+            Method method,
+            List<McpIconModel> icons,
+            String title,
+            McpToolAnnotationsModel annotations) {
         this.name = name;
         this.description = description;
         this.inputSchema = inputSchema;
@@ -89,6 +120,8 @@ public class McpToolDescriptor {
         this.method = method;
         this.icons = icons;
         this.headerDesignations = McpHeaderDesignations.of(method);
+        this.title = title;
+        this.annotations = annotations;
     }
 
     /**
@@ -114,7 +147,9 @@ public class McpToolDescriptor {
                 JsonSchemaGenerator.fromMethod(method, true),
                 beanClass,
                 method,
-                McpIconResolver.resolve(FeatureType.TOOL, toolName, beanClass, method));
+                McpIconResolver.resolve(FeatureType.TOOL, toolName, beanClass, method),
+                tool.title().isEmpty() ? null : tool.title(),
+                McpToolAnnotationsModel.of(tool.annotations()));
     }
 
     /**
@@ -129,21 +164,24 @@ public class McpToolDescriptor {
     /**
      * Converts this descriptor to the MCP wire-format tool representation for a given era.
      *
-     * @param modernEra {@code true} for MCP 2026-07-28, which carries the SEP-2243 {@code x-mcp-header} designations
-     *     and the {@code icons} member; {@code false} for the 2025-03-26 legacy era, whose {@code Tool} definition has
-     *     neither
+     * @param modernEra {@code true} for MCP 2026-07-28, which carries the SEP-2243 {@code x-mcp-header} designations,
+     *     the {@code icons} member, top-level {@code title}, and {@code annotations}; {@code false} for the 2025-03-26
+     *     legacy era, whose {@code Tool} definition has none of them — {@code annotations} is technically defined by
+     *     the 2025-03-26 schema too, but this server keeps the legacy wire output byte-identical to the pre-annotations
+     *     baseline, as promised by the upstream PR
      * @return an MCP {@link McpToolModel} suitable for JSON serialization
      */
     public McpToolModel toWireFormat(boolean modernEra) {
         return new McpToolModel(
                 name,
-                null,
+                modernEra ? annotations : null,
                 description,
                 modernEra ? modernInputSchema : inputSchema,
                 null,
                 null,
                 null,
-                modernEra ? icons : null);
+                modernEra ? icons : null,
+                modernEra ? title : null);
     }
 
     /**
@@ -169,6 +207,24 @@ public class McpToolDescriptor {
      */
     public List<McpIconModel> getIcons() {
         return icons;
+    }
+
+    /**
+     * Returns the resolved {@code @Tool.title()}.
+     *
+     * @return the title, or {@code null} when it equals the default ({@code ""})
+     */
+    public String getTitle() {
+        return title;
+    }
+
+    /**
+     * Returns the resolved {@code @Tool.annotations()}.
+     *
+     * @return the annotations, or {@code null} when every member equals its default
+     */
+    public McpToolAnnotationsModel getAnnotations() {
+        return annotations;
     }
 
     /**

@@ -15,6 +15,8 @@ import java.util.List;
  * @param destructive the {@code destructive} hint, or {@code null}
  * @param icons the icons to advertise, or {@code null} to omit the key; only the MCP 2026-07-28 schema carries
  *     {@code icons} on a tool, so the 2025-03-26 legacy era always passes {@code null}
+ * @param title a human-readable display title, or {@code null} to omit the key; top-level {@code title} was introduced
+ *     by the MCP 2026-07-28 schema and is absent from 2025-03-26, so the legacy era always passes {@code null}
  */
 public record McpToolModel(
         String name,
@@ -24,10 +26,11 @@ public record McpToolModel(
         Object outputSchema,
         Object returnDirect,
         Object destructive,
-        List<McpIconModel> icons) {
+        List<McpIconModel> icons,
+        String title) {
 
     /**
-     * Creates a tool model carrying no icons. Retained for source compatibility with the pre-icons arity.
+     * Creates a tool model carrying no icons and no title. Retained for source compatibility with the pre-icons arity.
      *
      * @param name the tool name
      * @param annotations the tool annotations, or {@code null}
@@ -45,6 +48,30 @@ public record McpToolModel(
             Object outputSchema,
             Object returnDirect,
             Object destructive) {
-        this(name, annotations, description, inputSchema, outputSchema, returnDirect, destructive, null);
+        this(name, annotations, description, inputSchema, outputSchema, returnDirect, destructive, null, null);
+    }
+
+    /**
+     * Creates a tool model carrying no title. Retained for source compatibility with the pre-title arity.
+     *
+     * @param name the tool name
+     * @param annotations the tool annotations, or {@code null}
+     * @param description the tool description
+     * @param inputSchema the JSON Schema of the tool's arguments
+     * @param outputSchema the JSON Schema of the tool's structured result, or {@code null}
+     * @param returnDirect the {@code returnDirect} hint, or {@code null}
+     * @param destructive the {@code destructive} hint, or {@code null}
+     * @param icons the icons to advertise, or {@code null} to omit the key
+     */
+    public McpToolModel(
+            String name,
+            Object annotations,
+            String description,
+            JsonObject inputSchema,
+            Object outputSchema,
+            Object returnDirect,
+            Object destructive,
+            List<McpIconModel> icons) {
+        this(name, annotations, description, inputSchema, outputSchema, returnDirect, destructive, icons, null);
     }
 }
