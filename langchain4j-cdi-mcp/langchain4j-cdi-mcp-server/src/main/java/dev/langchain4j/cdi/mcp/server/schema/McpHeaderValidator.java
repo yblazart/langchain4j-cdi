@@ -44,7 +44,7 @@ public final class McpHeaderValidator {
             if (designation == null) {
                 continue;
             }
-            String paramName = JsonSchemaGenerator.resolveParamName(param);
+            String paramName = McpParameterNames.resolve(param);
             String headerName = designation.value();
 
             if (McpFrameworkTypes.isFrameworkType(param.getType())) {

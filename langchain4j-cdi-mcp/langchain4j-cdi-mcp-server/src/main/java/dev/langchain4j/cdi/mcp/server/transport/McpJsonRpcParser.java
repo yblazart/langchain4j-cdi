@@ -24,11 +24,35 @@ public final class McpJsonRpcParser {
      * @return {@code true} if the body looks like a client response
      */
     public static boolean isJsonRpcResponse(String body) {
-        try (JsonReader reader = Json.createReader(new StringReader(body))) {
-            JsonObject json = reader.readObject();
-            return !json.containsKey("method") && (json.containsKey("result") || json.containsKey("error"));
+        try {
+            return isJsonRpcResponse(parseJson(body));
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Returns whether the given parsed JSON object is a JSON-RPC response.
+     *
+     * @param json the parsed JSON object
+     * @return {@code true} if the object looks like a client response
+     */
+    public static boolean isJsonRpcResponse(JsonObject json) {
+        return !json.containsKey("method") && (json.containsKey("result") || json.containsKey("error"));
+    }
+
+    /**
+     * Parses a raw JSON body into a {@link JsonObject}.
+     *
+     * @param body the raw request body
+     * @return the parsed JSON object
+     * @throws McpException with error code {@link McpErrorCode#PARSE_ERROR} if the body is not valid JSON
+     */
+    public static JsonObject parseJson(String body) {
+        try (JsonReader reader = Json.createReader(new StringReader(body))) {
+            return reader.readObject();
+        } catch (JsonException | ClassCastException e) {
+            throw new McpException(null, McpErrorCode.PARSE_ERROR, "Parse error: invalid JSON-RPC message", 400, null);
         }
     }
 
@@ -40,17 +64,22 @@ public final class McpJsonRpcParser {
      * @throws McpException with error code {@link McpErrorCode#PARSE_ERROR} if the body is not valid JSON-RPC
      */
     public static JsonRpcRequest parseRequest(String body) {
-        try (JsonReader reader = Json.createReader(new StringReader(body))) {
-            JsonObject json = reader.readObject();
-            JsonObject params = json.get("params") instanceof JsonObject p ? p : null;
-            JsonRpcRequest request = new JsonRpcRequest(extractId(json), json.getString("method", null), params);
-            if (params != null && params.get("_meta") instanceof JsonObject meta && meta.containsKey("progressToken")) {
-                request.setProgressToken(jsonPrimitive(meta.get("progressToken")));
-            }
-            return request;
-        } catch (JsonException | ClassCastException e) {
-            throw new McpException(null, McpErrorCode.PARSE_ERROR, "Parse error: invalid JSON-RPC message", 400, null);
+        return parseRequest(parseJson(body));
+    }
+
+    /**
+     * Builds a {@link JsonRpcRequest} from a pre-parsed JSON object.
+     *
+     * @param json the parsed JSON object
+     * @return the parsed request
+     */
+    public static JsonRpcRequest parseRequest(JsonObject json) {
+        JsonObject params = json.get("params") instanceof JsonObject p ? p : null;
+        JsonRpcRequest request = new JsonRpcRequest(extractId(json), json.getString("method", null), params);
+        if (params != null && params.get("_meta") instanceof JsonObject meta && meta.containsKey("progressToken")) {
+            request.setProgressToken(jsonPrimitive(meta.get("progressToken")));
         }
+        return request;
     }
 
     /**

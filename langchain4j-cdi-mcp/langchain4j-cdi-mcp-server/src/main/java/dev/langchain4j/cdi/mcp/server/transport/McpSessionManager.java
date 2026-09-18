@@ -1,5 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.transport;
 
+import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
+import dev.langchain4j.cdi.mcp.server.error.McpException;
 import dev.langchain4j.cdi.mcp.server.error.McpSessionException;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -27,7 +29,11 @@ public class McpSessionManager {
 
     private final ConcurrentHashMap<String, McpSession> sessions = new ConcurrentHashMap<>();
     private final Duration sessionTimeout;
+    private final int maxSessions;
     private final ScheduledExecutorService cleanupExecutor;
+
+    @Inject
+    McpServerConfigResolver configResolver;
 
     @Inject
     McpResourceSubscriptionManager subscriptionManager;
@@ -38,18 +44,29 @@ public class McpSessionManager {
     @Inject
     McpNotificationBroadcaster broadcaster;
 
-    /** CDI-required default constructor. Uses the default 30-minute session timeout. */
+    /** CDI-required default constructor. Uses defaults. */
     public McpSessionManager() {
-        this(DEFAULT_SESSION_TIMEOUT);
+        this(DEFAULT_SESSION_TIMEOUT, McpServerConfig.DEFAULT_MAX_SESSIONS);
     }
 
     /**
-     * Creates a session manager with a custom session timeout.
+     * Creates a session manager with a custom session timeout and the default max sessions limit.
      *
      * @param sessionTimeout the duration after which idle sessions are expired
      */
     public McpSessionManager(Duration sessionTimeout) {
+        this(sessionTimeout, McpServerConfig.DEFAULT_MAX_SESSIONS);
+    }
+
+    /**
+     * Creates a session manager with a custom session timeout and max sessions limit.
+     *
+     * @param sessionTimeout the duration after which idle sessions are expired
+     * @param maxSessions the maximum number of concurrent sessions (zero or negative for unlimited)
+     */
+    public McpSessionManager(Duration sessionTimeout, int maxSessions) {
         this.sessionTimeout = sessionTimeout;
+        this.maxSessions = maxSessions;
         this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "mcp-session-cleanup");
             t.setDaemon(true);
@@ -71,6 +88,10 @@ public class McpSessionManager {
      * @return the new session identifier
      */
     public String createSession(JsonObject initParams) {
+        int limit = resolveMaxSessions();
+        if (limit > 0 && sessions.size() >= limit) {
+            throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Too many concurrent sessions", 429, null);
+        }
         String id = UUID.randomUUID().toString();
         sessions.put(id, new McpSession(id, initParams));
         return id;
@@ -127,6 +148,13 @@ public class McpSessionManager {
      */
     public int activeSessionCount() {
         return sessions.size();
+    }
+
+    private int resolveMaxSessions() {
+        if (configResolver != null) {
+            return configResolver.get().getMaxSessions();
+        }
+        return maxSessions;
     }
 
     void cleanupExpiredSessions() {

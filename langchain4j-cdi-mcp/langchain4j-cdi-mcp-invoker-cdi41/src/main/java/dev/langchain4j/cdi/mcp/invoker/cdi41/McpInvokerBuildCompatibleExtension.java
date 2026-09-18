@@ -56,9 +56,20 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
 
     private static final Logger LOGGER = Logger.getLogger(McpInvokerBuildCompatibleExtension.class.getName());
 
+    private static final boolean CDI41_AVAILABLE = isCdi41Available();
+
     /** The MCP method annotations whose methods are worth an invoker. */
     private static final List<Class<? extends Annotation>> MCP_METHOD_ANNOTATIONS =
             List.of(Tool.class, Prompt.class, Resource.class, ResourceTemplate.class);
+
+    private static boolean isCdi41Available() {
+        try {
+            Class.forName("jakarta.enterprise.invoke.Invoker");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 
     /**
      * Invokers collected during {@link Registration}, keyed by {@link McpInvokerKey#encode() encoded} key so a method
@@ -83,6 +94,9 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
     @SuppressWarnings("unused")
     @Registration(types = Object.class)
     public void buildInvokers(BeanInfo bean, InvokerFactory invokerFactory) {
+        if (!CDI41_AVAILABLE) {
+            return;
+        }
         // Only managed (class) beans can be invoker targets; @Registration also runs a second time, after
         // synthesis, for synthetic beans - which have no invocable class of their own.
         if (!bean.isClassBean() || bean.isSynthetic()) {
@@ -137,6 +151,11 @@ public class McpInvokerBuildCompatibleExtension implements BuildCompatibleExtens
     @SuppressWarnings("unused")
     @Synthesis
     public void registerInvokerProvider(SyntheticComponents syntheticComponents) {
+        if (!CDI41_AVAILABLE) {
+            LOGGER.info(() -> "MCP: CDI 4.1 invoker API (jakarta.enterprise.invoke.Invoker) not available;"
+                    + " the MCP server keeps using reflection");
+            return;
+        }
         // The clear is in a finally so that an aborted synthesis cannot leave the static map pinning InvokerInfos -
         // and through them the deployment's classloader - across a Quarkus dev-mode reload.
         try {

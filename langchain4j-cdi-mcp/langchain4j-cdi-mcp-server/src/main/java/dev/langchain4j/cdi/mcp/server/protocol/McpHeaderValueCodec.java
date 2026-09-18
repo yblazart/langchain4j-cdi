@@ -19,16 +19,11 @@ public final class McpHeaderValueCodec {
      * @throws IllegalArgumentException if the Base64 payload is invalid
      */
     public static String decode(String headerValue) {
-        if (headerValue == null) {
-            return null;
+        if (!isBase64Wrapped(headerValue)) {
+            return headerValue;
         }
-        if (headerValue.length() >= PREFIX.length() + SUFFIX.length()
-                && headerValue.startsWith(PREFIX)
-                && headerValue.endsWith(SUFFIX)) {
-            String payload = headerValue.substring(PREFIX.length(), headerValue.length() - SUFFIX.length());
-            return new String(Base64.getDecoder().decode(payload), StandardCharsets.UTF_8);
-        }
-        return headerValue;
+        String payload = headerValue.substring(PREFIX.length(), headerValue.length() - SUFFIX.length());
+        return new String(Base64.getDecoder().decode(payload), StandardCharsets.UTF_8);
     }
 
     /**

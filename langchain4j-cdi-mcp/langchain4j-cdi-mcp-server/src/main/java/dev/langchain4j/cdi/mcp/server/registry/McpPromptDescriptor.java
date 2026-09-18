@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
+import dev.langchain4j.cdi.mcp.server.schema.McpParameterNames;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
@@ -16,7 +17,7 @@ import org.mcpjava.server.prompts.PromptArg;
  */
 public class McpPromptDescriptor {
 
-    private static final String DEFAULT_NAME = "<<element name>>";
+    private static final String DEFAULT_NAME = McpParameterNames.DEFAULT_ELEMENT_NAME;
 
     private final String name;
     private final String description;

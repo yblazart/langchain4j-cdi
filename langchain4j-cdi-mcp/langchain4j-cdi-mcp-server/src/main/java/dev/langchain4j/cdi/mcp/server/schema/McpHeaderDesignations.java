@@ -16,7 +16,7 @@ import java.util.Map;
  * <p>The map produced here is the request-time twin of the {@code x-mcp-header} keywords
  * {@link JsonSchemaGenerator#fromMethod(Method, boolean)} publishes in the modern-era schema: both walk the same
  * parameters, skip the same framework types, and name arguments with the same
- * {@link JsonSchemaGenerator#resolveParamName(Parameter)}.
+ * {@link McpParameterNames#resolve(Parameter)}.
  */
 public final class McpHeaderDesignations {
 
@@ -39,7 +39,7 @@ public final class McpHeaderDesignations {
             if (designation == null || McpFrameworkTypes.isFrameworkType(param.getType())) {
                 continue;
             }
-            designations.put(JsonSchemaGenerator.resolveParamName(param), designation.value());
+            designations.put(McpParameterNames.resolve(param), designation.value());
         }
         return designations.isEmpty() ? Map.of() : Collections.unmodifiableMap(designations);
     }

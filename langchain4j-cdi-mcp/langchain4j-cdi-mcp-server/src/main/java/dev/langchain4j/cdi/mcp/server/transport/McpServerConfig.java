@@ -31,6 +31,21 @@ public class McpServerConfig {
     /** The timeout for continuation. Defaults to 5 minutes. */
     private Duration continuationTimeout = Duration.ofMinutes(5);
 
+    /** Maximum concurrent sessions. Zero or negative means unlimited. Defaults to {@value #DEFAULT_MAX_SESSIONS}. */
+    private int maxSessions = DEFAULT_MAX_SESSIONS;
+
+    /**
+     * Maximum concurrent continuations (MRTR CONTINUATION mode). Zero or negative means unlimited. Defaults to
+     * {@value #DEFAULT_MAX_CONTINUATIONS}.
+     */
+    private int maxContinuations = DEFAULT_MAX_CONTINUATIONS;
+
+    /** Default maximum concurrent sessions. */
+    public static final int DEFAULT_MAX_SESSIONS = 1000;
+
+    /** Default maximum concurrent continuations. */
+    public static final int DEFAULT_MAX_CONTINUATIONS = 200;
+
     /**
      * The SEP-2549 {@code ttlMs} caching hint emitted on cacheable results ({@code tools/list}, {@code prompts/list},
      * {@code resources/list}, {@code resources/templates/list} and {@code resources/read}) of the 2026-07-28 era.
@@ -203,6 +218,42 @@ public class McpServerConfig {
     }
 
     /**
+     * Returns the maximum number of concurrent sessions. Zero or negative means unlimited.
+     *
+     * @return the max sessions limit
+     */
+    public int getMaxSessions() {
+        return maxSessions;
+    }
+
+    /**
+     * Sets the maximum number of concurrent sessions. Zero or negative means unlimited.
+     *
+     * @param maxSessions the max sessions limit
+     */
+    public void setMaxSessions(int maxSessions) {
+        this.maxSessions = maxSessions;
+    }
+
+    /**
+     * Returns the maximum number of concurrent continuations. Zero or negative means unlimited.
+     *
+     * @return the max continuations limit
+     */
+    public int getMaxContinuations() {
+        return maxContinuations;
+    }
+
+    /**
+     * Sets the maximum number of concurrent continuations. Zero or negative means unlimited.
+     *
+     * @param maxContinuations the max continuations limit
+     */
+    public void setMaxContinuations(int maxContinuations) {
+        this.maxContinuations = maxContinuations;
+    }
+
+    /**
      * Returns the SEP-2549 {@code ttlMs} caching hint emitted on cacheable 2026-07-28 results.
      *
      * @return the cache TTL, never negative
@@ -251,6 +302,8 @@ public class McpServerConfig {
         private String requestStateSecret;
         private Duration requestStateTtl = Duration.ofMinutes(10);
         private Duration continuationTimeout = Duration.ofMinutes(5);
+        private int maxSessions = DEFAULT_MAX_SESSIONS;
+        private int maxContinuations = DEFAULT_MAX_CONTINUATIONS;
         private Duration cacheTtl = Duration.ZERO;
         private String cacheScope = CACHE_SCOPE_PUBLIC;
 
@@ -357,6 +410,28 @@ public class McpServerConfig {
         }
 
         /**
+         * Sets the maximum number of concurrent sessions. Zero or negative means unlimited.
+         *
+         * @param maxSessions the max sessions limit
+         * @return this builder
+         */
+        public McpServerConfigBuilder maxSessions(int maxSessions) {
+            this.maxSessions = maxSessions;
+            return this;
+        }
+
+        /**
+         * Sets the maximum number of concurrent continuations. Zero or negative means unlimited.
+         *
+         * @param maxContinuations the max continuations limit
+         * @return this builder
+         */
+        public McpServerConfigBuilder maxContinuations(int maxContinuations) {
+            this.maxContinuations = maxContinuations;
+            return this;
+        }
+
+        /**
          * Builds the {@link McpServerConfig}.
          *
          * @return the constructed config
@@ -368,6 +443,8 @@ public class McpServerConfig {
             config.setRequestStateSecret(requestStateSecret);
             config.setRequestStateTtl(requestStateTtl);
             config.setContinuationTimeout(continuationTimeout);
+            config.setMaxSessions(maxSessions);
+            config.setMaxContinuations(maxContinuations);
             config.setCacheTtl(cacheTtl);
             config.setCacheScope(cacheScope);
             return config;

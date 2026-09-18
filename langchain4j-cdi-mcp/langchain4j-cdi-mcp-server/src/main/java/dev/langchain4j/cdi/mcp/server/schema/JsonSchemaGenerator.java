@@ -15,8 +15,6 @@ import org.mcpjava.server.tools.ToolArg;
 /** Generates JSON Schema objects from Java method signatures for MCP tool descriptions. */
 public class JsonSchemaGenerator {
 
-    private static final String DEFAULT_NAME = "<<element name>>";
-
     /** The SEP-2243 schema keyword carrying an argument's HTTP header designation. */
     static final String X_MCP_HEADER = "x-mcp-header";
 
@@ -49,7 +47,7 @@ public class JsonSchemaGenerator {
             if (McpFrameworkTypes.isFrameworkType(param.getType())) {
                 continue;
             }
-            String paramName = resolveParamName(param);
+            String paramName = McpParameterNames.resolve(param);
             ToolArg annotation = param.getAnnotation(ToolArg.class);
             String description = annotation != null ? annotation.description() : "";
             boolean isRequired = annotation == null || annotation.required();
@@ -66,12 +64,10 @@ public class JsonSchemaGenerator {
         return schema.add("properties", properties).add("required", required).build();
     }
 
+    /** @deprecated use {@link McpParameterNames#resolve(Parameter)} */
+    @Deprecated(forRemoval = true)
     static String resolveParamName(Parameter param) {
-        ToolArg annotation = param.getAnnotation(ToolArg.class);
-        if (annotation != null && !DEFAULT_NAME.equals(annotation.name())) {
-            return annotation.name();
-        }
-        return param.getName();
+        return McpParameterNames.resolve(param);
     }
 
     private static JsonObject buildPropertySchema(Class<?> type, String description, String headerName) {
