@@ -8,6 +8,7 @@ import dev.langchain4j.cdi.mcp.server.protocol.McpHttpHeaders;
 import dev.langchain4j.cdi.mcp.server.protocol.McpProtocolVersions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.json.JsonObject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -71,10 +72,11 @@ public class McpEndpoint {
         if (forbidden != null) {
             return forbidden;
         }
-        if (McpJsonRpcParser.isJsonRpcResponse(body)) {
+        JsonObject json = McpJsonRpcParser.parseJson(body);
+        if (McpJsonRpcParser.isJsonRpcResponse(json)) {
             return legacy.handleClientResponse(body);
         }
-        JsonRpcRequest request = McpJsonRpcParser.parseRequest(body);
+        JsonRpcRequest request = McpJsonRpcParser.parseRequest(json);
         if (request.getMethod() == null) {
             throw new McpException(request.getId(), McpErrorCode.INVALID_REQUEST, "Missing method");
         }
@@ -132,8 +134,9 @@ public class McpEndpoint {
             if (forbidden != null) {
                 throw new WebApplicationException(forbidden);
             }
+            JsonObject json = McpJsonRpcParser.parseJson(body);
             JsonRpcRequest request =
-                    McpJsonRpcParser.isJsonRpcResponse(body) ? null : McpJsonRpcParser.parseRequest(body);
+                    McpJsonRpcParser.isJsonRpcResponse(json) ? null : McpJsonRpcParser.parseRequest(json);
             if (request == null || request.getMethod() == null || request.getId() == null) {
                 throw new McpException(
                         request != null ? request.getId() : null,

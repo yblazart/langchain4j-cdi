@@ -165,13 +165,16 @@ public final class McpContinuation {
             futures.forEach((k, f) -> result.put(k, f.join()));
             return result;
         } catch (CancellationException e) {
+            futures.values().forEach(f -> f.cancel(true));
             onAbandon.run();
             throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Client input request cancelled");
         } catch (InterruptedException e) {
+            futures.values().forEach(f -> f.cancel(true));
             Thread.currentThread().interrupt();
             onAbandon.run();
             throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Interrupted while waiting for client input");
         } catch (ExecutionException | TimeoutException e) {
+            futures.values().forEach(f -> f.cancel(true));
             onAbandon.run();
             throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "No client input received for batch");
         }

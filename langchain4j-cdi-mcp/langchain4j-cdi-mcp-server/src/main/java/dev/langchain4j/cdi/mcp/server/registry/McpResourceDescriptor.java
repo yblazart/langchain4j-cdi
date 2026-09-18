@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
+import dev.langchain4j.cdi.mcp.server.schema.McpParameterNames;
 import java.lang.reflect.Method;
 import java.util.List;
 import org.mcpjava.server.FeatureType;
@@ -12,7 +13,7 @@ import org.mcpjava.server.resources.Resource;
  */
 public class McpResourceDescriptor {
 
-    private static final String DEFAULT_NAME = "<<element name>>";
+    private static final String DEFAULT_NAME = McpParameterNames.DEFAULT_ELEMENT_NAME;
 
     private final String uri;
     private final String name;

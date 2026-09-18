@@ -113,7 +113,7 @@ public final class McpInputSchemaValidator {
             if (McpFrameworkTypes.isFrameworkType(param.getType())) {
                 continue;
             }
-            names.add(JsonSchemaGenerator.resolveParamName(param));
+            names.add(McpParameterNames.resolve(param));
         }
         return names;
     }

@@ -132,7 +132,7 @@ public class McpModernProtocolHandler {
             };
         } catch (McpException e) {
             return McpReply.json(e.getHttpStatus(), rpcError(id, e));
-        } catch (McpInputRequiredSignal signal) {
+        } catch (McpInputRequiredSignal | McpInputRequiredBatchSignal signal) {
             // handled inside execute(); never turned into an error response
             throw signal;
         } catch (RuntimeException e) {
@@ -282,7 +282,7 @@ public class McpModernProtocolHandler {
                 message = rpcResult(request.getId(), execute(request, protocol, channel, cancelled));
             } catch (McpException e) {
                 message = rpcError(request.getId(), e);
-            } catch (McpInputRequiredSignal signal) {
+            } catch (McpInputRequiredSignal | McpInputRequiredBatchSignal signal) {
                 // handled inside execute(); never turned into an error response
                 throw signal;
             } catch (RuntimeException e) {

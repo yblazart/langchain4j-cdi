@@ -15,6 +15,10 @@ class CdiInteractionResults implements McpInteractionResults {
     private final Map<String, BatchRequestSpec> specsByKey;
 
     CdiInteractionResults(Map<String, JsonObject> results, List<BatchRequestSpec> specs) {
+        if (results.size() != specs.size()) {
+            throw new IllegalStateException("Batch collected " + results.size() + " answers but declared "
+                    + specs.size() + " requests; partial results indicate a transport failure");
+        }
         this.results = results;
         Map<String, BatchRequestSpec> byKey = new LinkedHashMap<>();
         specs.forEach(spec -> byKey.put(spec.key(), spec));

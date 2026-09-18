@@ -163,7 +163,8 @@ class McpContinuationTest {
                 .hasCauseInstanceOf(McpException.class);
 
         assertThat(continuation.isWaitingFor("user_name")).isFalse();
-        assertThat(continuation.isWaitingFor("roots")).isTrue();
+        // after timeout, unanswered futures are cancelled and removed from the pending map
+        assertThat(continuation.isWaitingFor("roots")).isFalse();
     }
 
     @Test
