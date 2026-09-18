@@ -8,6 +8,7 @@ import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderDesignations;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderValidator;
 import dev.langchain4j.cdi.mcp.server.schema.McpInputSchemaValidator;
+import dev.langchain4j.cdi.mcp.server.schema.McpParameterNames;
 import jakarta.json.JsonObject;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -18,7 +19,7 @@ import org.mcpjava.server.tools.Tool;
 /** Describes a discovered MCP tool, holding its metadata, JSON Schema, and the backing bean method. */
 public class McpToolDescriptor {
 
-    private static final String DEFAULT_NAME = "<<element name>>";
+    private static final String DEFAULT_NAME = McpParameterNames.DEFAULT_ELEMENT_NAME;
 
     private final String name;
     private final String description;

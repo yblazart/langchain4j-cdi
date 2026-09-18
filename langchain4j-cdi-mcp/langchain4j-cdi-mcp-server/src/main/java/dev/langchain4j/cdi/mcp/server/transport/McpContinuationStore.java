@@ -11,7 +11,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -29,6 +31,9 @@ public class McpContinuationStore {
 
     @Inject
     McpMrtrSupport mrtr;
+
+    @Inject
+    McpServerConfigResolver configResolver;
 
     /** CDI constructor. */
     public McpContinuationStore() {}
@@ -50,6 +55,12 @@ public class McpContinuationStore {
      * @return the newly created continuation
      */
     public McpContinuation create() {
+        int limit = configResolver != null
+                ? configResolver.get().getMaxContinuations()
+                : McpServerConfig.DEFAULT_MAX_CONTINUATIONS;
+        if (limit > 0 && continuations.size() >= limit) {
+            throw new McpException(null, McpErrorCode.INTERNAL_ERROR, "Too many concurrent continuations");
+        }
         String id = UUID.randomUUID().toString();
         McpContinuation continuation = new McpContinuation(id, mrtr.continuationTimeout(), () -> remove(id));
         continuations.put(id, continuation);
@@ -123,11 +134,16 @@ public class McpContinuationStore {
         if (current == null) {
             synchronized (this) {
                 if (executor == null) {
-                    executor = Executors.newCachedThreadPool(r -> {
-                        Thread t = new Thread(r, "mcp-continuation-" + threadCounter.incrementAndGet());
-                        t.setDaemon(true);
-                        return t;
-                    });
+                    int limit = configResolver != null
+                            ? configResolver.get().getMaxContinuations()
+                            : McpServerConfig.DEFAULT_MAX_CONTINUATIONS;
+                    int poolSize = limit > 0 ? limit : McpServerConfig.DEFAULT_MAX_CONTINUATIONS;
+                    executor = new ThreadPoolExecutor(
+                            0, poolSize, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> {
+                                Thread t = new Thread(r, "mcp-continuation-" + threadCounter.incrementAndGet());
+                                t.setDaemon(true);
+                                return t;
+                            });
                 }
                 current = executor;
             }

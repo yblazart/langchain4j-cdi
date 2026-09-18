@@ -1,6 +1,7 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
+import dev.langchain4j.cdi.mcp.server.schema.McpParameterNames;
 import java.lang.reflect.Method;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -9,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.mcpjava.server.FeatureType;
@@ -26,7 +29,9 @@ import org.mcpjava.server.resources.ResourceTemplate;
  */
 public class McpResourceTemplateDescriptor {
 
-    private static final String DEFAULT_NAME = "<<element name>>";
+    private static final Logger LOGGER = Logger.getLogger(McpResourceTemplateDescriptor.class.getName());
+
+    private static final String DEFAULT_NAME = McpParameterNames.DEFAULT_ELEMENT_NAME;
 
     private static final Pattern VARIABLE = Pattern.compile("\\{([^{}/]+)}");
 
@@ -144,6 +149,7 @@ public class McpResourceTemplateDescriptor {
             // URLDecoder also maps '+' to a space, which is a form-encoding rule and not a URI one
             return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.FINE, "URI variable contains malformed percent-encoding, using raw value: {0}", value);
             return value;
         }
     }

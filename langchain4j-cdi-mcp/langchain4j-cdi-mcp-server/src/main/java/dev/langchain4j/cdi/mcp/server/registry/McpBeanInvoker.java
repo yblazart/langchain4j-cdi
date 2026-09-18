@@ -5,6 +5,7 @@ import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
+import dev.langchain4j.cdi.mcp.server.schema.McpParameterNames;
 import dev.langchain4j.cdi.mcp.server.transport.McpInputRequiredBatchSignal;
 import dev.langchain4j.cdi.mcp.server.transport.McpInputRequiredSignal;
 import dev.langchain4j.cdi.mcp.server.transport.McpSession;
@@ -23,18 +24,17 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import org.mcpjava.server.prompts.PromptArg;
-import org.mcpjava.server.resources.ResourceTemplateArg;
-import org.mcpjava.server.tools.ToolArg;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Shared utility for invoking CDI bean methods with JSON arguments. */
 @ApplicationScoped
 public class McpBeanInvoker {
 
+    private static final Logger LOGGER = Logger.getLogger(McpBeanInvoker.class.getName());
+
     /** CDI-required default constructor. */
     public McpBeanInvoker() {}
-
-    private static final String DEFAULT_NAME = "<<element name>>";
 
     @Inject
     BeanManager beanManager;
@@ -205,10 +205,8 @@ public class McpBeanInvoker {
         if (cause instanceof McpException mcpException) {
             return mcpException;
         }
-        return new McpException(
-                requestId,
-                McpErrorCode.INTERNAL_ERROR,
-                "Invocation failed: " + method.getName() + " - " + cause.getMessage());
+        LOGGER.log(Level.WARNING, "MCP: invocation of " + method.getName() + " failed", cause);
+        return new McpException(requestId, McpErrorCode.INTERNAL_ERROR, "Tool execution failed");
     }
 
     /** A single invocation to perform, abstracting over reflective and provider-supplied invokers. */
@@ -235,7 +233,7 @@ public class McpBeanInvoker {
             if (McpFrameworkTypes.isFrameworkType(params[i].getType())) {
                 args[i] = apiFactory.createInstance(params[i].getType(), ctx, session, beanType);
             } else {
-                String paramName = resolveParamName(params[i]);
+                String paramName = McpParameterNames.resolve(params[i]);
                 if (arguments != null && arguments.containsKey(paramName)) {
                     args[i] = convertJsonValue(arguments.get(paramName), params[i].getType());
                 } else {
@@ -244,30 +242,6 @@ public class McpBeanInvoker {
             }
         }
         return args;
-    }
-
-    /**
-     * Resolves the wire name of a parameter: the {@code name} of its {@code @ToolArg}, {@code @PromptArg} or
-     * {@code @ResourceTemplateArg} annotation when it sets one, otherwise the Java parameter name (which needs the
-     * module to be compiled with {@code -parameters}, or it is {@code arg0}).
-     *
-     * @param param the method parameter
-     * @return the name the argument is sent under
-     */
-    private static String resolveParamName(Parameter param) {
-        ToolArg toolArg = param.getAnnotation(ToolArg.class);
-        if (toolArg != null && !DEFAULT_NAME.equals(toolArg.name())) {
-            return toolArg.name();
-        }
-        PromptArg promptArg = param.getAnnotation(PromptArg.class);
-        if (promptArg != null && !DEFAULT_NAME.equals(promptArg.name())) {
-            return promptArg.name();
-        }
-        ResourceTemplateArg templateArg = param.getAnnotation(ResourceTemplateArg.class);
-        if (templateArg != null && !DEFAULT_NAME.equals(templateArg.name())) {
-            return templateArg.name();
-        }
-        return param.getName();
     }
 
     private Object convertJsonValue(JsonValue jsonValue, Class<?> targetType) {
