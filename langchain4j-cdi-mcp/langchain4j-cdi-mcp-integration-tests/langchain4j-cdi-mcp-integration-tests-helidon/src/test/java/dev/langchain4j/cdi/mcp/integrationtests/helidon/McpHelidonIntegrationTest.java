@@ -287,6 +287,38 @@ public class McpHelidonIntegrationTest {
         scenarios().shouldIgnoreParamHeadersInTheLegacyEra();
     }
 
+    // ---- Argument binding (langchain4j-cdi#298) ----
+
+    @Test
+    void shouldAdvertiseDefaultedArgumentsAsNotRequired() {
+        scenarios().shouldAdvertiseDefaultedArgumentsAsNotRequired();
+    }
+
+    @Test
+    void shouldApplyArgumentDefaultsInBothEras() {
+        scenarios().shouldApplyArgumentDefaultsInBothEras();
+    }
+
+    @Test
+    void shouldBindEnumArgumentInBothEras() {
+        scenarios().shouldBindEnumArgumentInBothEras();
+    }
+
+    @Test
+    void shouldRejectWronglyTypedToolArgumentAsInvalidParamsInLegacyEra() {
+        scenarios().shouldRejectWronglyTypedToolArgumentAsInvalidParamsInLegacyEra();
+    }
+
+    @Test
+    void shouldReportWronglyTypedToolArgumentAsToolErrorInModernEra() {
+        scenarios().shouldReportWronglyTypedToolArgumentAsToolErrorInModernEra();
+    }
+
+    @Test
+    void shouldRejectWronglyTypedPromptArgumentAsInvalidParamsInBothEras() {
+        scenarios().shouldRejectWronglyTypedPromptArgumentAsInvalidParamsInBothEras();
+    }
+
     @Test
     void shouldRejectUnsupportedProtocolVersion() {
         scenarios().shouldRejectUnsupportedProtocolVersion();

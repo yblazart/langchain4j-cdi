@@ -15,6 +15,7 @@ import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
 import jakarta.json.JsonString;
+import jakarta.json.JsonValue;
 import java.io.StringReader;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -610,6 +611,137 @@ public final class McpIntegrationTestScenarios {
 
         assertThat(result.getJsonArray("content").getJsonObject(0).getString("text"))
                 .isEqualTo("tenant=acme, attempt=7");
+    }
+
+    // ---- Argument binding (langchain4j-cdi#298): defaults, enums, strictly typed arguments ----
+
+    private JsonObject listTasksLegacy(String sessionId, int id, String argumentsJson) {
+        return JsonRpcAssertions.assertJsonRpcSuccess(
+                postMcp(sessionId, McpTestRequests.toolsCallRequest(id, LIST_TASKS, argumentsJson)), id);
+    }
+
+    private JsonObject listTasksModern(int id, String argumentsJson) {
+        return JsonRpcAssertions.assertJsonRpcSuccess(
+                postModern(
+                        id,
+                        "tools/call",
+                        LIST_TASKS,
+                        "\"name\":\"" + LIST_TASKS + "\",\"arguments\":" + argumentsJson,
+                        "{}"),
+                id);
+    }
+
+    private static String text(JsonObject result) {
+        return result.getJsonArray("content").getJsonObject(0).getString("text");
+    }
+
+    public void shouldAdvertiseDefaultedArgumentsAsNotRequired() {
+        String sessionId = initializeSession();
+        JsonObject tools =
+                JsonRpcAssertions.assertJsonRpcSuccess(postMcp(sessionId, McpTestRequests.toolsListRequest(140)), 140);
+        JsonObject listTasks = tools.getJsonArray("tools").stream()
+                .map(JsonValue::asJsonObject)
+                .filter(t -> LIST_TASKS.equals(t.getString("name")))
+                .findFirst()
+                .orElseThrow();
+        JsonObject schema = listTasks.getJsonObject("inputSchema");
+
+        assertThat(schema.getJsonArray("required")).isEmpty();
+        assertThat(schema.getJsonObject("properties").getJsonObject("limit").getInt("default"))
+                .isEqualTo(20);
+        assertThat(schema.getJsonObject("properties")
+                        .getJsonObject("priority")
+                        .getJsonArray("enum")
+                        .getValuesAs(JsonString::getString))
+                .containsExactly("LOW", "MEDIUM", "HIGH");
+
+        JsonObject prompts = JsonRpcAssertions.assertJsonRpcSuccess(
+                postMcp(sessionId, McpTestRequests.promptsListRequest(141)), 141);
+        JsonObject planDay = prompts.getJsonArray("prompts").stream()
+                .map(JsonValue::asJsonObject)
+                .filter(p -> PLAN_DAY.equals(p.getString("name")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(planDay.getJsonArray("arguments").getJsonObject(0).getBoolean("required"))
+                .isFalse();
+    }
+
+    public void shouldApplyArgumentDefaultsInBothEras() {
+        String sessionId = initializeSession();
+
+        assertThat(text(listTasksLegacy(sessionId, 142, "{}")))
+                .isEqualTo("limit=20, includeDone=true, priority=MEDIUM");
+        assertThat(text(listTasksModern(143, "{}"))).isEqualTo("limit=20, includeDone=true, priority=MEDIUM");
+
+        JsonObject prompt = JsonRpcAssertions.assertJsonRpcSuccess(
+                postMcp(sessionId, McpTestRequests.promptsGetRequest(144, PLAN_DAY, "{}")), 144);
+        assertThat(prompt.getJsonArray("messages")
+                        .getJsonObject(0)
+                        .getJsonObject("content")
+                        .getString("text"))
+                .isEqualTo("hours=8");
+        JsonObject parsed = JsonRpcAssertions.assertJsonRpcSuccess(
+                postMcp(sessionId, McpTestRequests.promptsGetRequest(145, PLAN_DAY, "{\"hours\":\"6\"}")), 145);
+        assertThat(parsed.getJsonArray("messages")
+                        .getJsonObject(0)
+                        .getJsonObject("content")
+                        .getString("text"))
+                .isEqualTo("hours=6");
+    }
+
+    public void shouldBindEnumArgumentInBothEras() {
+        String sessionId = initializeSession();
+
+        assertThat(text(listTasksLegacy(sessionId, 146, "{\"priority\":\"HIGH\"}")))
+                .isEqualTo("limit=20, includeDone=true, priority=HIGH");
+        assertThat(text(listTasksModern(147, "{\"priority\":\"HIGH\"}")))
+                .isEqualTo("limit=20, includeDone=true, priority=HIGH");
+    }
+
+    public void shouldRejectWronglyTypedToolArgumentAsInvalidParamsInLegacyEra() {
+        String sessionId = initializeSession();
+
+        McpHttpResponse limit =
+                postMcp(sessionId, McpTestRequests.toolsCallRequest(148, LIST_TASKS, "{\"limit\":\"5\"}"));
+        JsonObject error = JsonRpcAssertions.assertHttpJsonRpcError(limit, 200, 148, -32602);
+        assertThat(error.getString("message"))
+                .isEqualTo("Invalid argument 'limit': expected integer, got string \"5\"");
+        assertThat(limit.body())
+                .doesNotContain("java.")
+                .doesNotContain("jakarta.")
+                .doesNotContain("Exception");
+
+        McpHttpResponse includeDone =
+                postMcp(sessionId, McpTestRequests.toolsCallRequest(149, LIST_TASKS, "{\"includeDone\":\"true\"}"));
+        assertThat(JsonRpcAssertions.assertHttpJsonRpcError(includeDone, 200, 149, -32602)
+                        .getString("message"))
+                .isEqualTo("Invalid argument 'includeDone': expected boolean, got string \"true\"");
+
+        McpHttpResponse priority =
+                postMcp(sessionId, McpTestRequests.toolsCallRequest(150, LIST_TASKS, "{\"priority\":\"URGENT\"}"));
+        assertThat(JsonRpcAssertions.assertHttpJsonRpcError(priority, 200, 150, -32602)
+                        .getString("message"))
+                .isEqualTo("Invalid argument 'priority': expected one of [LOW, MEDIUM, HIGH], got string \"URGENT\"");
+    }
+
+    public void shouldReportWronglyTypedToolArgumentAsToolErrorInModernEra() {
+        JsonObject result = listTasksModern(151, "{\"limit\":\"5\"}");
+
+        assertThat(result.getBoolean("isError")).isTrue();
+        assertThat(text(result)).isEqualTo("Invalid argument 'limit': expected integer, got string \"5\"");
+    }
+
+    public void shouldRejectWronglyTypedPromptArgumentAsInvalidParamsInBothEras() {
+        String sessionId = initializeSession();
+        McpHttpResponse legacy =
+                postMcp(sessionId, McpTestRequests.promptsGetRequest(152, PLAN_DAY, "{\"hours\":\"six\"}"));
+        JsonRpcAssertions.assertJsonRpcError(legacy, 152, -32602, "Invalid argument 'hours'");
+
+        McpHttpResponse modern = postModern(
+                153, "prompts/get", PLAN_DAY, "\"name\":\"" + PLAN_DAY + "\",\"arguments\":{\"hours\":\"six\"}", "{}");
+        JsonObject error = JsonRpcAssertions.assertHttpJsonRpcError(modern, 200, 153, -32602);
+        assertThat(error.getString("message"))
+                .isEqualTo("Invalid argument 'hours': expected integer, got string \"six\"");
     }
 
     public void shouldRejectUnsupportedProtocolVersion() {

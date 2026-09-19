@@ -24,6 +24,12 @@ public final class McpTestConstants {
     /** Prompt name for the summarize prompt. */
     public static final String SUMMARIZE = "summarize";
 
+    /** Tool name of {@link TaskListTool}, whose arguments carry defaults and an enum. */
+    public static final String LIST_TASKS = "list_tasks";
+
+    /** Prompt name of {@link DayPlanPrompt}, whose {@code int} argument has a default. */
+    public static final String PLAN_DAY = "plan_day";
+
     /** Tool name for the elicitation tool. */
     public static final String ASK_NAME = "askName";
 
