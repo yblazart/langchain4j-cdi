@@ -77,13 +77,24 @@ public class McpLegacyProtocolHandler {
      * before; only the response is replaced. {@code initialize} is the one exception: an id-less {@code initialize} is
      * rejected as {@code -32600 Invalid Request} instead of silently creating a session nothing can ever reach.
      *
+     * <p>An unexpected exception is answered {@code -32603 Internal error} and logged, as on the 2026-07-28 path: it
+     * never reaches the Jakarta REST container, whose error page is runtime-specific and may carry internal class
+     * names.
+     *
      * @param request the parsed JSON-RPC request
      * @param sessionId the {@code Mcp-Session-Id} header value, or {@code null}
      * @param wantsSse whether the client accepts {@code text/event-stream} responses
      * @return the JAX-RS response
      */
     public Response handle(JsonRpcRequest request, String sessionId, boolean wantsSse) {
-        Response response = dispatch(request, sessionId, wantsSse);
+        Response response;
+        try {
+            response = dispatch(request, sessionId, wantsSse);
+        } catch (McpException | WebApplicationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw McpModernProtocolHandler.internalError(request.getId(), request.getMethod(), e);
+        }
         return request.getId() == null ? accepted() : response;
     }
 

@@ -5,7 +5,9 @@ import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.CONFIG_A
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.DESCRIBE_SIGNATURE;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.GET_WEATHER;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.GREET;
+import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.LIST_TASKS;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.MCP_SESSION_ID;
+import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.PLAN_DAY;
 import static dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants.SUMMARIZE;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,10 +50,10 @@ class McpQuarkusCdi41InvokerTest {
     /**
      * Number of {@code @Tool}/{@code @Prompt}/{@code @Resource} methods in the shared IT application:
      * {@code getWeather}, {@code greet}, {@code describeSignature}, {@code askName}, {@code summarize},
-     * {@code getConfig}, {@code getStatus}, {@code iconedTool}, {@code tenantEcho}. This test invokes all nine, so the
-     * match count is expected to reach exactly this number.
+     * {@code getConfig}, {@code getStatus}, {@code iconedTool}, {@code tenantEcho}, {@code listTasks}, {@code planDay}.
+     * This test invokes all eleven, so the match count is expected to reach exactly this number.
      */
-    private static final int ANNOTATED_MCP_METHODS = 9;
+    private static final int ANNOTATED_MCP_METHODS = 11;
 
     /** URI of the second resource of {@code ConfigResource}, invoked here only to cover its invoker too. */
     private static final String STATUS_RESOURCE = "data://status";
@@ -116,6 +118,24 @@ class McpQuarkusCdi41InvokerTest {
                         sessionId,
                         McpTestRequests.promptsGetRequest(202, SUMMARIZE, "{\"text\":\"Hello world\"}")),
                 202);
+
+        // listTasks binds an int and a boolean from their defaults and an enum constant from its name, and planDay
+        // parses its int from a string, before both hand their arguments to the container invoker positionally.
+        JsonObject tasks = JsonRpcAssertions.assertJsonRpcSuccess(
+                post(
+                        transport,
+                        sessionId,
+                        McpTestRequests.toolsCallRequest(210, LIST_TASKS, "{\"priority\":\"HIGH\"}")),
+                210);
+        assertThat(tasks.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("limit=20, includeDone=true, priority=HIGH");
+        JsonObject plan = JsonRpcAssertions.assertJsonRpcSuccess(
+                post(transport, sessionId, McpTestRequests.promptsGetRequest(211, PLAN_DAY, "{\"hours\":\"6\"}")), 211);
+        assertThat(plan.getJsonArray("messages")
+                        .getJsonObject(0)
+                        .getJsonObject("content")
+                        .getString("text"))
+                .isEqualTo("hours=6");
         JsonRpcAssertions.assertJsonRpcSuccess(
                 post(transport, sessionId, McpTestRequests.resourcesReadRequest(203, CONFIG_APP)), 203);
         JsonRpcAssertions.assertJsonRpcSuccess(

@@ -8,10 +8,12 @@ import static org.mockito.Mockito.*;
 
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
+import dev.langchain4j.cdi.mcp.server.error.McpInvalidArgumentException;
 import dev.langchain4j.cdi.mcp.server.error.McpToolNotFoundException;
 import dev.langchain4j.cdi.mcp.server.registry.*;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonValue;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -82,6 +84,73 @@ class McpFeatureServiceTest {
 
         assertThat(result.getJsonArray("content").getJsonObject(0).getString("text"))
                 .isEqualTo("Hello");
+    }
+
+    // --- langchain4j-cdi#298: an argument that cannot be bound, answered by era ---
+
+    private McpToolDescriptor toolRejecting(String name) {
+        McpToolDescriptor descriptor = mock(McpToolDescriptor.class);
+        when(toolRegistry.findTool(name)).thenReturn(Optional.of(descriptor));
+        when(toolInvoker.invoke(any(), eq(descriptor), any(), any(), any()))
+                .thenThrow(new McpInvalidArgumentException(null, "limit", "expected integer, got string \"5\""));
+        return descriptor;
+    }
+
+    @Test
+    void anInvalidToolArgumentIsAToolExecutionErrorInTheModernEra() {
+        toolRejecting("list_tasks");
+        JsonObject params = Json.createObjectBuilder().add("name", "list_tasks").build();
+
+        JsonObject result = service.callTool(23, params, modernCtx(), null);
+
+        assertThat(result.getBoolean("isError")).isTrue();
+        assertThat(result.getJsonArray("content").getJsonObject(0).getString("text"))
+                .isEqualTo("Invalid argument 'limit': expected integer, got string \"5\"");
+    }
+
+    @Test
+    void anInvalidToolArgumentIsInvalidParamsInTheLegacyEra() {
+        toolRejecting("list_tasks");
+        JsonObject params = Json.createObjectBuilder().add("name", "list_tasks").build();
+
+        assertThatThrownBy(() -> service.callTool(7, params, ctx(), null))
+                .isInstanceOfSatisfying(McpException.class, e -> {
+                    assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
+                    assertThat(e.getRequestId()).isEqualTo(7);
+                    assertThat(e.getHttpStatus()).isEqualTo(200);
+                    assertThat(e.getMessage())
+                            .isEqualTo("Invalid argument 'limit': expected integer, got string \"5\"");
+                });
+    }
+
+    @Test
+    void anInvalidPromptArgumentIsInvalidParamsInBothEras() throws Exception {
+        McpPromptRegistry promptRegistry = new McpPromptRegistry();
+        promptRegistry.register(new McpPromptDescriptor(
+                "plan_day",
+                "Plan my day",
+                List.of(),
+                TemplateBean.class,
+                TemplateBean.class.getMethod("data", String.class)));
+        McpFeatureService prompts = new McpFeatureService(
+                toolRegistry,
+                resourceRegistry,
+                promptRegistry,
+                toolInvoker,
+                beanInvoker,
+                new McpCancellationManager(),
+                new McpServerConfigResolver(new McpServerConfig("srv", "1.2")));
+        when(beanInvoker.invoke(any(), any(), any(), any(), any(), any()))
+                .thenThrow(new McpInvalidArgumentException(null, "hours", "expected integer, got string \"six\""));
+        JsonObject params = Json.createObjectBuilder().add("name", "plan_day").build();
+
+        for (McpRequestContext context : List.of(ctx(), modernCtx())) {
+            assertThatThrownBy(() -> prompts.getPrompt(9, params, context, null))
+                    .isInstanceOfSatisfying(McpException.class, e -> {
+                        assertThat(e.getErrorCode().getCode()).isEqualTo(-32602);
+                        assertThat(e.getRequestId()).isEqualTo(9);
+                    });
+        }
     }
 
     @Test
@@ -224,5 +293,16 @@ class McpFeatureServiceTest {
 
     private static McpRequestContext ctx() {
         return new McpRequestContext(null, 1, null, new AtomicBoolean());
+    }
+
+    private static McpRequestContext modernCtx() {
+        return new McpRequestContext(
+                null,
+                1,
+                null,
+                new AtomicBoolean(),
+                new McpProtocolContext(McpEra.MODERN, "2026-07-28", JsonValue.EMPTY_JSON_OBJECT, null, null),
+                null,
+                null);
     }
 }

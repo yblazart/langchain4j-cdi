@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.integrationtests.openliberty;
 
 import dev.langchain4j.cdi.mcp.integrationtests.ArquillianDeploymentHelper;
 import dev.langchain4j.cdi.mcp.integrationtests.ConfigResource;
+import dev.langchain4j.cdi.mcp.integrationtests.DayPlanPrompt;
 import dev.langchain4j.cdi.mcp.integrationtests.ElicitationTool;
 import dev.langchain4j.cdi.mcp.integrationtests.GreetingTool;
 import dev.langchain4j.cdi.mcp.integrationtests.HeaderParamTool;
@@ -16,6 +17,7 @@ import dev.langchain4j.cdi.mcp.integrationtests.McpModernTestRequests;
 import dev.langchain4j.cdi.mcp.integrationtests.McpTestConstants;
 import dev.langchain4j.cdi.mcp.integrationtests.McpTestRequests;
 import dev.langchain4j.cdi.mcp.integrationtests.SummarizePrompt;
+import dev.langchain4j.cdi.mcp.integrationtests.TaskListTool;
 import dev.langchain4j.cdi.mcp.integrationtests.WeatherTool;
 import java.io.File;
 import java.io.IOException;
@@ -75,6 +77,9 @@ public class McpOpenLibertyArquillianTest {
                         ElicitationTool.class,
                         ConfigResource.class,
                         SummarizePrompt.class,
+                        TaskListTool.class,
+                        TaskListTool.Priority.class,
+                        DayPlanPrompt.class,
                         JaxRsApplication.class,
                         JdkHttpClientTransport.class,
                         McpHttpTransport.class,
@@ -357,6 +362,38 @@ public class McpOpenLibertyArquillianTest {
     @Test
     public void shouldIgnoreParamHeadersInTheLegacyEra() {
         scenarios().shouldIgnoreParamHeadersInTheLegacyEra();
+    }
+
+    // --- Argument binding (langchain4j-cdi#298) ---
+
+    @Test
+    public void shouldAdvertiseDefaultedArgumentsAsNotRequired() {
+        scenarios().shouldAdvertiseDefaultedArgumentsAsNotRequired();
+    }
+
+    @Test
+    public void shouldApplyArgumentDefaultsInBothEras() {
+        scenarios().shouldApplyArgumentDefaultsInBothEras();
+    }
+
+    @Test
+    public void shouldBindEnumArgumentInBothEras() {
+        scenarios().shouldBindEnumArgumentInBothEras();
+    }
+
+    @Test
+    public void shouldRejectWronglyTypedToolArgumentAsInvalidParamsInLegacyEra() {
+        scenarios().shouldRejectWronglyTypedToolArgumentAsInvalidParamsInLegacyEra();
+    }
+
+    @Test
+    public void shouldReportWronglyTypedToolArgumentAsToolErrorInModernEra() {
+        scenarios().shouldReportWronglyTypedToolArgumentAsToolErrorInModernEra();
+    }
+
+    @Test
+    public void shouldRejectWronglyTypedPromptArgumentAsInvalidParamsInBothEras() {
+        scenarios().shouldRejectWronglyTypedPromptArgumentAsInvalidParamsInBothEras();
     }
 
     @Test

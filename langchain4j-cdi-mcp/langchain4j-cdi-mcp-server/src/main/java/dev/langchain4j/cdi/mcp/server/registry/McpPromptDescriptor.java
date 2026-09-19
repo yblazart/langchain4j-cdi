@@ -2,6 +2,7 @@ package dev.langchain4j.cdi.mcp.server.registry;
 
 import dev.langchain4j.cdi.mcp.server.api.McpFrameworkTypes;
 import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
+import dev.langchain4j.cdi.mcp.server.schema.McpArguments;
 import dev.langchain4j.cdi.mcp.server.schema.McpParameterNames;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -71,10 +72,13 @@ public class McpPromptDescriptor {
      * @param beanClass the CDI bean class that declares the method
      * @param method the {@code @Prompt}-annotated method
      * @return a new descriptor built from the method's annotation metadata
+     * @throws dev.langchain4j.cdi.mcp.server.error.McpArgumentDefinitionException if a {@code @PromptArg} default value
+     *     cannot be converted to its parameter type
      */
     public static McpPromptDescriptor fromMethod(Class<?> beanClass, Method method) {
         Prompt annotation = method.getAnnotation(Prompt.class);
         String name = DEFAULT_NAME.equals(annotation.name()) ? method.getName() : annotation.name();
+        McpArguments.validateDefaults("Prompt '" + name + "'", method);
 
         List<PromptArgument> args = new ArrayList<>();
         for (Parameter param : method.getParameters()) {
@@ -84,8 +88,8 @@ public class McpPromptDescriptor {
             }
             PromptArg argAnnotation = param.getAnnotation(PromptArg.class);
             String argDescription = argAnnotation != null ? argAnnotation.description() : "";
-            boolean required = argAnnotation == null || argAnnotation.required();
-            args.add(new PromptArgument(argumentName(param, argAnnotation), argDescription, required));
+            args.add(new PromptArgument(
+                    argumentName(param, argAnnotation), argDescription, McpArguments.isRequired(param)));
         }
 
         return new McpPromptDescriptor(

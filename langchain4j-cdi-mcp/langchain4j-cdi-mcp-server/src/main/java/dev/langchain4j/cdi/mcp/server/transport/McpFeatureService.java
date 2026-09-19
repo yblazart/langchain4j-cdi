@@ -3,6 +3,7 @@ package dev.langchain4j.cdi.mcp.server.transport;
 import dev.langchain4j.cdi.mcp.server.api.McpRequestContext;
 import dev.langchain4j.cdi.mcp.server.error.McpErrorCode;
 import dev.langchain4j.cdi.mcp.server.error.McpException;
+import dev.langchain4j.cdi.mcp.server.error.McpInvalidArgumentException;
 import dev.langchain4j.cdi.mcp.server.error.McpToolNotFoundException;
 import dev.langchain4j.cdi.mcp.server.protocol.McpCursor;
 import dev.langchain4j.cdi.mcp.server.protocol.McpImplementation;
@@ -274,6 +275,11 @@ public class McpFeatureService {
     /**
      * Invokes a tool by name.
      *
+     * <p>An argument that cannot be bound to its parameter ({@link McpInvalidArgumentException}) is answered by era. In
+     * MCP 2026-07-28 it is a tool execution error, a result with {@code isError: true} whose text names the argument,
+     * so the model can correct the call ({@code server/tools.mdx}, "Error Handling", since 2025-11-25). In 2025-03-26
+     * it is thrown as {@code -32602 Invalid params} ("Invalid arguments" is a protocol error there).
+     *
      * @param requestId the JSON-RPC request id
      * @param params the {@code tools/call} parameters ({@code name}, {@code arguments})
      * @param ctx the request context (progress, cancellation, client requester, response channel)
@@ -294,11 +300,22 @@ public class McpFeatureService {
             return callResult instanceof ToolResponse tr
                     ? McpJsonSerializer.toolResponseToJson(tr)
                     : McpJsonSerializer.plainTextToolResult(callResult);
+        } catch (McpInvalidArgumentException e) {
+            if (ctx.isModern()) {
+                return invalidArgumentResult(e);
+            }
+            throw withRequestId(requestId, e);
         } catch (McpException e) {
             throw withRequestId(requestId, e);
         } finally {
             cancellationManager.unregister(requestId);
         }
+    }
+
+    private static JsonObject invalidArgumentResult(McpInvalidArgumentException e) {
+        return Json.createObjectBuilder(McpJsonSerializer.plainTextToolResult(e.getMessage()))
+                .add("isError", true)
+                .build();
     }
 
     /**

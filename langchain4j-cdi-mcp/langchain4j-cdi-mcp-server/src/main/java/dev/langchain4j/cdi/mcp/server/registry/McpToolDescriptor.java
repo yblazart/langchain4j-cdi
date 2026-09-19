@@ -5,6 +5,7 @@ import dev.langchain4j.cdi.mcp.server.protocol.McpIconModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolAnnotationsModel;
 import dev.langchain4j.cdi.mcp.server.protocol.McpToolModel;
 import dev.langchain4j.cdi.mcp.server.schema.JsonSchemaGenerator;
+import dev.langchain4j.cdi.mcp.server.schema.McpArguments;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderDesignations;
 import dev.langchain4j.cdi.mcp.server.schema.McpHeaderValidator;
 import dev.langchain4j.cdi.mcp.server.schema.McpInputSchemaValidator;
@@ -139,12 +140,15 @@ public class McpToolDescriptor {
      *     icon provider that cannot be resolved
      * @throws dev.langchain4j.cdi.mcp.server.error.McpInputSchemaDefinitionException if an {@link McpInputSchema}
      *     document violates one of its three consistency rules
+     * @throws dev.langchain4j.cdi.mcp.server.error.McpArgumentDefinitionException if a {@code @ToolArg} default value
+     *     cannot be converted to its parameter type
      */
     public static McpToolDescriptor fromMethod(Class<?> beanClass, Method method) {
         Tool tool = method.getAnnotation(Tool.class);
         String toolName = DEFAULT_NAME.equals(tool.name()) ? method.getName() : tool.name();
         String toolDescription = tool.description();
         McpHeaderValidator.validate(toolName, method);
+        McpArguments.validateDefaults("Tool '" + toolName + "'", method);
 
         McpInputSchema schemaOverride = method.getAnnotation(McpInputSchema.class);
         JsonObject legacySchema;

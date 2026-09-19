@@ -198,9 +198,29 @@ public class Calculator {
 }
 ```
 
-**Supported parameter types:** `String`, `int`/`Integer`, `long`/`Long`, `double`/`Double`, `float`/`Float`, `boolean`/`Boolean`, enums, arrays, and collections.
+**Supported parameter types:** `String`, `int`/`Integer`, `long`/`Long`, `short`/`Short`, `byte`/`Byte`, `double`/`Double`, `float`/`Float`, `boolean`/`Boolean`, `char`/`Character`, and enums. An enum is advertised as a `string` whose `enum` lists the constants' `name()`, and binds from exactly those values. Arrays, collections and other object types appear in the schema but are not converted yet: a call that supplies one fails with `-32603`.
 
-**Optional parameters:** Set `required = false` on `@ToolArg` — the parameter will be `null` if the client doesn't provide it.
+**Optional arguments and defaults:** an argument is optional when its `@ToolArg`/`@PromptArg` sets `required = false` or a non-empty `defaultValue`. When the client omits it (or sends `null`), the parameter receives the `defaultValue` converted to the parameter type, or else `null` (zero or `false` for a primitive). An argument with a default is left out of the schema's `required` list and advertises the value as the JSON Schema `default`. A default that does not convert, such as `defaultValue = "abc"` on an `Integer`, fails the deployment. A parameter of type `Optional<T>`, `OptionalInt`, `OptionalLong` or `OptionalDouble` is optional too: it is described by its value type, and receives an empty optional when the argument is absent.
+
+```java
+@Tool(name = "list_tasks", description = "List tasks")
+public String listTasks(
+        @ToolArg(name = "limit", description = "Max results", defaultValue = "20") int limit,
+        @ToolArg(name = "priority", description = "Priority", defaultValue = "MEDIUM") Priority priority) {
+    // list_tasks {} runs with limit=20, priority=MEDIUM
+}
+```
+
+**Argument types are checked.** A tool argument must have the JSON type its schema advertises. `"limit": "5"` for an `int`, `5.5` for an `int`, `"true"` for a `boolean`, or `"URGENT"` for an enum without that constant is rejected, never coerced or truncated. A `String` parameter still accepts a number or a boolean, as its JSON text. The rejection names the argument and the expected type, for example `Invalid argument 'limit': expected integer, got string "5"`, and is answered by era:
+
+| Request | 2025-03-26 | 2026-07-28 |
+|---|---|---|
+| `tools/call` | JSON-RPC error `-32602` (Invalid params) | result with `isError: true` carrying that text, so the model can correct the call |
+| `prompts/get`, `resources/read` | `-32602` | `-32602` |
+
+Prompt arguments are strings on the wire (`GetPromptRequest.arguments` is a map of strings), and so are resource-template variables. A `@PromptArg` or `@ResourceTemplateArg` of type `int`, `boolean` or an enum is therefore parsed from its string.
+
+> **Behaviour change (langchain4j-cdi#298).** `tools/list` and `prompts/list` no longer report an argument that has a `defaultValue` as required, and list enum values by `name()` instead of `toString()`. A tool argument whose JSON type contradicts the advertised schema used to crash the call (HTTP 500 or `-32603`), be read as `false` (`"true"` for a `boolean`), or be truncated (`5.7` for an `int`); it is now rejected as described above. Clients that relied on the old readings must send the advertised types.
 
 #### Custom headers (SEP-2243)
 

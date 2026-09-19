@@ -15,9 +15,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
-import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
-import jakarta.json.JsonString;
 import jakarta.json.JsonValue;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -26,6 +24,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.mcpjava.server.tools.Tool;
 
 /** Shared utility for invoking CDI bean methods with JSON arguments. */
 @ApplicationScoped
@@ -135,7 +134,7 @@ public class McpBeanInvoker {
             McpRequestContext ctx,
             McpSession session,
             McpMethodInvoker methodInvoker) {
-        Object[] args = resolveArguments(method, arguments, ctx, session, beanType);
+        Object[] args = resolveArguments(requestId, method, arguments, ctx, session, beanType);
         if (methodInvoker.resolvesInstance()) {
             return invokeAndMapExceptions(requestId, method, () -> methodInvoker.invoke(null, args));
         }
@@ -160,10 +159,15 @@ public class McpBeanInvoker {
         CreationalContext<?> creationalCtx = beanManager.createCreationalContext(bean);
         try {
             Object instance = beanManager.getReference(bean, beanType, creationalCtx);
-            Object[] args = resolveArguments(method, arguments, ctx, session, beanType);
+            Object[] args = resolveArguments(requestId, method, arguments, ctx, session, beanType);
             return method.invoke(instance, args);
         } catch (InvocationTargetException e) {
             throw mapInvocationException(requestId, method, e.getCause());
+        } catch (IllegalArgumentException e) {
+            // Method.invoke's "argument type mismatch": a parameter type the binder does not convert (an array, a
+            // collection, a POJO). Answered -32603 like any other invocation failure, never propagated to the
+            // container.
+            throw mapInvocationException(requestId, method, e);
         } catch (IllegalAccessException e) {
             throw new McpException(requestId, McpErrorCode.INTERNAL_ERROR, "Invocation failed: " + method.getName());
         } finally {
@@ -224,60 +228,33 @@ public class McpBeanInvoker {
         return bean;
     }
 
+    /**
+     * Builds the Java arguments of an invocation: MCP framework types are injected, every other parameter is bound from
+     * its JSON argument by {@link McpArgumentBinder}. A {@code @Tool} method's arguments are typed JSON values
+     * described by its {@code inputSchema}; the arguments of any other method (a prompt, a resource template) are
+     * strings on the wire. An argument that cannot be bound raises {@code McpInvalidArgumentException}, an
+     * {@link McpException}, which both invocation paths propagate unchanged.
+     */
     private Object[] resolveArguments(
-            Method method, JsonObject arguments, McpRequestContext ctx, McpSession session, Class<?> beanType) {
+            Object requestId,
+            Method method,
+            JsonObject arguments,
+            McpRequestContext ctx,
+            McpSession session,
+            Class<?> beanType) {
         Parameter[] params = method.getParameters();
         Object[] args = new Object[params.length];
+        boolean textual = !method.isAnnotationPresent(Tool.class);
 
         for (int i = 0; i < params.length; i++) {
             if (McpFrameworkTypes.isFrameworkType(params[i].getType())) {
                 args[i] = apiFactory.createInstance(params[i].getType(), ctx, session, beanType);
             } else {
                 String paramName = McpParameterNames.resolve(params[i]);
-                if (arguments != null && arguments.containsKey(paramName)) {
-                    args[i] = convertJsonValue(arguments.get(paramName), params[i].getType());
-                } else {
-                    args[i] = getDefaultValue(params[i].getType());
-                }
+                JsonValue value = arguments != null ? arguments.get(paramName) : null;
+                args[i] = McpArgumentBinder.bind(requestId, params[i], paramName, value, textual);
             }
         }
         return args;
-    }
-
-    private Object convertJsonValue(JsonValue jsonValue, Class<?> targetType) {
-        if (jsonValue == null || jsonValue.getValueType() == JsonValue.ValueType.NULL) {
-            return getDefaultValue(targetType);
-        }
-        if (targetType == String.class) {
-            if (jsonValue instanceof JsonString) {
-                return ((JsonString) jsonValue).getString();
-            }
-            return jsonValue.toString();
-        }
-        if (targetType == int.class || targetType == Integer.class) {
-            return ((JsonNumber) jsonValue).intValue();
-        }
-        if (targetType == long.class || targetType == Long.class) {
-            return ((JsonNumber) jsonValue).longValue();
-        }
-        if (targetType == double.class || targetType == Double.class) {
-            return ((JsonNumber) jsonValue).doubleValue();
-        }
-        if (targetType == float.class || targetType == Float.class) {
-            return (float) ((JsonNumber) jsonValue).doubleValue();
-        }
-        if (targetType == boolean.class || targetType == Boolean.class) {
-            return jsonValue.getValueType() == JsonValue.ValueType.TRUE;
-        }
-        return jsonValue.toString();
-    }
-
-    private Object getDefaultValue(Class<?> type) {
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == double.class) return 0.0;
-        if (type == float.class) return 0.0f;
-        if (type == boolean.class) return false;
-        return null;
     }
 }
