@@ -335,6 +335,30 @@
                                 <argument>-Xlint:all,-processing</argument>
                                 <argument>${module-path.consumer.src}/module-info.java</argument>
                                 <argument>${module-path.consumer.src}/dev/langchain4j/cdi/mcp/modulepathconsumer/DocumentedMcpApiConsumer.java</argument>
+                                <argument>${module-path.consumer.src}/dev/langchain4j/cdi/mcp/modulepathconsumer/McpServerSpiBinding.java</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <!--
+                        (5) SERVICE BINDING. On the module path a provider is registered only by a 'provides' clause:
+                        META-INF/services is ignored for a named module, and every integration suite runs from the
+                        class path. Without 'provides org.mcpjava.server.spi.McpServerSPI', the MCP framework's
+                        McpServerSPILoader found no implementation and failed every call that goes through it. This runs
+                        the consumer compiled in (4), on the same strict module path, and fails the build when the MCP
+                        server's provider is not bound.
+                    -->
+                    <execution>
+                        <id>verify-module-path-service-binding</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <phase>verify</phase>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>--module-path=${module-path.consumer.out}${path.separator}${module-path.patched}${path.separator}${module-path.deps}</argument>
+                                <argument>--module</argument>
+                                <argument>dev.langchain4j.cdi.mcp.modulepathconsumer/dev.langchain4j.cdi.mcp.modulepathconsumer.McpServerSpiBinding</argument>
                             </arguments>
                         </configuration>
                     </execution>
