@@ -1,8 +1,12 @@
 package dev.langchain4j.cdi.mcp.server.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import dev.langchain4j.cdi.mcp.server.api.Elicitation;
+import dev.langchain4j.cdi.mcp.server.error.McpArgumentDefinitionException;
+import dev.langchain4j.cdi.mcp.server.fixtures.ArgumentBindingTool;
 import org.junit.jupiter.api.Test;
 import org.mcpjava.server.prompts.Prompt;
 import org.mcpjava.server.prompts.PromptArg;
@@ -22,6 +26,11 @@ class McpPromptDescriptorTest {
         @Prompt(description = "Ask the user")
         public String ask(Elicitation elicitation, String topic) {
             return topic;
+        }
+
+        @Prompt(name = "bad_default", description = "A default that is not an integer")
+        public String badDefault(@PromptArg(name = "hours", defaultValue = "eight") int hours) {
+            return "hours=" + hours;
         }
     }
 
@@ -51,5 +60,26 @@ class McpPromptDescriptorTest {
         assertThat(descriptor.getArguments())
                 .extracting(McpPromptDescriptor.PromptArgument::name)
                 .containsExactly("topic");
+    }
+
+    @Test
+    void anArgumentWithADefaultIsNotRequired() throws Exception {
+        var method = ArgumentBindingTool.class.getMethod("planDay", int.class);
+
+        McpPromptDescriptor descriptor = McpPromptDescriptor.fromMethod(ArgumentBindingTool.class, method);
+
+        assertThat(descriptor.getArguments())
+                .extracting(McpPromptDescriptor.PromptArgument::name, McpPromptDescriptor.PromptArgument::required)
+                .containsExactly(tuple("hours", false));
+    }
+
+    @Test
+    void aDefaultValueThatDoesNotConvertFailsRegistration() throws Exception {
+        var method = TestBean.class.getMethod("badDefault", int.class);
+
+        assertThatThrownBy(() -> McpPromptDescriptor.fromMethod(TestBean.class, method))
+                .isInstanceOf(McpArgumentDefinitionException.class)
+                .hasMessage(
+                        "Prompt 'bad_default', parameter 'hours': defaultValue \"eight\" cannot be converted to int");
     }
 }

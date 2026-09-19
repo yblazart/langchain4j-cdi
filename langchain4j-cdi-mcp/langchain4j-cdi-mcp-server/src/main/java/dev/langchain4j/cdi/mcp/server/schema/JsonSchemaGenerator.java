@@ -50,13 +50,16 @@ public class JsonSchemaGenerator {
             String paramName = McpParameterNames.resolve(param);
             ToolArg annotation = param.getAnnotation(ToolArg.class);
             String description = annotation != null ? annotation.description() : "";
-            boolean isRequired = annotation == null || annotation.required();
 
             McpHeader header = includeHeaderDesignations ? param.getAnnotation(McpHeader.class) : null;
             properties.add(
                     paramName,
-                    buildPropertySchema(param.getType(), description, header == null ? null : header.value()));
-            if (isRequired) {
+                    buildPropertySchema(
+                            param.getType(),
+                            description,
+                            header == null ? null : header.value(),
+                            McpArguments.defaultValue(param)));
+            if (McpArguments.isRequired(param)) {
                 required.add(paramName);
             }
         }
@@ -70,7 +73,8 @@ public class JsonSchemaGenerator {
         return McpParameterNames.resolve(param);
     }
 
-    private static JsonObject buildPropertySchema(Class<?> type, String description, String headerName) {
+    private static JsonObject buildPropertySchema(
+            Class<?> type, String description, String headerName, String defaultValue) {
         JsonObjectBuilder prop = Json.createObjectBuilder();
         prop.add("type", mapJavaTypeToJsonSchema(type));
         if (!description.isEmpty()) {
@@ -80,11 +84,11 @@ public class JsonSchemaGenerator {
             prop.add(X_MCP_HEADER, headerName);
         }
         if (type.isEnum()) {
-            JsonArrayBuilder enumValues = Json.createArrayBuilder();
-            for (Object constant : type.getEnumConstants()) {
-                enumValues.add(constant.toString());
-            }
-            prop.add("enum", enumValues);
+            // Enum#name(), not toString(): the binder matches exactly these values
+            prop.add("enum", Json.createArrayBuilder(McpArguments.enumNames(type)));
+        }
+        if (defaultValue != null) {
+            prop.add("default", McpArguments.toJson(McpArguments.parse(type, defaultValue)));
         }
         return prop.build();
     }
