@@ -6,9 +6,15 @@ import jakarta.json.Json;
 import jakarta.json.JsonValue;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import org.mcpjava.server.prompts.PromptArg;
 import org.mcpjava.server.tools.ToolArg;
 
@@ -23,13 +29,17 @@ public final class McpArguments {
 
     /**
      * Returns whether the client must supply the argument bound to this parameter. A parameter is not required when its
-     * {@code @ToolArg}/{@code @PromptArg} sets {@code required = false} or a non-empty {@code defaultValue}; a
-     * parameter without either annotation is required.
+     * type is {@link Optional}, {@link OptionalInt}, {@link OptionalLong} or {@link OptionalDouble}, or when its
+     * {@code @ToolArg}/{@code @PromptArg} sets {@code required = false} or a non-empty {@code defaultValue}; any other
+     * parameter, with or without an annotation, is required.
      *
      * @param param the method parameter, not an MCP framework type
      * @return {@code true} if the argument is required
      */
     public static boolean isRequired(Parameter param) {
+        if (isOptionalType(param.getType())) {
+            return false;
+        }
         ToolArg toolArg = param.getAnnotation(ToolArg.class);
         if (toolArg != null) {
             return toolArg.required() && toolArg.defaultValue().isEmpty();
@@ -57,6 +67,51 @@ public final class McpArguments {
             return promptArg.defaultValue();
         }
         return null;
+    }
+
+    /**
+     * Returns whether a parameter type is one of the containers the mcp-java contract makes optional.
+     *
+     * @param type the parameter type
+     * @return {@code true} for {@link Optional}, {@link OptionalInt}, {@link OptionalLong} and {@link OptionalDouble}
+     */
+    public static boolean isOptionalType(Class<?> type) {
+        return type == Optional.class
+                || type == OptionalInt.class
+                || type == OptionalLong.class
+                || type == OptionalDouble.class;
+    }
+
+    /**
+     * Returns the type of the value a parameter carries: {@code T} for {@code Optional<T>} (its raw type when {@code T}
+     * is itself parameterized, {@code Object} when it cannot be resolved), {@code int}/{@code long}/{@code double} for
+     * {@code OptionalInt}/{@code OptionalLong}/{@code OptionalDouble}, and the parameter type otherwise.
+     *
+     * @param param the method parameter
+     * @return the type the schema describes and the binder converts to
+     */
+    public static Class<?> valueType(Parameter param) {
+        Class<?> type = param.getType();
+        if (type == OptionalInt.class) {
+            return int.class;
+        }
+        if (type == OptionalLong.class) {
+            return long.class;
+        }
+        if (type == OptionalDouble.class) {
+            return double.class;
+        }
+        if (type == Optional.class && param.getParameterizedType() instanceof ParameterizedType optional) {
+            Type argument = optional.getActualTypeArguments()[0];
+            if (argument instanceof Class<?> c) {
+                return c;
+            }
+            if (argument instanceof ParameterizedType p && p.getRawType() instanceof Class<?> raw) {
+                return raw;
+            }
+            return Object.class;
+        }
+        return type == Optional.class ? Object.class : type;
     }
 
     /**
@@ -208,20 +263,21 @@ public final class McpArguments {
             if (defaultValue == null) {
                 continue;
             }
+            Class<?> type = valueType(param);
             String prefix = owner + ", parameter '" + McpParameterNames.resolve(param) + "': defaultValue \""
                     + defaultValue + "\" ";
-            if (!hasTextualForm(param.getType())) {
+            if (!hasTextualForm(type)) {
                 throw new McpArgumentDefinitionException(prefix
                         + "is not supported on a parameter of type "
-                        + param.getType().getSimpleName()
+                        + type.getSimpleName()
                         + "; defaults apply to String, primitive, wrapper and enum parameters only");
             }
             try {
-                parse(param.getType(), defaultValue);
+                parse(type, defaultValue);
             } catch (IllegalArgumentException e) {
                 throw new McpArgumentDefinitionException(prefix + "cannot be converted to "
-                        + param.getType().getSimpleName()
-                        + (param.getType().isEnum() ? " " + enumNames(param.getType()) : ""));
+                        + type.getSimpleName()
+                        + (type.isEnum() ? " " + enumNames(type) : ""));
             }
         }
     }

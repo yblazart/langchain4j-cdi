@@ -55,7 +55,7 @@ public class JsonSchemaGenerator {
             properties.add(
                     paramName,
                     buildPropertySchema(
-                            param.getType(),
+                            McpArguments.valueType(param),
                             description,
                             header == null ? null : header.value(),
                             McpArguments.defaultValue(param)));

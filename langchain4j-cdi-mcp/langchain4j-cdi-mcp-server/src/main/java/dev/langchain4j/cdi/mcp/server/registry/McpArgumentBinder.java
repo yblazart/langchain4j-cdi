@@ -6,6 +6,10 @@ import jakarta.json.JsonNumber;
 import jakarta.json.JsonString;
 import jakarta.json.JsonValue;
 import java.lang.reflect.Parameter;
+import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 
 /**
  * Converts one client-supplied JSON argument into the Java value of its method parameter.
@@ -42,11 +46,18 @@ final class McpArgumentBinder {
      * @throws McpInvalidArgumentException if the value cannot be bound to the parameter type
      */
     static Object bind(Object requestId, Parameter param, String name, JsonValue value, boolean textual) {
-        Class<?> type = param.getType();
+        Class<?> container = param.getType();
+        Class<?> type = McpArguments.valueType(param);
         if (value == null || value.getValueType() == JsonValue.ValueType.NULL) {
             String defaultValue = McpArguments.defaultValue(param);
-            return defaultValue != null ? McpArguments.parse(type, defaultValue) : absentValue(type);
+            return defaultValue != null
+                    ? wrap(container, McpArguments.parse(type, defaultValue))
+                    : absentValue(container);
         }
+        return wrap(container, convert(requestId, name, type, value, textual));
+    }
+
+    private static Object convert(Object requestId, String name, Class<?> type, JsonValue value, boolean textual) {
         if (textual && type != String.class && value instanceof JsonString text && McpArguments.hasTextualForm(type)) {
             try {
                 return McpArguments.parse(type, text.getString());
@@ -58,12 +69,49 @@ final class McpArgumentBinder {
     }
 
     /**
+     * Wraps a bound value into the optional container a parameter declares.
+     *
+     * @param container the declared parameter type
+     * @param value the bound value, never {@code null}
+     * @return the value, or the value wrapped in {@code Optional}/{@code OptionalInt}/{@code OptionalLong}/
+     *     {@code OptionalDouble}
+     */
+    private static Object wrap(Class<?> container, Object value) {
+        if (container == Optional.class) {
+            return Optional.of(value);
+        }
+        if (container == OptionalInt.class) {
+            return OptionalInt.of((Integer) value);
+        }
+        if (container == OptionalLong.class) {
+            return OptionalLong.of((Long) value);
+        }
+        if (container == OptionalDouble.class) {
+            return OptionalDouble.of((Double) value);
+        }
+        return value;
+    }
+
+    /**
      * Returns the value passed for an absent argument that has no default.
      *
      * @param type the parameter type
-     * @return zero or {@code false} for a primitive, {@code null} otherwise
+     * @return an empty optional for an optional container, zero or {@code false} for a primitive, {@code null}
+     *     otherwise
      */
     static Object absentValue(Class<?> type) {
+        if (type == Optional.class) {
+            return Optional.empty();
+        }
+        if (type == OptionalInt.class) {
+            return OptionalInt.empty();
+        }
+        if (type == OptionalLong.class) {
+            return OptionalLong.empty();
+        }
+        if (type == OptionalDouble.class) {
+            return OptionalDouble.empty();
+        }
         if (type == int.class) {
             return 0;
         }
