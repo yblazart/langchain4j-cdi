@@ -35,4 +35,12 @@ open module dev.langchain4j.cdi.mcp.server {
     // session/notification/request managers, McpExceptionMapper) is server-internal plumbing: it is not documented
     // as an extension point and carries no compatibility promise.
     exports dev.langchain4j.cdi.mcp.server.transport;
+
+    // The MCP framework's McpServerSPILoader finds its implementation through ServiceLoader.
+    // META-INF/services/org.mcpjava.server.spi.McpServerSPI registers it for the class path, but the JDK ignores
+    // that file for a named module: without this clause, every call that goes through McpServerSPILoader fails with
+    // "No McpServerSPI implementation found" whenever this jar is on the module path (a jlink image, a Vidocq boot
+    // layer). ModuleDescriptorServicesTest keeps the two declarations identical.
+    provides org.mcpjava.server.spi.McpServerSPI with
+            dev.langchain4j.cdi.mcp.server.spi.CdiMcpServerSPI;
 }
