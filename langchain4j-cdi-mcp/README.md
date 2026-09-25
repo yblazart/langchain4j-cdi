@@ -583,7 +583,7 @@ flowchart TD
 
 | Mode | How it works | Constraints |
 |---|---|---|
-| `REPLAY` (default) | The method is **re-executed from the beginning** on each retry. Answers already given are replayed in call order; they travel in a signed, expiring `requestState`. | Code executed before an interaction must be idempotent, and interactions must happen in a deterministic order. Stateless: works behind any load balancer if all instances share `requestStateSecret`. |
+| `REPLAY` (default) | The method is **re-executed from the beginning** on each retry. Answers already given are replayed in call order; they travel in an encrypted, expiring `requestState` (see [The request state](#the-request-state)). | Code executed before an interaction must be idempotent, and interactions must happen in a deterministic order. Stateless: works behind any load balancer if all instances share `requestStateSecret`. |
 | `CONTINUATION` | The first call starts the method on a worker thread which waits for the answer; retries resume it. | In-memory state: requires sticky routing in a cluster. `@RequestScoped` beans are not active on the worker thread. Each round must complete within `continuationTimeout`. A round that exceeds `continuationTimeout` fails the request, but a compute-bound method is not interrupted (it keeps its worker thread until it returns). Worker threads come from an unbounded cached pool: size `continuationTimeout` accordingly and prefer `REPLAY` for public-facing servers. The log-level threshold of the first round applies to all rounds (progress tokens, cancellation and whether logs are sent at all follow each round). |
 
 #### On The Wire
@@ -596,7 +596,7 @@ sequenceDiagram
     participant Server
     Client->>Server: tools/call, round 1
     Note over Server: method executes from the start
-    Server-->>Client: input_required + signed requestState
+    Server-->>Client: input_required + encrypted requestState
     Client->>Server: tools/call retry, inputResponses + requestState
     Note over Server: method RE-EXECUTED from the start
     Server->>Server: replay stored answers in call order
@@ -700,7 +700,7 @@ Asking `McpInteractionResults` for an unknown key, or for a key under the wrong 
 
 | Mode | `awaitAll()` behaviour |
 |---|---|
-| `REPLAY` (default) | If every key is already answered (carried in the signed `requestState`), returns the results. Otherwise returns **one** `input_required` result listing **every missing request at once** — never just the first — and already-answered keys are not re-requested. |
+| `REPLAY` (default) | If every key is already answered (carried in the encrypted `requestState`), returns the results. Otherwise returns **one** `input_required` result listing **every missing request at once** — never just the first — and already-answered keys are not re-requested. |
 | `CONTINUATION` | Emits every missing request in one `input_required` result and parks the worker thread until **all** of them are answered; a round that answers only some of them keeps the rest pending across further rounds. |
 | Legacy (2025-03-26) | No MRTR in this era: the batch's interactions are issued one after another (`elicitation/create`, `sampling/createMessage`, `roots/list`) and their answers collected, exactly as if each had been sent with `sendAndAwait()` in turn. |
 
@@ -726,6 +726,8 @@ public class McpConfigProducer {
                 .requestStateSecret(System.getenv("MCP_REQUEST_STATE_SECRET")) // >= 32 characters
                 .requestStateTtl(Duration.ofMinutes(10))
                 .continuationTimeout(Duration.ofMinutes(5))
+                .maxSessions(1000)
+                .maxContinuations(200)
                 .cacheTtl(Duration.ofMinutes(5))
                 .cacheScope("public")
                 .build();
@@ -738,11 +740,21 @@ public class McpConfigProducer {
 | `serverName` / `serverVersion` | `langchain4j-cdi` / `unknown` | Returned in `initialize` and in `_meta.io.modelcontextprotocol/serverInfo` |
 | `allowedOrigins` | empty (loopback `Origin` on a loopback `Host` only) | Accepted `Origin` values; `*` accepts all |
 | `mrtrMode` | `REPLAY` | Strategy for client interactions with MCP 2026-07-28 clients |
-| `requestStateSecret` | random per JVM | HMAC key protecting `requestState`; **set it when running several instances** |
+| `requestStateSecret` | random per JVM | At least 32 characters. The key `requestState` is encrypted and authenticated with (see [The request state](#the-request-state)); **set the same value on every instance** of a cluster, otherwise a `requestState` issued by one instance is rejected by the others |
 | `requestStateTtl` | 10 minutes | Validity of a `requestState` |
 | `continuationTimeout` | 5 minutes | `CONTINUATION` mode: maximum wait for a client answer or for the method to finish |
+| `maxSessions` | 1000 | Maximum concurrent MCP 2025-03-26 sessions; a new `initialize` beyond it is refused with HTTP 429. Zero or negative means unlimited |
+| `maxContinuations` | 200 | `CONTINUATION` mode: maximum concurrent parked calls, and the size of their worker pool; a call beyond it fails with `-32603 Too many concurrent continuations`. Zero or negative means unlimited |
 | `cacheTtl` | 0 (immediately stale) | SEP-2549 `ttlMs` emitted on `server/discover` and on every cacheable MCP 2026-07-28 result; raise it when your tool/prompt/resource catalogue is stable |
 | `cacheScope` | `public` | SEP-2549 `cacheScope` emitted on the same results; use `private` when a result depends on the caller's authorization context |
+
+#### The request state
+
+In `REPLAY` mode the answers a client already gave travel back and forth in `requestState`, so the server keeps nothing between rounds. The token is **encrypted and authenticated** with AES-256-GCM: a client, a proxy or an access log that holds it can neither read the state — the tool name, the elicitation and sampling answers collected so far — nor alter it, and it expires after `requestStateTtl`. It is also bound to the call that issued it: the method, the tool, prompt or resource name, and a digest of the arguments must match, or the retry is rejected with `-32602 Invalid requestState`. A tampered, truncated or foreign token gets the same answer, which never says why.
+
+The AES key is derived from `requestStateSecret` (`HMAC-SHA256(secret, "mcp-request-state/aes-256-gcm/v2")`); the secret itself is never used as a key, never logged, and without it the server draws a random 32-byte key per JVM, logging only that it did so.
+
+> **Behaviour change.** `requestState` used to be signed (HMAC-SHA256) but not encrypted: anyone holding the token could decode it and read the answers it carried. Tokens are now `v2.`-prefixed and encrypted. A server still **accepts** a token of the old format when its signature is valid, so that a rolling upgrade of instances sharing a secret does not break the interactions in flight; it never issues one. That compatibility will be removed in a later release.
 
 ---
 
@@ -772,9 +784,9 @@ npx -y @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:80
 The remaining failure is listed in `conformance-baseline.yml`, so a regression anywhere else fails the gate.
 
 - **`input-required-result-ignore-extra-params` (warning-severity)** — the fixture sends `inputResponses` without
-  ever obtaining or echoing a signed `requestState` from a prior round. This server requires a valid `requestState`
-  before accepting any `inputResponses` (an answer is bound to the specific pending request it signed, so accepting
-  unsigned answers on a fresh call would let a client inject arbitrary "answers" the server never asked for), so the
+  ever obtaining or echoing a `requestState` from a prior round. This server requires a valid `requestState`
+  before accepting any `inputResponses` (an answer is bound to the specific pending request its `requestState` names, so accepting
+  answers without a `requestState` on a fresh call would let a client inject arbitrary "answers" the server never asked for), so the
   retry can never reach a complete result. This is intrinsic to the fixture's test design, not a missing feature.
 - **Tasks extension** — not implemented.
 
