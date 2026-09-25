@@ -126,8 +126,6 @@ The `requestState` is **encrypted and authenticated** with AES-256-GCM. A client
 
 The AES key is derived from `requestStateSecret`. The secret is never logged. Without a secret, the server draws a random secret per JVM, which only works for a single instance. Use a random value (`openssl rand -base64 32`), not a passphrase, and rotate it from time to time.
 
-Tokens of the previous format, which were signed but not encrypted, are still accepted when valid, and no longer issued: a round started on an old instance can finish on an upgraded one, but not the reverse, so drain the old instances or use sticky routing during a rolling upgrade.
-
 ## Reflection-Free Invocation
 
 The optional `langchain4j-cdi-mcp-invoker-cdi41` module invokes the bean methods through the CDI 4.1 invoker API instead of reflection. It is verified on Quarkus. CDI 4.1 is a hard prerequisite: on a CDI 4.0 runtime, it breaks the deployment.

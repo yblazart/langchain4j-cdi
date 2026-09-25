@@ -13,7 +13,6 @@ import jakarta.json.JsonValue;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -34,9 +33,8 @@ import javax.crypto.spec.SecretKeySpec;
  * carries the elicitation and sampling answers collected so far, nor alter it. The AES key is derived from the secret
  * ({@code HMAC-SHA256(secret, "mcp-request-state/aes-256-gcm/v2")}), never the secret itself.
  *
- * <p>Tokens of the first format, {@code base64url(json) + "." + base64url(HMAC-SHA256)}, are still accepted when their
- * signature is valid, so that a rolling upgrade of servers sharing a secret does not break the interactions in flight.
- * They are only read, never written; this compatibility will be removed in a later release.
+ * <p>Any other token is rejected, the first format ({@code base64url(json) + "." + base64url(HMAC-SHA256)}, signed but
+ * not encrypted) included: no released version ever issued it (#304).
  */
 public final class McpRequestStateCodec {
 
@@ -117,8 +115,7 @@ public final class McpRequestStateCodec {
     }
 
     public String encode(State state) {
-        // "v" is the version of the payload's schema, unchanged since the first format; the token format is the
-        // "v2." prefix, which the AAD also binds.
+        // "v" is the version of the payload's schema; the token format is the "v2." prefix, which the AAD also binds.
         JsonObjectBuilder json = Json.createObjectBuilder()
                 .add("v", 1)
                 .add("m", state.method())
@@ -139,9 +136,10 @@ public final class McpRequestStateCodec {
     }
 
     public State decode(Object requestId, String token, String method, String name, String argumentsDigest) {
-        byte[] payload = token != null && token.startsWith(V2_PREFIX)
-                ? decrypted(requestId, token.substring(V2_PREFIX.length()))
-                : verified(requestId, token);
+        if (token == null || !token.startsWith(V2_PREFIX)) {
+            throw invalid(requestId);
+        }
+        byte[] payload = decrypted(requestId, token.substring(V2_PREFIX.length()));
         JsonObject json;
         try (JsonReader reader = Json.createReader(new StringReader(new String(payload, StandardCharsets.UTF_8)))) {
             json = reader.readObject();
@@ -195,26 +193,6 @@ public final class McpRequestStateCodec {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("AES/GCM not available", e);
         }
-    }
-
-    /** The payload of a first-format token, whose HMAC signature is checked; read-only compatibility. */
-    private byte[] verified(Object requestId, String token) {
-        int dot = token == null ? -1 : token.indexOf('.');
-        if (dot <= 0) {
-            throw invalid(requestId);
-        }
-        byte[] payload;
-        byte[] signature;
-        try {
-            payload = DECODER.decode(token.substring(0, dot));
-            signature = DECODER.decode(token.substring(dot + 1));
-        } catch (IllegalArgumentException e) {
-            throw invalid(requestId);
-        }
-        if (!MessageDigest.isEqual(sign(payload), signature)) {
-            throw invalid(requestId);
-        }
-        return payload;
     }
 
     /** {@code nonce || ciphertext || tag}, with a fresh random nonce. */
