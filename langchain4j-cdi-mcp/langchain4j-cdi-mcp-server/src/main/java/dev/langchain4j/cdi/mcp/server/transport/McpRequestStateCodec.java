@@ -14,18 +14,41 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import javax.crypto.AEADBadTagException;
+import javax.crypto.Cipher;
 import javax.crypto.Mac;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-/** Integrity-protected, expiring {@code requestState} bound to the originating request. */
+/**
+ * Encrypted, authenticated, expiring {@code requestState} bound to the originating request.
+ *
+ * <p>A token is {@code v2.} followed by the base64url of a random 12-byte nonce, the AES-256-GCM ciphertext of the
+ * state and its 16-byte tag: a client, a proxy or an access log holding the token can neither read the state, which
+ * carries the elicitation and sampling answers collected so far, nor alter it. The AES key is derived from the secret
+ * ({@code HMAC-SHA256(secret, "mcp-request-state/aes-256-gcm/v2")}), never the secret itself.
+ *
+ * <p>Tokens of the first format, {@code base64url(json) + "." + base64url(HMAC-SHA256)}, are still accepted when their
+ * signature is valid, so that a rolling upgrade of servers sharing a secret does not break the interactions in flight.
+ * They are only read, never written; this compatibility will be removed in a later release.
+ */
 public final class McpRequestStateCodec {
 
     private static final String HMAC = "HmacSHA256";
+    private static final String AES = "AES";
+    private static final String AES_GCM = "AES/GCM/NoPadding";
+    private static final String V2_PREFIX = "v2.";
+    private static final byte[] V2_AAD = "mcp-request-state/v2".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] V2_KEY_LABEL = "mcp-request-state/aes-256-gcm/v2".getBytes(StandardCharsets.UTF_8);
+    private static final int NONCE_BYTES = 12;
+    private static final int TAG_BITS = 128;
+    private static final SecureRandom RANDOM = new SecureRandom();
     private static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder DECODER = Base64.getUrlDecoder();
 
@@ -77,6 +100,7 @@ public final class McpRequestStateCodec {
     }
 
     private final byte[] secret;
+    private final SecretKeySpec aesKey;
     private final Clock clock;
 
     public McpRequestStateCodec(byte[] secret, Clock clock) {
@@ -84,6 +108,7 @@ public final class McpRequestStateCodec {
             throw new IllegalArgumentException("requestState secret must be at least 32 bytes");
         }
         this.secret = secret.clone();
+        this.aesKey = new SecretKeySpec(sign(V2_KEY_LABEL), AES);
         this.clock = clock;
     }
 
@@ -108,25 +133,13 @@ public final class McpRequestStateCodec {
             json.add("p", Json.createArrayBuilder(state.pendingKeys()));
         }
         byte[] payload = json.build().toString().getBytes(StandardCharsets.UTF_8);
-        return ENCODER.encodeToString(payload) + "." + ENCODER.encodeToString(sign(payload));
+        return V2_PREFIX + ENCODER.encodeToString(encrypt(payload));
     }
 
     public State decode(Object requestId, String token, String method, String name, String argumentsDigest) {
-        int dot = token == null ? -1 : token.indexOf('.');
-        if (dot <= 0) {
-            throw invalid(requestId);
-        }
-        byte[] payload;
-        byte[] signature;
-        try {
-            payload = DECODER.decode(token.substring(0, dot));
-            signature = DECODER.decode(token.substring(dot + 1));
-        } catch (IllegalArgumentException e) {
-            throw invalid(requestId);
-        }
-        if (!MessageDigest.isEqual(sign(payload), signature)) {
-            throw invalid(requestId);
-        }
+        byte[] payload = token != null && token.startsWith(V2_PREFIX)
+                ? decrypted(requestId, token.substring(V2_PREFIX.length()))
+                : verified(requestId, token);
         JsonObject json;
         try (JsonReader reader = Json.createReader(new StringReader(new String(payload, StandardCharsets.UTF_8)))) {
             json = reader.readObject();
@@ -157,6 +170,67 @@ public final class McpRequestStateCodec {
                 json.get("r") instanceof JsonObject r ? r : JsonValue.EMPTY_JSON_OBJECT,
                 json.getString("c", null),
                 pendingKeys);
+    }
+
+    /** The payload of a {@code v2} token, decrypted and authenticated. */
+    private byte[] decrypted(Object requestId, String blob) {
+        byte[] bytes;
+        try {
+            bytes = DECODER.decode(blob);
+        } catch (IllegalArgumentException e) {
+            throw invalid(requestId);
+        }
+        if (bytes.length < NONCE_BYTES + TAG_BITS / 8) {
+            throw invalid(requestId);
+        }
+        try {
+            Cipher cipher = Cipher.getInstance(AES_GCM);
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(TAG_BITS, bytes, 0, NONCE_BYTES));
+            cipher.updateAAD(V2_AAD);
+            return cipher.doFinal(bytes, NONCE_BYTES, bytes.length - NONCE_BYTES);
+        } catch (AEADBadTagException e) {
+            throw invalid(requestId);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("AES/GCM not available", e);
+        }
+    }
+
+    /** The payload of a first-format token, whose HMAC signature is checked; read-only compatibility. */
+    private byte[] verified(Object requestId, String token) {
+        int dot = token == null ? -1 : token.indexOf('.');
+        if (dot <= 0) {
+            throw invalid(requestId);
+        }
+        byte[] payload;
+        byte[] signature;
+        try {
+            payload = DECODER.decode(token.substring(0, dot));
+            signature = DECODER.decode(token.substring(dot + 1));
+        } catch (IllegalArgumentException e) {
+            throw invalid(requestId);
+        }
+        if (!MessageDigest.isEqual(sign(payload), signature)) {
+            throw invalid(requestId);
+        }
+        return payload;
+    }
+
+    /** {@code nonce || ciphertext || tag}, with a fresh random nonce. */
+    private byte[] encrypt(byte[] payload) {
+        byte[] nonce = new byte[NONCE_BYTES];
+        RANDOM.nextBytes(nonce);
+        try {
+            Cipher cipher = Cipher.getInstance(AES_GCM);
+            cipher.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(TAG_BITS, nonce));
+            cipher.updateAAD(V2_AAD);
+            byte[] sealed = cipher.doFinal(payload);
+            byte[] out = new byte[NONCE_BYTES + sealed.length];
+            System.arraycopy(nonce, 0, out, 0, NONCE_BYTES);
+            System.arraycopy(sealed, 0, out, NONCE_BYTES, sealed.length);
+            return out;
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("AES/GCM not available", e);
+        }
     }
 
     private byte[] sign(byte[] payload) {

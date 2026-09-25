@@ -137,6 +137,60 @@ class McpRequestStateCodecTest {
     }
 
     @Test
+    void theTokenIsVersionTwoAndHidesThePayload() {
+        String token = token();
+
+        assertThat(token).startsWith("v2.");
+        String decoded =
+                new String(java.util.Base64.getUrlDecoder().decode(token.substring(3)), StandardCharsets.ISO_8859_1);
+        assertThat(decoded).doesNotContain("input-0", "accept", "askName", "tools/call");
+    }
+
+    @Test
+    void twoTokensOfTheSameStateDiffer() {
+        assertThat(token()).isNotEqualTo(token());
+    }
+
+    @Test
+    void anAlteredCiphertextIsRejected() {
+        String token = token();
+        byte[] blob = java.util.Base64.getUrlDecoder().decode(token.substring(3));
+        for (int i : new int[] {0, 12, blob.length - 1}) {
+            byte[] altered = blob.clone();
+            altered[i] ^= 0x01;
+            String tampered =
+                    "v2." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(altered);
+
+            assertInvalid(() -> codec.decode(1, tampered, "tools/call", "askName", "d1"));
+        }
+    }
+
+    @Test
+    void aTruncatedTokenIsRejected() {
+        String token = token();
+
+        assertInvalid(() -> codec.decode(1, token.substring(0, 20), "tools/call", "askName", "d1"));
+        assertInvalid(() -> codec.decode(1, "v2.", "tools/call", "askName", "d1"));
+    }
+
+    @Test
+    void aVersionOneTokenOfAnotherSecretIsRejected() {
+        byte[] payload = Json.createObjectBuilder()
+                .add("v", 1)
+                .add("m", "tools/call")
+                .add("n", "askName")
+                .add("d", "d1")
+                .add("e", NOW.toEpochMilli() + 60_000)
+                .build()
+                .toString()
+                .getBytes(StandardCharsets.UTF_8);
+        String unsigned = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload) + "."
+                + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[32]);
+
+        assertInvalid(() -> codec.decode(1, unsigned, "tools/call", "askName", "d1"));
+    }
+
+    @Test
     void shortSecretIsRefused() {
         assertThatThrownBy(() -> new McpRequestStateCodec(new byte[16], Clock.systemUTC()))
                 .isInstanceOf(IllegalArgumentException.class);
