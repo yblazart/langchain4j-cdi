@@ -117,6 +117,8 @@ public final class McpRequestStateCodec {
     }
 
     public String encode(State state) {
+        // "v" is the version of the payload's schema, unchanged since the first format; the token format is the
+        // "v2." prefix, which the AAD also binds.
         JsonObjectBuilder json = Json.createObjectBuilder()
                 .add("v", 1)
                 .add("m", state.method())

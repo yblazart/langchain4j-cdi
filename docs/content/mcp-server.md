@@ -122,11 +122,11 @@ McpServerConfig mcpServerConfig() {
 
 ## Security of the Request State
 
-The `requestState` is **encrypted and authenticated** with AES-256-GCM. A client, a proxy or an access log holding it cannot read it: neither the tool name nor the elicitation and sampling answers it carries. Nor can they alter it. It is bound to the call that issued it, and it expires after `requestStateTtl`.
+The `requestState` is **encrypted and authenticated** with AES-256-GCM. A client, a proxy or an access log holding it can neither read the elicitation and sampling answers it carries nor alter them; the tool name and arguments travel in clear beside it, in the request itself. It is bound to the call that issued it, and it expires after `requestStateTtl`.
 
-The AES key is derived from `requestStateSecret`. The secret is never logged. Without a secret, the server draws a random key per JVM, which only works for a single instance.
+The AES key is derived from `requestStateSecret`. The secret is never logged. Without a secret, the server draws a random secret per JVM, which only works for a single instance. Use a random value (`openssl rand -base64 32`), not a passphrase, and rotate it from time to time.
 
-Tokens of the previous format, which were signed but not encrypted, are still accepted when valid, so that a rolling upgrade does not break the interactions in flight. They are no longer issued.
+Tokens of the previous format, which were signed but not encrypted, are still accepted when valid, and no longer issued: a round started on an old instance can finish on an upgraded one, but not the reverse, so drain the old instances or use sticky routing during a rolling upgrade.
 
 ## Reflection-Free Invocation
 

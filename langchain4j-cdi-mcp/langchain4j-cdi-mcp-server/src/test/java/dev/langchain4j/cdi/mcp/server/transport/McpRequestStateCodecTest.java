@@ -96,7 +96,7 @@ class McpRequestStateCodecTest {
     }
 
     @Test
-    void tamperedSignatureIsRejected() {
+    void aV2TokenWithAnAlteredNonceCharacterIsRejected() {
         String token = token();
         int dot = token.indexOf('.');
         char c = token.charAt(dot + 1);
@@ -188,6 +188,59 @@ class McpRequestStateCodecTest {
                 + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[32]);
 
         assertInvalid(() -> codec.decode(1, unsigned, "tools/call", "askName", "d1"));
+    }
+
+    /** A first-format token, signed with {@link #SECRET}, of the given payload. */
+    static String versionOneToken(JsonObject payload) {
+        byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes) + "."
+                + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(hmac(bytes));
+    }
+
+    static JsonObject versionOnePayload(long expiresAt) {
+        return Json.createObjectBuilder()
+                .add("v", 1)
+                .add("m", "tools/call")
+                .add("n", "askName")
+                .add("d", "d1")
+                .add("e", expiresAt)
+                .build();
+    }
+
+    @Test
+    void aVersionOneTokenWhosePayloadWasAlteredIsRejected() {
+        String token = versionOneToken(versionOnePayload(NOW.toEpochMilli() + 60_000));
+        byte[] forged = Json.createObjectBuilder(versionOnePayload(NOW.toEpochMilli() + 60_000))
+                .add("r", Json.createObjectBuilder().add("input-0", Json.createObjectBuilder()))
+                .build()
+                .toString()
+                .getBytes(StandardCharsets.UTF_8);
+        String tampered = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(forged)
+                + token.substring(token.indexOf('.'));
+
+        assertInvalid(() -> codec.decode(1, tampered, "tools/call", "askName", "d1"));
+    }
+
+    @Test
+    void aVersionOneTokenIsStillBoundAndExpires() {
+        String token = versionOneToken(versionOnePayload(NOW.toEpochMilli() + 60_000));
+
+        assertInvalid(() -> codec.decode(1, token, "tools/call", "other", "d1"));
+        assertInvalid(() -> codec.decode(1, token, "tools/call", "askName", "d2"));
+        McpRequestStateCodec later =
+                new McpRequestStateCodec(SECRET, Clock.fixed(NOW.plus(Duration.ofMinutes(2)), ZoneOffset.UTC));
+        assertThatThrownBy(() -> later.decode(1, token, "tools/call", "askName", "d1"))
+                .isInstanceOfSatisfying(
+                        McpException.class, e -> assertThat(e.getMessage()).contains("Expired"));
+    }
+
+    @Test
+    void aV2TokenThatIsNotBase64OrHoldsOnlyATagIsRejected() {
+        String tagOnly =
+                "v2." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[28]);
+
+        assertInvalid(() -> codec.decode(1, "v2.!!!", "tools/call", "askName", "d1"));
+        assertInvalid(() -> codec.decode(1, tagOnly, "tools/call", "askName", "d1"));
     }
 
     @Test
