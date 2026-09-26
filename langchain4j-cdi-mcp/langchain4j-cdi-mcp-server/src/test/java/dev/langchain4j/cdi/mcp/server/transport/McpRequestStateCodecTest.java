@@ -63,28 +63,6 @@ class McpRequestStateCodecTest {
         assertThat(state.pendingKeys()).isEmpty();
     }
 
-    @Test
-    void legacyPayloadWithoutPendingKeysIsStillDecoded() {
-        byte[] payload = Json.createObjectBuilder()
-                .add("v", 1)
-                .add("m", "tools/call")
-                .add("n", "askName")
-                .add("d", "d1")
-                .add("e", NOW.toEpochMilli() + 60_000)
-                .add("r", Json.createObjectBuilder().add("input-0", Json.createObjectBuilder()))
-                .build()
-                .toString()
-                .getBytes(StandardCharsets.UTF_8);
-        // a payload written before pending keys existed, signed with the codec's secret and token format
-        String token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload) + "."
-                + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(hmac(payload));
-
-        McpRequestStateCodec.State state = codec.decode(1, token, "tools/call", "askName", "d1");
-
-        assertThat(state.pendingKeys()).isEmpty();
-        assertThat(state.responses().containsKey("input-0")).isTrue();
-    }
-
     static byte[] hmac(byte[] payload) {
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
@@ -173,23 +151,6 @@ class McpRequestStateCodecTest {
         assertInvalid(() -> codec.decode(1, "v2.", "tools/call", "askName", "d1"));
     }
 
-    @Test
-    void aVersionOneTokenOfAnotherSecretIsRejected() {
-        byte[] payload = Json.createObjectBuilder()
-                .add("v", 1)
-                .add("m", "tools/call")
-                .add("n", "askName")
-                .add("d", "d1")
-                .add("e", NOW.toEpochMilli() + 60_000)
-                .build()
-                .toString()
-                .getBytes(StandardCharsets.UTF_8);
-        String unsigned = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload) + "."
-                + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[32]);
-
-        assertInvalid(() -> codec.decode(1, unsigned, "tools/call", "askName", "d1"));
-    }
-
     /** A first-format token, signed with {@link #SECRET}, of the given payload. */
     static String versionOneToken(JsonObject payload) {
         byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
@@ -208,39 +169,23 @@ class McpRequestStateCodecTest {
     }
 
     @Test
-    void aVersionOneTokenWhosePayloadWasAlteredIsRejected() {
-        String token = versionOneToken(versionOnePayload(NOW.toEpochMilli() + 60_000));
-        byte[] forged = Json.createObjectBuilder(versionOnePayload(NOW.toEpochMilli() + 60_000))
-                .add("r", Json.createObjectBuilder().add("input-0", Json.createObjectBuilder()))
-                .build()
-                .toString()
-                .getBytes(StandardCharsets.UTF_8);
-        String tampered = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(forged)
-                + token.substring(token.indexOf('.'));
-
-        assertInvalid(() -> codec.decode(1, tampered, "tools/call", "askName", "d1"));
-    }
-
-    @Test
-    void aVersionOneTokenIsStillBoundAndExpires() {
-        String token = versionOneToken(versionOnePayload(NOW.toEpochMilli() + 60_000));
-
-        assertInvalid(() -> codec.decode(1, token, "tools/call", "other", "d1"));
-        assertInvalid(() -> codec.decode(1, token, "tools/call", "askName", "d2"));
-        McpRequestStateCodec later =
-                new McpRequestStateCodec(SECRET, Clock.fixed(NOW.plus(Duration.ofMinutes(2)), ZoneOffset.UTC));
-        assertThatThrownBy(() -> later.decode(1, token, "tools/call", "askName", "d1"))
-                .isInstanceOfSatisfying(
-                        McpException.class, e -> assertThat(e.getMessage()).contains("Expired"));
-    }
-
-    @Test
     void aV2TokenThatIsNotBase64OrHoldsOnlyATagIsRejected() {
         String tagOnly =
                 "v2." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[28]);
 
         assertInvalid(() -> codec.decode(1, "v2.!!!", "tools/call", "askName", "d1"));
         assertInvalid(() -> codec.decode(1, tagOnly, "tools/call", "askName", "d1"));
+    }
+
+    /**
+     * The first format, signed but not encrypted, is no longer read (#304): no released version ever issued it, only
+     * snapshots between the MRTR work and #303.
+     */
+    @Test
+    void aValidFirstFormatTokenIsRejected() {
+        String token = versionOneToken(versionOnePayload(NOW.toEpochMilli() + 60_000));
+
+        assertInvalid(() -> codec.decode(1, token, "tools/call", "askName", "d1"));
     }
 
     @Test

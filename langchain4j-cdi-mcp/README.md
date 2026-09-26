@@ -754,7 +754,7 @@ In `REPLAY` mode the answers a client already gave travel back and forth in `req
 
 The AES key is derived from `requestStateSecret` (`HMAC-SHA256(secret, "mcp-request-state/aes-256-gcm/v2")`); the secret itself is never used as a key, never logged, and without it the server draws a random 32-byte secret per JVM, logging only that it did so. Use a random value, such as the output of `openssl rand -base64 32`, not a passphrase: the key derivation does not stretch it, so a guessable secret can be brute-forced from a single captured token. Rotate it from time to time: every token of a deployment is encrypted under the same key, and random nonces stay safe for a few billion tokens per key.
 
-> **Behaviour change.** `requestState` used to be signed (HMAC-SHA256) but not encrypted: anyone holding the token could decode it and read the answers it carried. Tokens are now `v2.`-prefixed and encrypted. A server still **accepts** a token of the old format when its signature is valid, and never issues one: during a rolling upgrade of instances that share a secret, a round started on an old instance can finish on a new one. The reverse does not hold — an instance not yet upgraded rejects the new tokens — so drain the old instances, or keep a client on the same instance (sticky routing), until every instance runs the new release. That compatibility will be removed in a later release.
+> **Note for snapshot users.** Snapshots built between the MRTR work and langchain4j-cdi#303 issued a `requestState` that was signed (HMAC-SHA256) but not encrypted. No released version ever did, and such a token is now rejected with `-32602 Invalid requestState`: an interaction started on one of those snapshots and retried after the upgrade has to start over.
 
 ---
 
